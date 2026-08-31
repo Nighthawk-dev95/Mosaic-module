@@ -1,0 +1,61 @@
+:root {
+  color-scheme: dark;
+
+  /* Chart chrome & ink - dark mode, from the validated reference palette */
+  --surface-1: #1a1a19;
+  --page-plane: #0d0d0d;
+  --surface-raised: #232322;
+  --text-primary: #ffffff;
+  --text-secondary: #c3c2b7;
+  --text-muted: #898781;
+  --gridline: #2c2c2a;
+  --border: rgba(255, 255, 255, 0.10);
+  --success-text: #0ca30c;
+
+  /* Categorical domain colors - fixed assignment, never cycled */
+  --domain-deployment: #3987e5; /* slot 1 blue */
+  --domain-utilization: #199e70; /* slot 3 aqua */
+  --domain-efficiency: #9085e9; /* slot 7 violet */
+  --domain-capacity: #d95926; /* slot 2 orange */
+  --domain-feedback: #e66767; /* slot 8 red */
+
+  /* Categorical series colors for in-chart identities (not domain identity) -
+     slots 4/5 of the fixed 8-hue order, unused by the domain colors above */
+  --series-4-yellow: #c98500;
+  --series-5-magenta: #d55181;
+  --series-6-green: #008300;
+
+  /* Fixed categorical order for the Drafting blocker-label stacked chart - reuses the
+     validated hues above under names that describe their role in that one chart. */
+  --blocker-no-cases-read: var(--domain-deployment);
+  --blocker-no-ad-group: var(--series-4-yellow);
+  --blocker-no-xr-and-cthead-training: var(--domain-capacity);
+  --blocker-no-xr-training: var(--series-5-magenta);
+  --blocker-no-cthead-training: var(--domain-utilization);
+  --blocker-other: var(--text-muted);
+
+  /* Status palette - fixed, reserved for state (never series identity) */
+  --status-good: #0ca30c;
+  --status-warning: #fab219;
+  --status-serious: #ec835a;
+  --status-critical: #d03b3b;
+
+  --font-sans: system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  background: var(--page-plane);
+  color: var(--text-primary);
+  font-family: var(--font-sans);
+}
