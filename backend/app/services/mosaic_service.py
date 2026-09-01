@@ -209,7 +209,9 @@ def get_deployment_funnel_reporting() -> DeploymentFunnel:
 # bridge view. Both source tables carry duplicate rows per NPI (live Dataverse sync artifact,
 # confirmed via COUNT(*) vs COUNT(DISTINCT NPI)); rn = 1 keeps only the most-recently-modified
 # row per NPI. A blank launch_group/consent is treated as "no exclusion on file" -> eligible,
-# per business confirmation.
+# per business confirmation. contacts.total_reporting_case_read (was reporting_cases_read,
+# briefly total_reporting_case_read mid-migration too) - EDW confirmed a live pipeline refresh
+# on the Dynamics sync renamed this column; re-verify here if it errors again.
 _DRAFTING_FUNNEL_BASE_SQL = """
 WITH ro_dedup AS (
   SELECT * FROM (
@@ -235,7 +237,7 @@ base AS (
     (ro.added_to_ad_group_ct_head IS NOT NULL AND CAST(ro.added_to_ad_group_ct_head AS DATE) > DATE'1900-01-01') AS ad_cthead_valid,
     (NULLIF(ro.drafting_training_completed_cxr_abd_msk, 'None') IS NOT NULL) AS xr_trained,
     (NULLIF(ro.drafting_training_completed_ct_head, 'None') IS NOT NULL) AS cthead_trained,
-    TRY_CAST(REPLACE(NULLIF(cd.reporting_cases_read, 'None'), ',', '') AS DOUBLE) AS cases_read_raw
+    TRY_CAST(REPLACE(NULLIF(cd.total_reporting_case_read, 'None'), ',', '') AS DOUBLE) AS cases_read_raw
   FROM ro_dedup ro
   LEFT JOIN contacts_dedup cd ON cd.npi = CAST(REPLACE(ro.npi, ',', '') AS DECIMAL(10,0))
 ),
