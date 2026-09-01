@@ -84,6 +84,13 @@ def get_radiologist_roster(
 ) -> list[RadiologistRosterItem]:
     payload, _ = cache_store.load("radiologist_roster")
     items = [RadiologistRosterItem(**row) for row in (payload or [])]
+
+    # total_mosaic_exams comes from the already-cached rad_summary_stats dataset instead of a
+    # second EDW join, since it's already computed there per NPI.
+    summary_payload, _ = cache_store.load("rad_summary_stats")
+    exams_by_npi = {row["npi"]: row.get("total_mosaic_exams") for row in (summary_payload or [])}
+    items = [item.model_copy(update={"total_mosaic_exams": exams_by_npi.get(item.npi)}) for item in items]
+
     if practice:
         items = [r for r in items if r.home_practice == practice]
     if subspecialty:
@@ -127,6 +134,16 @@ def get_deployment_funnel_drafting() -> DeploymentFunnel:
 
 def get_drafting_blockers_by_practice() -> list[BlockerByPractice]:
     payload, _ = cache_store.load("drafting_blockers_by_practice")
+    return [BlockerByPractice(**row) for row in (payload or [])]
+
+
+def get_deployment_funnel_ct_abdpel() -> DeploymentFunnel:
+    payload, _ = cache_store.load("deployment_funnel_ct_abdpel")
+    return DeploymentFunnel(**payload) if payload else DeploymentFunnel(domain="CT Abd/Pel", stages=[])
+
+
+def get_ct_abdpel_blockers_by_practice() -> list[BlockerByPractice]:
+    payload, _ = cache_store.load("ct_abdpel_blockers_by_practice")
     return [BlockerByPractice(**row) for row in (payload or [])]
 
 

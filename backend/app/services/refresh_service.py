@@ -46,6 +46,8 @@ DATASETS: list[tuple[str, object, object]] = [
     ("deployment_funnel_reporting", lambda: edw.get_deployment_funnel_reporting(), None),
     ("deployment_funnel_drafting", lambda: edw.get_deployment_funnel_drafting(), None),
     ("drafting_blockers_by_practice", lambda: edw.get_drafting_blockers_by_practice(), None),
+    ("deployment_funnel_ct_abdpel", lambda: edw.get_deployment_funnel_ct_abdpel(), None),
+    ("ct_abdpel_blockers_by_practice", lambda: edw.get_ct_abdpel_blockers_by_practice(), None),
     ("efficiency_matrix", lambda: edw.get_efficiency_matrix(), _store_efficiency_matrix),
     ("efficiency_trend_by_category", lambda: edw.get_efficiency_trend_by_category(), None),
     ("efficiency_trend_rp_avg", lambda: edw.get_efficiency_trend_rp_avg(), None),

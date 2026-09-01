@@ -64,26 +64,38 @@ def get_radiologist_roster(
     where_clauses = []
     params: dict[str, object] = {}
     if practice:
-        where_clauses.append("home_practice = %(practice)s")
+        where_clauses.append("dr.home_practice = %(practice)s")
         params["practice"] = practice
     if subspecialty:
-        where_clauses.append("working_subspecialty = %(subspecialty)s")
+        where_clauses.append("dr.working_subspecialty = %(subspecialty)s")
         params["subspecialty"] = subspecialty
     if deployment_status:
-        where_clauses.append("deployment_status = %(deployment_status)s")
+        where_clauses.append("dr.deployment_status = %(deployment_status)s")
         params["deployment_status"] = deployment_status
 
     where_sql = f"WHERE {' AND '.join(where_clauses)}" if where_clauses else ""
 
     rows = run_query(
         f"""
-        SELECT NPI AS npi, radiologist_name, home_practice, working_subspecialty,
-               deployment_status, deployment_launch_group, current_team,
-               TRY_CAST(REPLACE(CAST(reporting_cases_read AS STRING), ',', '') AS DOUBLE) AS reporting_cases_read,
-               TRY_CAST(REPLACE(CAST(total_drafting_cases AS STRING), ',', '') AS DOUBLE) AS total_drafting_cases
-        FROM {settings.qualified}.dim_mosaic_radiologist
+        WITH capture_dedup AS (
+          SELECT NPI, capture_enabled FROM (
+            SELECT
+              CAST(REPLACE(npi, ',', '') AS DECIMAL(10,0)) AS NPI,
+              NULLIF(capture_enabled, 'None') = 'Yes' AS capture_enabled,
+              ROW_NUMBER() OVER (PARTITION BY CAST(REPLACE(npi, ',', '') AS DECIMAL(10,0)) ORDER BY modified_on DESC) AS rn
+            FROM `edw_prod`.`dataverse_m365-vra-dynamics-prod`.rad_onboarding
+            WHERE npi IS NOT NULL AND npi <> '0000000000'
+          ) WHERE rn = 1
+        )
+        SELECT dr.NPI AS npi, dr.radiologist_name, dr.home_practice, dr.working_subspecialty,
+               dr.deployment_status, dr.deployment_launch_group, dr.current_team,
+               TRY_CAST(REPLACE(CAST(dr.reporting_cases_read AS STRING), ',', '') AS DOUBLE) AS reporting_cases_read,
+               TRY_CAST(REPLACE(CAST(dr.total_drafting_cases AS STRING), ',', '') AS DOUBLE) AS total_drafting_cases,
+               cd.capture_enabled
+        FROM {settings.qualified}.dim_mosaic_radiologist dr
+        LEFT JOIN capture_dedup cd ON cd.NPI = dr.NPI
         {where_sql}
-        ORDER BY radiologist_name
+        ORDER BY dr.radiologist_name
         LIMIT {safe_limit} OFFSET {safe_offset}
         """,
         params,
@@ -202,98 +214,56 @@ def get_deployment_funnel_reporting() -> DeploymentFunnel:
     return DeploymentFunnel(domain="Reporting", stages=[DeploymentFunnelStage(**row) for row in rows])
 
 
-# vw_drafting_npi_bridge's own DraftingStatus/BlockerLabel columns turned out to have no
-# rads categorized past "Eligible, Not Fully Enabled" and a BlockerLabel dominated (~37%) by
-# "Other" - confirmed stale/incomplete against live EDW data, so the Drafting funnel and its
-# blocker breakdown are rebuilt here directly from rad_onboarding/contacts instead of the
-# bridge view. Both source tables carry duplicate rows per NPI (live Dataverse sync artifact,
-# confirmed via COUNT(*) vs COUNT(DISTINCT NPI)); rn = 1 keeps only the most-recently-modified
-# row per NPI. A blank launch_group/consent is treated as "no exclusion on file" -> eligible,
-# per business confirmation. contacts.total_reporting_case_read (was reporting_cases_read,
-# briefly total_reporting_case_read mid-migration too) - EDW confirmed a live pipeline refresh
-# on the Dynamics sync renamed this column; re-verify here if it errors again.
-_DRAFTING_FUNNEL_BASE_SQL = """
-WITH ro_dedup AS (
-  SELECT * FROM (
-    SELECT ro.*, ROW_NUMBER() OVER (PARTITION BY CAST(REPLACE(npi, ',', '') AS DECIMAL(10,0)) ORDER BY modified_on DESC) AS rn
-    FROM `edw_prod`.`dataverse_m365-vra-dynamics-prod`.rad_onboarding ro
-    WHERE npi IS NOT NULL AND npi <> '0000000000'
-  ) WHERE rn = 1
-),
-contacts_dedup AS (
-  SELECT * FROM (
-    SELECT c.*, ROW_NUMBER() OVER (PARTITION BY CAST(REPLACE(npi, ',', '') AS DECIMAL(10,0)) ORDER BY modified_on DESC) AS rn
-    FROM `edw_prod`.`dataverse_m365-vra-dynamics-prod`.contacts c
-    WHERE npi IS NOT NULL AND npi <> '0000000000'
-  ) WHERE rn = 1
-),
-base AS (
-  SELECT
-    CAST(REPLACE(ro.npi, ',', '') AS DECIMAL(10,0)) AS NPI,
-    ro.practice AS Practice,
-    COALESCE(UPPER(TRIM(NULLIF(ro.launch_group, 'None'))), '') AS launch_upper,
-    COALESCE(UPPER(TRIM(NULLIF(ro.mosaic_drafting_consent, 'None'))), '') AS consent_upper,
-    (NULLIF(ro.added_to_ad_group_cxr_abd_msk, 'None') IS NOT NULL AND TO_DATE(ro.added_to_ad_group_cxr_abd_msk, 'M/d/yyyy') > DATE'1900-01-01') AS ad_xr_valid,
-    (ro.added_to_ad_group_ct_head IS NOT NULL AND CAST(ro.added_to_ad_group_ct_head AS DATE) > DATE'1900-01-01') AS ad_cthead_valid,
-    (NULLIF(ro.drafting_training_completed_cxr_abd_msk, 'None') IS NOT NULL) AS xr_trained,
-    (NULLIF(ro.drafting_training_completed_ct_head, 'None') IS NOT NULL) AS cthead_trained,
-    TRY_CAST(REPLACE(NULLIF(cd.total_reporting_case_read, 'None'), ',', '') AS DOUBLE) AS cases_read_raw
-  FROM ro_dedup ro
-  LEFT JOIN contacts_dedup cd ON cd.npi = CAST(REPLACE(ro.npi, ',', '') AS DECIMAL(10,0))
-),
-scoped AS (
-  SELECT *,
-    (consent_upper NOT IN ('NO DRAFTING','DISABLED') AND launch_upper NOT IN ('DO NOT LAUNCH','DO NOT REVISIT')) AS eligible,
-    (ad_xr_valid OR ad_cthead_valid) AS enabled,
-    ((ad_xr_valid OR ad_cthead_valid) AND COALESCE(cases_read_raw,0) >= 1) AS live
-  FROM base
-  WHERE launch_upper <> 'DO NOT LAUNCH'
-)
-"""
-
-_BLOCKER_LABEL_CASE_SQL = """
-    CASE
-      WHEN NOT eligible OR live THEN 'Not Applicable'
-      WHEN COALESCE(cases_read_raw,0) < 1 THEN 'No Reporting Cases Read'
-      WHEN NOT ad_xr_valid AND NOT ad_cthead_valid THEN 'No AD Group'
-      WHEN NOT xr_trained AND NOT cthead_trained THEN 'No XR & CT Head Training'
-      WHEN NOT xr_trained THEN 'No XR Training'
-      WHEN NOT cthead_trained THEN 'No CT Head Training'
-      ELSE 'Other'
-    END
-"""
-
-
+# vw_drafting_npi_bridge/vw_ct_abdpel_npi_bridge's own StatusLabel/BlockerLabel columns are
+# now the source of truth - both were confirmed broken earlier (stale Dataverse column names,
+# a bare CAST-without-format-string bug that made "Fully Enabled"/"Enabled" unreachable) and
+# have since been fixed directly in EDW, so these are simple pass-throughs matching
+# get_deployment_funnel_reporting's pattern, not the raw rad_onboarding/contacts rebuild this
+# used to be.
 def get_deployment_funnel_drafting() -> DeploymentFunnel:
-    row = run_query_one(
+    rows = run_query(
         f"""
-        {_DRAFTING_FUNNEL_BASE_SQL}
-        SELECT
-          COUNT(DISTINCT CASE WHEN eligible THEN NPI END) AS eligible,
-          COUNT(DISTINCT CASE WHEN eligible AND enabled THEN NPI END) AS enabled,
-          COUNT(DISTINCT CASE WHEN eligible AND live THEN NPI END) AS live
-        FROM scoped
+        SELECT DraftingStatus AS stage, StatusRank AS rank, COUNT(DISTINCT NPI) AS count
+        FROM {settings.qualified}.vw_drafting_npi_bridge
+        GROUP BY DraftingStatus, StatusRank
+        ORDER BY StatusRank
         """
     )
-    row = row or {"eligible": 0, "enabled": 0, "live": 0}
-    return DeploymentFunnel(
-        domain="Drafting",
-        stages=[
-            DeploymentFunnelStage(stage="Eligible", rank=1, count=row["eligible"]),
-            DeploymentFunnelStage(stage="Enabled", rank=2, count=row["enabled"]),
-            DeploymentFunnelStage(stage="Live", rank=3, count=row["live"]),
-        ],
+    return DeploymentFunnel(domain="Drafting", stages=[DeploymentFunnelStage(**row) for row in rows])
+
+
+def get_deployment_funnel_ct_abdpel() -> DeploymentFunnel:
+    rows = run_query(
+        f"""
+        SELECT StatusLabel AS stage, StatusRank AS rank, COUNT(DISTINCT NPI) AS count
+        FROM {settings.qualified}.vw_ct_abdpel_npi_bridge
+        GROUP BY StatusLabel, StatusRank
+        ORDER BY StatusRank
+        """
     )
+    return DeploymentFunnel(domain="CT Abd/Pel", stages=[DeploymentFunnelStage(**row) for row in rows])
 
 
 def get_drafting_blockers_by_practice() -> list[BlockerByPractice]:
     rows = run_query(
         f"""
-        {_DRAFTING_FUNNEL_BASE_SQL}
-        SELECT Practice AS practice, {_BLOCKER_LABEL_CASE_SQL} AS blocker, COUNT(DISTINCT NPI) AS count
-        FROM scoped
-        WHERE eligible AND NOT live
-        GROUP BY Practice, {_BLOCKER_LABEL_CASE_SQL}
+        SELECT Practice AS practice, BlockerLabel AS blocker, COUNT(DISTINCT NPI) AS count
+        FROM {settings.qualified}.vw_drafting_npi_bridge
+        WHERE BlockerLabel != 'Not Applicable'
+        GROUP BY Practice, BlockerLabel
+        ORDER BY Practice
+        """
+    )
+    return [BlockerByPractice(**row) for row in rows]
+
+
+def get_ct_abdpel_blockers_by_practice() -> list[BlockerByPractice]:
+    rows = run_query(
+        f"""
+        SELECT Practice AS practice, BlockerLabel AS blocker, COUNT(DISTINCT NPI) AS count
+        FROM {settings.qualified}.vw_ct_abdpel_npi_bridge
+        WHERE BlockerLabel != 'Not Applicable'
+        GROUP BY Practice, BlockerLabel
         ORDER BY Practice
         """
     )
@@ -429,6 +399,7 @@ def get_capacity_by_radiologist(limit: int = 500, offset: int = 0) -> list[Capac
         f"""
         SELECT
           NPI AS npi, Rad_name AS radiologist_name, Team AS team, localpractice AS practice,
+          ARRAY_JOIN(SORT_ARRAY(COLLECT_SET(ShiftName)), ', ') AS shift_names,
           {_CAPACITY_MEASURES_SQL}
         FROM edw_dev.bipa_analytics.presentation_rpt_vra_capacity_enhancetest_vw
         GROUP BY NPI, Rad_name, Team, localpractice
@@ -488,11 +459,29 @@ def get_mosaic_intelligence_snapshot() -> MosaicIntelligenceSnapshot:
           AND (
             (NULLIF(ro.added_to_ad_group_cxr_abd_msk, 'None') IS NOT NULL
               AND TO_DATE(ro.added_to_ad_group_cxr_abd_msk, 'M/d/yyyy') <> DATE'1900-01-01')
-            OR (ro.added_to_ad_group_ct_head IS NOT NULL
-              AND CAST(ro.added_to_ad_group_ct_head AS DATE) <> DATE'1900-01-01')
-            OR (ro.added_to_ad_group_ct_abd_pelvis IS NOT NULL
-              AND CAST(ro.added_to_ad_group_ct_abd_pelvis AS DATE) <> DATE'1900-01-01')
+            OR (NULLIF(ro.added_to_ad_group_ct_head, 'None') IS NOT NULL
+              AND TO_DATE(ro.added_to_ad_group_ct_head, 'M/d/yyyy') <> DATE'1900-01-01')
+            OR (NULLIF(ro.added_to_ad_group_ct_abd_pelvis, 'None') IS NOT NULL
+              AND TO_DATE(ro.added_to_ad_group_ct_abd_pelvis, 'M/d/yyyy') <> DATE'1900-01-01')
           )
+        """
+    )
+
+    # rad_onboarding carries duplicate rows per NPI (live Dataverse sync artifact - see
+    # get_deployment_funnel_drafting's docstring history); dedupe to the most-recently-modified
+    # row per NPI before counting, same pattern used everywhere else this table is queried.
+    capture_row = run_query_one(
+        """
+        SELECT COUNT(DISTINCT NPI) AS rads_capture_enabled
+        FROM (
+          SELECT
+            CAST(REPLACE(npi, ',', '') AS DECIMAL(10,0)) AS NPI,
+            NULLIF(capture_enabled, 'None') AS capture_enabled,
+            ROW_NUMBER() OVER (PARTITION BY CAST(REPLACE(npi, ',', '') AS DECIMAL(10,0)) ORDER BY modified_on DESC) AS rn
+          FROM `edw_prod`.`dataverse_m365-vra-dynamics-prod`.rad_onboarding
+          WHERE npi IS NOT NULL AND npi <> '0000000000'
+        )
+        WHERE rn = 1 AND capture_enabled = 'Yes'
         """
     )
 
@@ -503,6 +492,7 @@ def get_mosaic_intelligence_snapshot() -> MosaicIntelligenceSnapshot:
         pct_rpce_reporting=volume_row["pct_rpce_reporting"] if volume_row else None,
         pct_rpce_drafting=volume_row["pct_rpce_drafting"] if volume_row else None,
         rads_live_on_capture=volume_row["rads_live_on_capture"] if volume_row else 0,
+        rads_capture_enabled=capture_row["rads_capture_enabled"] if capture_row else 0,
         practices_fully_on_rpce=rpce_counts["Fully on RPCE"],
         practices_split_integration=rpce_counts["Split Integration"],
         practices_not_on_rpce=rpce_counts["Not on RPCE"],
@@ -571,10 +561,10 @@ def get_rad_summary_stats() -> list[RadSummaryStat]:
           CAST(REPLACE(ro.npi, ',', '') AS DECIMAL(10,0)) AS npi,
           (NULLIF(ro.added_to_ad_group_cxr_abd_msk, 'None') IS NOT NULL
             AND TO_DATE(ro.added_to_ad_group_cxr_abd_msk, 'M/d/yyyy') <> DATE'1900-01-01') AS on_xr,
-          (ro.added_to_ad_group_ct_head IS NOT NULL
-            AND CAST(ro.added_to_ad_group_ct_head AS DATE) <> DATE'1900-01-01') AS on_ct_head,
-          (ro.added_to_ad_group_ct_abd_pelvis IS NOT NULL
-            AND CAST(ro.added_to_ad_group_ct_abd_pelvis AS DATE) <> DATE'1900-01-01') AS on_ct_abdpel
+          (NULLIF(ro.added_to_ad_group_ct_head, 'None') IS NOT NULL
+            AND TO_DATE(ro.added_to_ad_group_ct_head, 'M/d/yyyy') <> DATE'1900-01-01') AS on_ct_head,
+          (NULLIF(ro.added_to_ad_group_ct_abd_pelvis, 'None') IS NOT NULL
+            AND TO_DATE(ro.added_to_ad_group_ct_abd_pelvis, 'M/d/yyyy') <> DATE'1900-01-01') AS on_ct_abdpel
         FROM `edw_prod`.`dataverse_m365-vra-dynamics-prod`.rad_onboarding ro
         """
     )

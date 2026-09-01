@@ -4,6 +4,7 @@ export interface MosaicIntelligenceSnapshot {
   pct_rpce_reporting: number | null;
   pct_rpce_drafting: number | null;
   rads_live_on_capture: number;
+  rads_capture_enabled: number;
   practices_fully_on_rpce: number;
   practices_split_integration: number;
   practices_not_on_rpce: number;
@@ -48,6 +49,8 @@ export interface RadiologistRosterItem {
   current_team: string | null;
   reporting_cases_read: number | null;
   total_drafting_cases: number | null;
+  total_mosaic_exams: number | null;
+  capture_enabled: boolean | null;
 }
 
 export interface UtilizationPracticeRollup {
@@ -212,6 +215,7 @@ export interface CapacityRadiologistItem extends CapacityMeasures {
   radiologist_name: string | null;
   team: string | null;
   practice: string | null;
+  shift_names: string | null;
 }
 
 export interface CapacityPracticeRollup extends CapacityMeasures {

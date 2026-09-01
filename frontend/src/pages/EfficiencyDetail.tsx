@@ -1,9 +1,12 @@
 import { useEffect, useMemo, useState } from "react";
+import type { CSSProperties } from "react";
 import { mosaicApi } from "../api/client";
 import { useFetch } from "../hooks/useFetch";
 import { DataTable, fmtPct } from "../components/DataTable";
 import type { DataTableColumn } from "../components/DataTable";
 import { EfficiencyTrendChart } from "../components/EfficiencyTrendChart";
+import { FilterBar } from "../components/FilterBar";
+import { useFilters, matchesPractice, matchesRadiologistSearch } from "../context/FilterContext";
 import type {
   EfficiencyMode,
   EfficiencyPracticeRollup,
@@ -151,6 +154,21 @@ function PopulationTile({ label, data }: { label: string; data: PopulationEffici
   );
 }
 
+const TABLE_SECTION_STYLE: CSSProperties = {
+  background: "var(--surface-1)",
+  border: "1px solid var(--border)",
+  borderRadius: 8,
+  padding: 16,
+  display: "flex",
+  flexDirection: "column",
+  minHeight: 0,
+};
+
+const TABLE_SCROLL_STYLE: CSSProperties = {
+  maxHeight: 480,
+  overflow: "auto",
+};
+
 function pctChange(current: number | null | undefined, baseline: number | null | undefined): number | null {
   if (current == null || baseline == null || baseline === 0) return null;
   return (current - baseline) / baseline;
@@ -164,7 +182,8 @@ function readTimeChange(current: number | null | undefined, baseline: number | n
 export function EfficiencyDetail() {
   const [mode, setMode] = useState<EfficiencyMode>("full_mosaic");
   const [viewFilter, setViewFilter] = useState<ViewFilter>("all");
-  const [practice, setPractice] = useState("");
+  const filters = useFilters();
+  const practice = filters.practice;
   const [subspecialty, setSubspecialty] = useState("");
   const [modality, setModality] = useState("");
   const [procedure, setProcedure] = useState("");
@@ -222,13 +241,19 @@ export function EfficiencyDetail() {
   const filteredRadRows = useMemo(() => {
     if (!detail.data) return [];
     return detail.data.by_radiologist.filter((r) => {
-      if (practice && r.practice !== practice) return false;
+      if (!matchesPractice(filters, r.practice)) return false;
+      if (!matchesRadiologistSearch(filters, r.radiologist_name, r.npi)) return false;
       if (subspecialty && r.subspecialty !== subspecialty) return false;
       if (viewFilter === "positive" && !(r.pct_change_vs_baseline != null && r.pct_change_vs_baseline > 0)) return false;
       if (viewFilter === "negative" && !(r.pct_change_vs_baseline != null && r.pct_change_vs_baseline < 0)) return false;
       return true;
     });
-  }, [detail.data, practice, subspecialty, viewFilter]);
+  }, [detail.data, filters, subspecialty, viewFilter]);
+
+  const filteredPracticeRows = useMemo(() => {
+    if (!detail.data) return [];
+    return detail.data.by_practice.filter((r) => matchesPractice(filters, r.practice));
+  }, [detail.data, filters]);
 
   return (
     <div style={{ padding: 24, display: "flex", flexDirection: "column", gap: 20, flex: 1, overflowY: "auto" }}>
@@ -258,8 +283,9 @@ export function EfficiencyDetail() {
         />
       </div>
 
+      <FilterBar practices={filterOptions.data?.practices ?? []} />
+
       <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
-        <FilterSelect value={practice} onChange={setPractice} options={filterOptions.data?.practices ?? []} placeholder="All Practices" />
         <FilterSelect
           value={subspecialty}
           onChange={setSubspecialty}
@@ -304,20 +330,24 @@ export function EfficiencyDetail() {
         {trend.data && <EfficiencyTrendChart trend={trend.data} mode="change" />}
       </div>
 
-      <div style={{ background: "var(--surface-1)", border: "1px solid var(--border)", borderRadius: 8, padding: 16, overflowX: "auto" }}>
+      <div style={TABLE_SECTION_STYLE}>
         <div style={{ color: "var(--text-muted)", fontSize: 13, marginBottom: 12, textTransform: "uppercase", letterSpacing: 0.5 }}>
           By Practice
         </div>
-        {detail.data && (
-          <DataTable columns={PRACTICE_COLUMNS} rows={detail.data.by_practice} rowKey={(r) => r.practice ?? "unknown"} />
-        )}
+        <div style={TABLE_SCROLL_STYLE}>
+          {detail.data && (
+            <DataTable columns={PRACTICE_COLUMNS} rows={filteredPracticeRows} rowKey={(r) => r.practice ?? "unknown"} />
+          )}
+        </div>
       </div>
 
-      <div style={{ background: "var(--surface-1)", border: "1px solid var(--border)", borderRadius: 8, padding: 16, overflowX: "auto" }}>
+      <div style={TABLE_SECTION_STYLE}>
         <div style={{ color: "var(--text-muted)", fontSize: 13, marginBottom: 12, textTransform: "uppercase", letterSpacing: 0.5 }}>
           By Radiologist
         </div>
-        {detail.data && <DataTable columns={RAD_COLUMNS} rows={filteredRadRows} rowKey={(r) => r.npi} />}
+        <div style={TABLE_SCROLL_STYLE}>
+          {detail.data && <DataTable columns={RAD_COLUMNS} rows={filteredRadRows} rowKey={(r) => r.npi} />}
+        </div>
       </div>
     </div>
   );

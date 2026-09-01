@@ -29,9 +29,12 @@ export function Sidebar() {
         boxSizing: "border-box",
       }}
     >
-      <div>
-        <div style={{ fontWeight: 700, fontSize: 15 }}>Mosaic Info Hub</div>
-        <div style={{ color: "var(--text-muted)", fontSize: 12 }}>AI adoption intelligence</div>
+      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+        <img src="/mosaic-logo.png" alt="Mosaic" style={{ width: 32, height: 32, objectFit: "contain" }} />
+        <div>
+          <div style={{ fontWeight: 700, fontSize: 15 }}>Mosaic Info Hub</div>
+          <div style={{ color: "var(--text-muted)", fontSize: 12 }}>AI adoption intelligence</div>
+        </div>
       </div>
 
       <nav style={{ display: "flex", flexDirection: "column", gap: 4 }}>
@@ -56,7 +59,7 @@ export function Sidebar() {
 
       <div>
         <div style={{ color: "var(--text-muted)", fontSize: 12, marginBottom: 8, textTransform: "uppercase", letterSpacing: 0.5 }}>
-          Data Models
+          Mosaic Metrics
         </div>
         <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
           {DATA_MODELS.map((m) =>

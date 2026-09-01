@@ -25,13 +25,18 @@
   --series-5-magenta: #d55181;
   --series-6-green: #008300;
 
-  /* Fixed categorical order for the Drafting blocker-label stacked chart - reuses the
-     validated hues above under names that describe their role in that one chart. */
+  /* Fixed categorical order for the Drafting/CT Abd-Pel blocker-label stacked charts -
+     reuses the validated hues above under names that describe their role in that chart.
+     Covers the union of both domains' real BlockerLabel values so the same label always
+     gets the same color regardless of which chart it appears in. */
   --blocker-no-cases-read: var(--domain-deployment);
-  --blocker-no-ad-group: var(--series-4-yellow);
+  --blocker-not-signed-irb: var(--series-4-yellow);
   --blocker-no-xr-and-cthead-training: var(--domain-capacity);
   --blocker-no-xr-training: var(--series-5-magenta);
   --blocker-no-cthead-training: var(--domain-utilization);
+  --blocker-no-ad-group: var(--domain-efficiency);
+  --blocker-training-not-sent: var(--series-6-green);
+  --blocker-training-not-completed: var(--domain-feedback);
   --blocker-other: var(--text-muted);
 
   /* Status palette - fixed, reserved for state (never series identity) */

@@ -13,6 +13,8 @@ class RadiologistRosterItem(BaseModel):
     current_team: str | None
     reporting_cases_read: float | None = None
     total_drafting_cases: float | None = None
+    total_mosaic_exams: int | None = None
+    capture_enabled: bool | None = None
 
 
 class UtilizationPracticeRollup(BaseModel):
@@ -147,6 +149,7 @@ class CapacityRadiologistItem(BaseModel):
     radiologist_name: str | None
     team: str | None
     practice: str | None
+    shift_names: str | None = None
     total_shifts: int
     total_hours: float | None
     capacity_rvu: float | None
@@ -180,6 +183,7 @@ class MosaicIntelligenceSnapshot(BaseModel):
     pct_rpce_reporting: float | None
     pct_rpce_drafting: float | None
     rads_live_on_capture: int
+    rads_capture_enabled: int
     practices_fully_on_rpce: int
     practices_split_integration: int
     practices_not_on_rpce: int

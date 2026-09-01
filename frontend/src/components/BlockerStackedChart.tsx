@@ -10,10 +10,13 @@ interface Props {
 // contributes 0 to that segment; the legend and color assignment stay stable regardless.
 const BLOCKER_ORDER: { key: string; color: string }[] = [
   { key: "No Reporting Cases Read", color: "var(--blocker-no-cases-read)" },
-  { key: "No AD Group", color: "var(--blocker-no-ad-group)" },
+  { key: "Not Signed IRB", color: "var(--blocker-not-signed-irb)" },
   { key: "No XR & CT Head Training", color: "var(--blocker-no-xr-and-cthead-training)" },
   { key: "No XR Training", color: "var(--blocker-no-xr-training)" },
   { key: "No CT Head Training", color: "var(--blocker-no-cthead-training)" },
+  { key: "No AD Group", color: "var(--blocker-no-ad-group)" },
+  { key: "Training Not Sent", color: "var(--blocker-training-not-sent)" },
+  { key: "Training Not Completed", color: "var(--blocker-training-not-completed)" },
   { key: "Other", color: "var(--blocker-other)" },
 ];
 

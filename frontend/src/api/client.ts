@@ -69,6 +69,8 @@ export const mosaicApi = {
   getDeploymentFunnelReporting: () => get<DeploymentFunnel>("/deployment/funnel/reporting"),
   getDeploymentFunnelDrafting: () => get<DeploymentFunnel>("/deployment/funnel/drafting"),
   getDeploymentBlockersDrafting: () => get<BlockerByPractice[]>("/deployment/blockers/drafting"),
+  getDeploymentFunnelCtAbdpel: () => get<DeploymentFunnel>("/deployment/funnel/ct-abdpel"),
+  getDeploymentBlockersCtAbdpel: () => get<BlockerByPractice[]>("/deployment/blockers/ct-abdpel"),
   getEfficiencyDetail: (mode: EfficiencyMode = "full_mosaic") => get<EfficiencyDetail>(`/efficiency?mode=${mode}`),
   getEfficiencyPopulation: (params: {
     mode?: EfficiencyMode;

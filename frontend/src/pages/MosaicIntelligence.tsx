@@ -5,6 +5,8 @@ import { StatTile } from "../components/StatTile";
 import { RpceTrendChart } from "../components/RpceTrendChart";
 import { DataTable, fmtPct } from "../components/DataTable";
 import type { DataTableColumn } from "../components/DataTable";
+import { FilterBar } from "../components/FilterBar";
+import { useFilters, matchesPractice, matchesRadiologistSearch } from "../context/FilterContext";
 import type { RadSummaryStat } from "../api/types";
 
 function fmt(value: number | null | undefined): string {
@@ -65,8 +67,8 @@ const RAD_COLUMNS: DataTableColumn<RadSummaryStat>[] = [
 ];
 
 export function MosaicIntelligence() {
-  const [practiceFilter, setPracticeFilter] = useState("");
   const [groupFilter, setGroupFilter] = useState("");
+  const filters = useFilters();
 
   const snapshot = useFetch(() => mosaicApi.getMosaicIntelligence(), []);
   const trend = useFetch(() => mosaicApi.getRpceTrend(), []);
@@ -83,10 +85,17 @@ export function MosaicIntelligence() {
     if (!radStats.data) return [];
     return radStats.data.filter(
       (r) =>
-        (!practiceFilter || r.home_practice === practiceFilter) &&
+        matchesPractice(filters, r.home_practice) &&
+        matchesRadiologistSearch(filters, r.radiologist_name, r.npi) &&
         (!groupFilter || r.drafting_groups.includes(groupFilter))
     );
-  }, [radStats.data, practiceFilter, groupFilter]);
+  }, [radStats.data, filters, groupFilter]);
+
+  const filteredTrend = useMemo(() => {
+    if (!trend.data) return [];
+    if (!filters.month) return trend.data;
+    return trend.data.filter((t) => t.period.startsWith(filters.month));
+  }, [trend.data, filters.month]);
 
   return (
     <div style={{ padding: 24, display: "flex", flexDirection: "column", gap: 20, flex: 1, overflowY: "auto" }}>
@@ -102,6 +111,8 @@ export function MosaicIntelligence() {
           Couldn't reach the backend API. Is it running at http://127.0.0.1:8000? ({anyError})
         </div>
       )}
+
+      <FilterBar practices={practices} />
 
       <div style={{ display: "flex", gap: 16, flexWrap: "wrap" }}>
         <StatTile label="Rads Live on Mosaic" value={snapshot.data ? fmt(snapshot.data.rads_live_on_mosaic) : "…"} />
@@ -120,6 +131,10 @@ export function MosaicIntelligence() {
         <StatTile
           label="Rads Live on Capture"
           value={snapshot.data ? fmt(snapshot.data.rads_live_on_capture) : "…"}
+        />
+        <StatTile
+          label="Rads Capture Enabled"
+          value={snapshot.data ? fmt(snapshot.data.rads_capture_enabled) : "…"}
         />
       </div>
 
@@ -167,7 +182,7 @@ export function MosaicIntelligence() {
         <div style={{ color: "var(--text-muted)", fontSize: 13, marginBottom: 12, textTransform: "uppercase", letterSpacing: 0.5 }}>
           % RPCE Reporting &amp; Drafting Trend
         </div>
-        {trend.data && <RpceTrendChart data={trend.data} />}
+        {trend.data && <RpceTrendChart data={filteredTrend} />}
       </div>
 
       <div
@@ -182,25 +197,6 @@ export function MosaicIntelligence() {
           Rad Summary Stats
         </div>
         <div style={{ display: "flex", gap: 12, marginBottom: 16 }}>
-          <select
-            value={practiceFilter}
-            onChange={(e) => setPracticeFilter(e.target.value)}
-            style={{
-              fontSize: 13,
-              padding: "6px 10px",
-              borderRadius: 6,
-              border: "1px solid var(--border)",
-              background: "var(--surface-raised)",
-              color: "var(--text-primary)",
-            }}
-          >
-            <option value="">All Practices</option>
-            {practices.map((p) => (
-              <option key={p} value={p}>
-                {p}
-              </option>
-            ))}
-          </select>
           <select
             value={groupFilter}
             onChange={(e) => setGroupFilter(e.target.value)}

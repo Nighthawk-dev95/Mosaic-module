@@ -86,6 +86,16 @@ async def deployment_blockers_drafting():
     return cache_service.get_drafting_blockers_by_practice()
 
 
+@router.get("/deployment/funnel/ct-abdpel", response_model=DeploymentFunnel)
+async def deployment_funnel_ct_abdpel():
+    return cache_service.get_deployment_funnel_ct_abdpel()
+
+
+@router.get("/deployment/blockers/ct-abdpel", response_model=list[BlockerByPractice])
+async def deployment_blockers_ct_abdpel():
+    return cache_service.get_ct_abdpel_blockers_by_practice()
+
+
 @router.get("/efficiency", response_model=EfficiencyDetail)
 async def efficiency_detail(mode: str = Query("full_mosaic")):
     return cache_service.get_efficiency_detail(mode)
