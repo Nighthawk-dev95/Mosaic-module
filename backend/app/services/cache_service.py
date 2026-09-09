@@ -31,6 +31,7 @@ from app.models.mosaic import (
     PopulationEfficiency,
     RadiologistRosterItem,
     RadiologistScorecard,
+    ScorecardMetrics,
     RadSummaryStat,
     RpceTrendPoint,
     UndraftedCategoryPoint,
@@ -632,11 +633,42 @@ def get_capacity_by_practice() -> list[CapacityPracticeRollup]:
     return [CapacityPracticeRollup(**row) for row in (payload or [])]
 
 
+# Metric names on ScorecardMetrics that come straight off the wide cached row (suffixed
+# `_top5`/.../`_all`) - must match mosaic_service._SCORECARD_METRICS' output names exactly.
+_SCORECARD_METRIC_NAMES = [
+    "shifts_worked", "case_count", "addl_capacity_per_shift", "efficiency", "shift_utilization",
+    "avg_units_per_shift", "ct_cases", "xr_cases", "us_cases", "mr_cases", "nm_cases", "pt_cases",
+    "mg_cases", "ir_cases", "other_modality_cases", "routine_cases", "stat_cases", "stroke_cases",
+    "trauma_cases", "otherp_cases",
+]
+_SCORECARD_WINDOWS = ["5", "10", "15", "20", "25", "30", "all"]
+
+
 def get_radiologist_scorecard(practice: str | None = None) -> list[RadiologistScorecard]:
     payload, _ = cache_store.load("radiologist_scorecard")
-    items = [RadiologistScorecard(**row) for row in (payload or [])]
+    rows = payload or []
     if practice:
-        items = [r for r in items if r.practice == practice]
+        rows = [r for r in rows if r.get("practice") == practice]
+
+    items = []
+    for row in rows:
+        metrics = [
+            ScorecardMetrics(
+                top_n=window,
+                **{name: row.get(f"{name}_top{window}" if window != "all" else f"{name}_all") for name in _SCORECARD_METRIC_NAMES},
+            )
+            for window in _SCORECARD_WINDOWS
+        ]
+        items.append(
+            RadiologistScorecard(
+                npi=row["npi"],
+                radiologist_name=row.get("radiologist_name"),
+                team=row.get("team"),
+                practice=row.get("practice"),
+                mosaic_go_live_date=row.get("mosaic_go_live_date"),
+                metrics=metrics,
+            )
+        )
     return items
 
 

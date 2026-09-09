@@ -500,23 +500,85 @@ def get_capacity_by_practice() -> list[CapacityPracticeRollup]:
     return [CapacityPracticeRollup(**row) for row in rows]
 
 
+# (output_name, agg_func, source_column) - source_column ignored for COUNT. Used to build
+# get_radiologist_scorecard's SELECT below programmatically: 19 metrics x 7 Top-N windows
+# would be ~140 near-identical hand-written expressions otherwise (every other query in this
+# file is deliberately literal SQL, but that convention stops paying off at this repetition
+# factor).
+_SCORECARD_METRICS: list[tuple[str, str, str]] = [
+    ("shifts_worked", "COUNT", "1"),
+    ("case_count", "SUM", "cases"),
+    ("addl_capacity_per_shift", "AVG", "addl_capacity"),
+    ("efficiency", "AVG", "new_efficiency"),
+    ("shift_utilization", "AVG", "new_utilization"),
+    ("avg_units_per_shift", "AVG", "capacity_rpwu"),
+    ("ct_cases", "SUM", "ct_cases"),
+    ("xr_cases", "SUM", "xr_cases"),
+    ("us_cases", "SUM", "us_cases"),
+    ("mr_cases", "SUM", "mr_cases"),
+    ("nm_cases", "SUM", "nm_cases"),
+    ("pt_cases", "SUM", "pt_cases"),
+    ("mg_cases", "SUM", "mg_cases"),
+    ("ir_cases", "SUM", "ir_cases"),
+    ("other_modality_cases", "SUM", "other_modality_cases"),
+    ("routine_cases", "SUM", "routine_cases"),
+    ("stat_cases", "SUM", "stat_cases"),
+    ("stroke_cases", "SUM", "stroke_cases"),
+    ("trauma_cases", "SUM", "trauma_cases"),
+    ("otherp_cases", "SUM", "otherp_cases"),
+]
+
+
+def _scorecard_window_sql(window: int | None) -> str:
+    suffix = f"top{window}" if window is not None else "all"
+    cond = f"shift_rank <= {window}" if window is not None else None
+    parts = []
+    for name, agg, col in _SCORECARD_METRICS:
+        if agg == "COUNT":
+            expr = f"COUNT(CASE WHEN {cond} THEN 1 END)" if cond else "COUNT(1)"
+        else:
+            inner = f"CASE WHEN {cond} THEN {col} END" if cond else col
+            expr = f"{agg}({inner})"
+        parts.append(f"{expr} AS {name}_{suffix}")
+    return ",\n          ".join(parts)
+
+
 def get_radiologist_scorecard() -> list[dict]:
-    """Addl Capacity/Shift, New Efficiency, New Utilization (all Top-N variants) for every
-    radiologist live on Mosaic, computed over their N most recent shifts since go-live.
-    Uses presentation_rpt_vra_capacity_enhance_vw (not the _enhancetest_vw variant the
-    Capacity page uses) - the test view currently throws NUMERIC_VALUE_OUT_OF_RANGE on this
-    same data (a pre-existing upstream EDW bug, confirmed independently), while this sibling
-    view has the identical shape without it. N is precomputed for every offered dropdown
-    value (5/10/15/20/25/30/all) in one pass so the frontend never has to refetch when the
-    user changes the N selector."""
+    """Addl Capacity/Shift, Efficiency, Shift Utilization, Avg Units/Shift, case count, and
+    modality/priority mix (all Top-N variants) for every radiologist live on Mosaic, computed
+    over their N most recent shifts since go-live. Uses presentation_rpt_vra_capacity_enhance_vw
+    (not the _enhancetest_vw variant the Capacity page uses) - the test view currently throws
+    NUMERIC_VALUE_OUT_OF_RANGE on this same data (a pre-existing upstream EDW bug, confirmed
+    independently), while this sibling view has the identical shape without it. N is
+    precomputed for every offered dropdown value (5/10/15/20/25/30/all) in one pass so the
+    frontend never has to refetch when the user changes the N selector. Still returns the wide
+    (one row per NPI, `_top5`/`_top10`/.../`_all`-suffixed columns) shape - cache_service.py
+    unpivots this into the nested per-Top-N `metrics` list the API actually returns."""
+    window_sql = ",\n          ".join(_scorecard_window_sql(w) for w in (5, 10, 15, 20, 25, 30, None))
     return run_query(
-        """
+        f"""
         WITH ranked AS (
           SELECT
             NPI, Rad_name, Team, localpractice AS practice, Mosaic_go_live_date,
             on_shift_capacity_vs_baseline_RPWU AS addl_capacity,
             on_shift_efficiency_RPWU AS new_efficiency,
             on_shift_utilization_RPWU_pct AS new_utilization,
+            on_shift_capacity_RPWU AS capacity_rpwu,
+            on_shift_cases AS cases,
+            on_shift_CT_cases AS ct_cases,
+            on_shift_XR_cases AS xr_cases,
+            on_shift_US_cases AS us_cases,
+            on_shift_MR_cases AS mr_cases,
+            on_shift_NM_cases AS nm_cases,
+            on_shift_PT_cases AS pt_cases,
+            on_shift_MG_cases AS mg_cases,
+            on_shift_IR_cases AS ir_cases,
+            on_shift_Other_Modality_cases AS other_modality_cases,
+            on_shift_Routine_cases AS routine_cases,
+            on_shift_Stat_cases AS stat_cases,
+            on_shift_Stroke_cases AS stroke_cases,
+            on_shift_Trauma_cases AS trauma_cases,
+            on_shift_OtherP_cases AS otherp_cases,
             ROW_NUMBER() OVER (PARTITION BY NPI ORDER BY ShiftDate DESC) AS shift_rank
           FROM edw_dev.bipa_analytics.presentation_rpt_vra_capacity_enhance_vw
           WHERE Mosaic_go_live_date IS NOT NULL AND ShiftDate >= Mosaic_go_live_date
@@ -524,34 +586,7 @@ def get_radiologist_scorecard() -> list[dict]:
         SELECT
           NPI AS npi, MAX(Rad_name) AS radiologist_name, MAX(Team) AS team,
           MAX(practice) AS practice, CAST(MAX(Mosaic_go_live_date) AS STRING) AS mosaic_go_live_date,
-          COUNT(CASE WHEN shift_rank <= 5 THEN 1 END) AS shifts_used_top5,
-          AVG(CASE WHEN shift_rank <= 5 THEN addl_capacity END) AS addl_capacity_top5,
-          AVG(CASE WHEN shift_rank <= 5 THEN new_efficiency END) AS new_efficiency_top5,
-          AVG(CASE WHEN shift_rank <= 5 THEN new_utilization END) AS new_utilization_top5,
-          COUNT(CASE WHEN shift_rank <= 10 THEN 1 END) AS shifts_used_top10,
-          AVG(CASE WHEN shift_rank <= 10 THEN addl_capacity END) AS addl_capacity_top10,
-          AVG(CASE WHEN shift_rank <= 10 THEN new_efficiency END) AS new_efficiency_top10,
-          AVG(CASE WHEN shift_rank <= 10 THEN new_utilization END) AS new_utilization_top10,
-          COUNT(CASE WHEN shift_rank <= 15 THEN 1 END) AS shifts_used_top15,
-          AVG(CASE WHEN shift_rank <= 15 THEN addl_capacity END) AS addl_capacity_top15,
-          AVG(CASE WHEN shift_rank <= 15 THEN new_efficiency END) AS new_efficiency_top15,
-          AVG(CASE WHEN shift_rank <= 15 THEN new_utilization END) AS new_utilization_top15,
-          COUNT(CASE WHEN shift_rank <= 20 THEN 1 END) AS shifts_used_top20,
-          AVG(CASE WHEN shift_rank <= 20 THEN addl_capacity END) AS addl_capacity_top20,
-          AVG(CASE WHEN shift_rank <= 20 THEN new_efficiency END) AS new_efficiency_top20,
-          AVG(CASE WHEN shift_rank <= 20 THEN new_utilization END) AS new_utilization_top20,
-          COUNT(CASE WHEN shift_rank <= 25 THEN 1 END) AS shifts_used_top25,
-          AVG(CASE WHEN shift_rank <= 25 THEN addl_capacity END) AS addl_capacity_top25,
-          AVG(CASE WHEN shift_rank <= 25 THEN new_efficiency END) AS new_efficiency_top25,
-          AVG(CASE WHEN shift_rank <= 25 THEN new_utilization END) AS new_utilization_top25,
-          COUNT(CASE WHEN shift_rank <= 30 THEN 1 END) AS shifts_used_top30,
-          AVG(CASE WHEN shift_rank <= 30 THEN addl_capacity END) AS addl_capacity_top30,
-          AVG(CASE WHEN shift_rank <= 30 THEN new_efficiency END) AS new_efficiency_top30,
-          AVG(CASE WHEN shift_rank <= 30 THEN new_utilization END) AS new_utilization_top30,
-          COUNT(1) AS shifts_used_all,
-          AVG(addl_capacity) AS addl_capacity_all,
-          AVG(new_efficiency) AS new_efficiency_all,
-          AVG(new_utilization) AS new_utilization_all
+          {window_sql}
         FROM ranked
         GROUP BY NPI
         """

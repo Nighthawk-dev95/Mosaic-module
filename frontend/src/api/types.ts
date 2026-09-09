@@ -310,40 +310,37 @@ export interface CapacityPracticeRollup extends CapacityMeasures {
   practice: string | null;
 }
 
+export interface ScorecardMetrics {
+  top_n: string;
+  shifts_worked: number;
+  case_count: number;
+  addl_capacity_per_shift: number | null;
+  efficiency: number | null;
+  shift_utilization: number | null;
+  avg_units_per_shift: number | null;
+  ct_cases: number;
+  xr_cases: number;
+  us_cases: number;
+  mr_cases: number;
+  nm_cases: number;
+  pt_cases: number;
+  mg_cases: number;
+  ir_cases: number;
+  other_modality_cases: number;
+  routine_cases: number;
+  stat_cases: number;
+  stroke_cases: number;
+  trauma_cases: number;
+  otherp_cases: number;
+}
+
 export interface RadiologistScorecard {
   npi: number;
   radiologist_name: string | null;
   team: string | null;
   practice: string | null;
   mosaic_go_live_date: string | null;
-  shifts_used_top5: number;
-  addl_capacity_top5: number | null;
-  new_efficiency_top5: number | null;
-  new_utilization_top5: number | null;
-  shifts_used_top10: number;
-  addl_capacity_top10: number | null;
-  new_efficiency_top10: number | null;
-  new_utilization_top10: number | null;
-  shifts_used_top15: number;
-  addl_capacity_top15: number | null;
-  new_efficiency_top15: number | null;
-  new_utilization_top15: number | null;
-  shifts_used_top20: number;
-  addl_capacity_top20: number | null;
-  new_efficiency_top20: number | null;
-  new_utilization_top20: number | null;
-  shifts_used_top25: number;
-  addl_capacity_top25: number | null;
-  new_efficiency_top25: number | null;
-  new_utilization_top25: number | null;
-  shifts_used_top30: number;
-  addl_capacity_top30: number | null;
-  new_efficiency_top30: number | null;
-  new_utilization_top30: number | null;
-  shifts_used_all: number;
-  addl_capacity_all: number | null;
-  new_efficiency_all: number | null;
-  new_utilization_all: number | null;
+  metrics: ScorecardMetrics[];
 }
 
 // week_start is the Monday the week begins; category_sort_order 0 is "Drafted" - included

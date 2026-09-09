@@ -306,40 +306,37 @@ class RadSummaryStat(BaseModel):
     drafting_groups: list[str]
 
 
+class ScorecardMetrics(BaseModel):
+    top_n: str  # "5" | "10" | "15" | "20" | "25" | "30" | "all"
+    shifts_worked: int
+    case_count: int
+    addl_capacity_per_shift: float | None
+    efficiency: float | None
+    shift_utilization: float | None
+    avg_units_per_shift: float | None
+    ct_cases: int
+    xr_cases: int
+    us_cases: int
+    mr_cases: int
+    nm_cases: int
+    pt_cases: int
+    mg_cases: int
+    ir_cases: int
+    other_modality_cases: int
+    routine_cases: int
+    stat_cases: int
+    stroke_cases: int
+    trauma_cases: int
+    otherp_cases: int
+
+
 class RadiologistScorecard(BaseModel):
     npi: int
     radiologist_name: str | None
     team: str | None
     practice: str | None
     mosaic_go_live_date: date | None
-    shifts_used_top5: int
-    addl_capacity_top5: float | None
-    new_efficiency_top5: float | None
-    new_utilization_top5: float | None
-    shifts_used_top10: int
-    addl_capacity_top10: float | None
-    new_efficiency_top10: float | None
-    new_utilization_top10: float | None
-    shifts_used_top15: int
-    addl_capacity_top15: float | None
-    new_efficiency_top15: float | None
-    new_utilization_top15: float | None
-    shifts_used_top20: int
-    addl_capacity_top20: float | None
-    new_efficiency_top20: float | None
-    new_utilization_top20: float | None
-    shifts_used_top25: int
-    addl_capacity_top25: float | None
-    new_efficiency_top25: float | None
-    new_utilization_top25: float | None
-    shifts_used_top30: int
-    addl_capacity_top30: float | None
-    new_efficiency_top30: float | None
-    new_utilization_top30: float | None
-    shifts_used_all: int
-    addl_capacity_all: float | None
-    new_efficiency_all: float | None
-    new_utilization_all: float | None
+    metrics: list[ScorecardMetrics]
 
 
 class UndraftedCategoryPoint(BaseModel):
