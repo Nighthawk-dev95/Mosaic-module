@@ -115,20 +115,42 @@ function fmtDate(value: string | null): string {
   return new Date(value).toLocaleDateString();
 }
 
+// A ranked horizontal bar list, not a stacked bar: the job here is "compare magnitude,
+// low->high" across categories, not "part-to-whole" as one continuous shape - so a single
+// sequential hue (per the dataviz method's color-by-job rule), not one hue per category.
+// Rank already communicates identity via position + label, so no legend is needed.
+const MIX_BAR_HUE = "var(--series-5-magenta)";
+
 function MixCard({ title, fields, metrics }: { title: string; fields: { key: keyof ScorecardMetrics; label: string }[]; metrics: ScorecardMetrics }) {
-  const rows = fields
-    .map((f) => ({ label: f.label, count: (metrics[f.key] as number) || 0 }))
+  const raw = fields.map((f) => ({ label: f.label, count: (metrics[f.key] as number) || 0 }));
+  const total = raw.reduce((acc, r) => acc + r.count, 0);
+  const rows = raw
     .filter((r) => r.count > 0)
-    .sort((a, b) => b.count - a.count);
+    .map((r) => ({ ...r, pct: total ? (r.count / total) * 100 : 0 }))
+    .sort((a, b) => b.pct - a.pct);
+  const maxPct = rows.length ? rows[0].pct : 0;
 
   return (
-    <div style={{ ...CARD_STYLE, flex: "1 1 240px" }}>
+    <div style={{ ...CARD_STYLE, flex: "1 1 280px" }}>
       <div style={{ color: "var(--text-muted)", fontSize: 13, marginBottom: 10, textTransform: "uppercase", letterSpacing: 0.5 }}>{title}</div>
       {rows.length === 0 && <div style={{ color: "var(--text-muted)", fontSize: 13 }}>No cases in this window.</div>}
       {rows.map((r) => (
-        <div key={r.label} style={{ display: "flex", justifyContent: "space-between", padding: "3px 0", fontSize: 13 }}>
-          <span style={{ color: "var(--text-secondary)" }}>{r.label}</span>
-          <span style={{ color: "var(--text-primary)", fontWeight: 600 }}>{r.count.toLocaleString()}</span>
+        <div key={r.label} title={`${r.count.toLocaleString()} cases`} style={{ display: "flex", alignItems: "center", gap: 8, padding: "3px 0" }}>
+          <span style={{ color: "var(--text-secondary)", fontSize: 12, width: 52, flexShrink: 0 }}>{r.label}</span>
+          <div style={{ flex: 1, background: "var(--gridline)", height: 16, position: "relative" }}>
+            <div
+              style={{
+                width: `${maxPct ? (r.pct / maxPct) * 100 : 0}%`,
+                height: "100%",
+                background: MIX_BAR_HUE,
+                borderRadius: "0 4px 4px 0",
+                minWidth: r.pct > 0 ? 4 : 0,
+              }}
+            />
+          </div>
+          <span style={{ color: "var(--text-primary)", fontSize: 12, fontWeight: 600, width: 42, textAlign: "right", flexShrink: 0 }}>
+            {r.pct.toFixed(1)}%
+          </span>
         </div>
       ))}
     </div>
