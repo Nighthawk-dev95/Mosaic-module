@@ -464,6 +464,10 @@ _CAPACITY_MEASURES_SQL = """
 """
 
 
+# Uses presentation_rpt_vra_capacity_enhance_vw, not the _enhancetest_vw variant this file
+# used to query - that one throws NUMERIC_VALUE_OUT_OF_RANGE (a DECIMAL(5,2) overflow in its
+# own dependency transform_rpt_vra_capacity_base_exam_leveltest_vw) on every refresh. This
+# sibling view has the identical shape (verified column-for-column) without the bug.
 def get_capacity_by_radiologist(limit: int = 500, offset: int = 0) -> list[CapacityRadiologistItem]:
     safe_limit = max(1, min(int(limit), 5000))
     safe_offset = max(0, int(offset))
@@ -473,7 +477,7 @@ def get_capacity_by_radiologist(limit: int = 500, offset: int = 0) -> list[Capac
           NPI AS npi, Rad_name AS radiologist_name, Team AS team, localpractice AS practice,
           ARRAY_JOIN(SORT_ARRAY(COLLECT_SET(ShiftName)), ', ') AS shift_names,
           {_CAPACITY_MEASURES_SQL}
-        FROM edw_dev.bipa_analytics.presentation_rpt_vra_capacity_enhancetest_vw
+        FROM edw_dev.bipa_analytics.presentation_rpt_vra_capacity_enhance_vw
         GROUP BY NPI, Rad_name, Team, localpractice
         ORDER BY radiologist_name
         LIMIT {safe_limit} OFFSET {safe_offset}
@@ -488,7 +492,7 @@ def get_capacity_by_practice() -> list[CapacityPracticeRollup]:
         SELECT
           localpractice AS practice,
           {_CAPACITY_MEASURES_SQL}
-        FROM edw_dev.bipa_analytics.presentation_rpt_vra_capacity_enhancetest_vw
+        FROM edw_dev.bipa_analytics.presentation_rpt_vra_capacity_enhance_vw
         WHERE localpractice IS NOT NULL
         GROUP BY localpractice
         ORDER BY practice
