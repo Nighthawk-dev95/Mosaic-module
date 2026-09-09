@@ -1,9 +1,10 @@
-import type { CSSProperties, ReactNode } from "react";
+import type { ReactNode } from "react";
 import { useMemo } from "react";
 import { mosaicApi } from "../api/client";
 import { useFetch } from "../hooks/useFetch";
 import { DataTable, fmtPct } from "../components/DataTable";
 import type { DataTableColumn } from "../components/DataTable";
+import { TABLE_SECTION_STYLE, TABLE_SCROLL_STYLE } from "../styles/tableLayout";
 import { FilterBar } from "../components/FilterBar";
 import { useFilters, matchesPractice, matchesRadiologistSearch } from "../context/FilterContext";
 import { getLocalRegion } from "../utils/localRegion";
@@ -54,21 +55,6 @@ const RAD_COLUMNS: DataTableColumn<CapacityRadiologistItem>[] = [
   ...SHARED_COLUMNS<CapacityRadiologistItem>(),
 ];
 
-const TABLE_SECTION_STYLE: CSSProperties = {
-  background: "var(--surface-1)",
-  border: "1px solid var(--border)",
-  borderRadius: 8,
-  padding: 16,
-  display: "flex",
-  flexDirection: "column",
-  minHeight: 0,
-};
-
-const TABLE_SCROLL_STYLE: CSSProperties = {
-  maxHeight: 480,
-  overflow: "auto",
-};
-
 export function CapacityDetail() {
   const byPractice = useFetch(() => mosaicApi.getCapacityByPractice(), []);
   const byRadiologist = useFetch(() => mosaicApi.getCapacityByRadiologist(), []);
@@ -96,7 +82,7 @@ export function CapacityDetail() {
   );
 
   return (
-    <div style={{ padding: 24, display: "flex", flexDirection: "column", gap: 20, flex: 1, overflowY: "auto" }}>
+    <div style={{ padding: 24, display: "flex", flexDirection: "column", gap: 20, flex: 1, minHeight: 0, overflowY: "auto" }}>
       <div>
         <h1 style={{ margin: 0, fontSize: 20 }}>Capacity</h1>
         <div style={{ color: "var(--text-muted)", fontSize: 13 }}>
@@ -110,7 +96,7 @@ export function CapacityDetail() {
         </div>
       )}
 
-      <FilterBar practices={practices} />
+      <FilterBar practices={practices} showMonth={false} />
 
       <div style={TABLE_SECTION_STYLE}>
         <div style={{ color: "var(--text-muted)", fontSize: 13, marginBottom: 12, textTransform: "uppercase", letterSpacing: 0.5 }}>

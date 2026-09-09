@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
-import type { CSSProperties } from "react";
 import { mosaicApi } from "../api/client";
 import { useFetch } from "../hooks/useFetch";
 import { DataTable, fmtPct } from "../components/DataTable";
 import type { DataTableColumn } from "../components/DataTable";
+import { TABLE_SECTION_STYLE, TABLE_SCROLL_STYLE } from "../styles/tableLayout";
 import { EfficiencyTrendChart } from "../components/EfficiencyTrendChart";
 import { FilterBar } from "../components/FilterBar";
 import { useFilters, matchesPractice, matchesRadiologistSearch } from "../context/FilterContext";
@@ -154,21 +154,6 @@ function PopulationTile({ label, data }: { label: string; data: PopulationEffici
   );
 }
 
-const TABLE_SECTION_STYLE: CSSProperties = {
-  background: "var(--surface-1)",
-  border: "1px solid var(--border)",
-  borderRadius: 8,
-  padding: 16,
-  display: "flex",
-  flexDirection: "column",
-  minHeight: 0,
-};
-
-const TABLE_SCROLL_STYLE: CSSProperties = {
-  maxHeight: 480,
-  overflow: "auto",
-};
-
 function pctChange(current: number | null | undefined, baseline: number | null | undefined): number | null {
   if (current == null || baseline == null || baseline === 0) return null;
   return (current - baseline) / baseline;
@@ -191,7 +176,10 @@ export function EfficiencyDetail() {
 
   const detail = useFetch(() => mosaicApi.getEfficiencyDetail(mode), [mode]);
   const filterOptions = useFetch(() => mosaicApi.getEfficiencyFilters(), []);
-  const trend = useFetch(() => mosaicApi.getEfficiencyTrend(examCategory || undefined), [examCategory]);
+  const trend = useFetch(
+    () => mosaicApi.getEfficiencyTrend(examCategory || undefined, practice || undefined),
+    [examCategory, practice]
+  );
   const rpAvgTrend = useFetch(() => mosaicApi.getEfficiencyTrendRpAvg(), []);
 
   const [population, setPopulation] = useState<PopulationEfficiency | null>(null);
@@ -256,7 +244,7 @@ export function EfficiencyDetail() {
   }, [detail.data, filters]);
 
   return (
-    <div style={{ padding: 24, display: "flex", flexDirection: "column", gap: 20, flex: 1, overflowY: "auto" }}>
+    <div style={{ padding: 24, display: "flex", flexDirection: "column", gap: 20, flex: 1, minHeight: 0, overflowY: "auto" }}>
       <div>
         <h1 style={{ margin: 0, fontSize: 20 }}>Efficiency</h1>
         <div style={{ color: "var(--text-muted)", fontSize: 13 }}>
@@ -283,7 +271,7 @@ export function EfficiencyDetail() {
         />
       </div>
 
-      <FilterBar practices={filterOptions.data?.practices ?? []} />
+      <FilterBar practices={filterOptions.data?.practices ?? []} showLocal={false} showMonth={false} />
 
       <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
         <FilterSelect
@@ -319,6 +307,9 @@ export function EfficiencyDetail() {
       <div style={{ background: "var(--surface-1)", border: "1px solid var(--border)", borderRadius: 8, padding: 16 }}>
         <div style={{ color: "var(--text-muted)", fontSize: 13, marginBottom: 12, textTransform: "uppercase", letterSpacing: 0.5 }}>
           Mosaic Efficiency Over Time
+        </div>
+        <div style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 8 }}>
+          Dashed "RP Avg" reference lines are company-wide and ignore every filter, including Practice.
         </div>
         {trend.data && <EfficiencyTrendChart trend={trend.data} rpAvg={rpAvgTrend.data ?? undefined} mode="absolute" />}
       </div>

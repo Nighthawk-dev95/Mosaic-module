@@ -4,6 +4,7 @@ import { RefreshStatus } from "./RefreshStatus";
 const NAV_ITEMS = [
   { to: "/", label: "Mosaic Intelligence" },
   { to: "/roster", label: "Radiologist Roster" },
+  { to: "/non-drafted", label: "Non-Drafted Analysis" },
 ];
 
 const DATA_MODELS: { label: string; color: string; to: string | null }[] = [
@@ -11,6 +12,8 @@ const DATA_MODELS: { label: string; color: string; to: string | null }[] = [
   { label: "Utilization", color: "var(--domain-utilization)", to: "/" },
   { label: "Efficiency", color: "var(--domain-efficiency)", to: "/efficiency" },
   { label: "Capacity", color: "var(--domain-capacity)", to: "/capacity" },
+  { label: "Capture", color: "var(--domain-capture)", to: "/capture" },
+  { label: "Scorecard", color: "var(--series-5-magenta)", to: "/scorecard" },
   { label: "Feedback", color: "var(--domain-feedback)", to: null },
 ];
 

@@ -20,7 +20,7 @@ function defaultRender(value: unknown): ReactNode {
 
 export function DataTable<T>({ columns, rows, rowKey }: DataTableProps<T>) {
   return (
-    <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+    <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 14 }}>
       <thead>
         <tr>
           {columns.map((c) => (
@@ -30,9 +30,13 @@ export function DataTable<T>({ columns, rows, rowKey }: DataTableProps<T>) {
                 textAlign: "left",
                 color: "var(--text-muted)",
                 borderBottom: "1px solid var(--gridline)",
-                padding: "8px 12px",
-                fontWeight: 500,
+                padding: "10px 14px",
+                fontWeight: 600,
                 whiteSpace: "nowrap",
+                position: "sticky",
+                top: 0,
+                zIndex: 1,
+                background: "var(--surface-1)",
               }}
             >
               {c.label}
@@ -47,7 +51,7 @@ export function DataTable<T>({ columns, rows, rowKey }: DataTableProps<T>) {
               <td
                 key={c.key}
                 style={{
-                  padding: "8px 12px",
+                  padding: "10px 14px",
                   borderBottom: "1px solid var(--gridline)",
                   color: "var(--text-primary)",
                   whiteSpace: "nowrap",

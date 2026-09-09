@@ -125,6 +125,7 @@ class EfficiencyFilterOptions(BaseModel):
 
 class EfficiencyTrendPoint(BaseModel):
     period: str
+    practice: str | None = None
     exam_category: str | None
     reporting_tbwu_per_min: float | None
     drafting_tbwu_per_min: float | None
@@ -178,6 +179,7 @@ class CapacityRadiologistItem(BaseModel):
 
 
 class MosaicIntelligenceSnapshot(BaseModel):
+    practice: str | None = None
     rads_live_on_mosaic: int
     rads_live_on_ai_drafting: int
     pct_rpce_reporting: float | None
@@ -191,10 +193,96 @@ class MosaicIntelligenceSnapshot(BaseModel):
 
 class RpceTrendPoint(BaseModel):
     period: str
+    practice: str | None = None
     pct_rpce_reporting: float | None
     pct_rpce_drafting: float | None
     mosaic_exam_ct: int
     drafting_exam_ct: int
+
+
+class CaptureOverview(BaseModel):
+    capturable_exams_all: int
+    captured_exams_all: int
+    pct_captured_all: float | None
+    capturable_exams_enabled: int
+    captured_exams_enabled: int
+    pct_captured_enabled: float | None
+    rads_live_on_capture: int
+    rads_capture_enabled: int
+    capture_mosaic_tbwu_per_min: float | None
+    capture_baseline_tbwu_per_min: float | None
+    capture_pct_change_vs_baseline: float | None
+
+
+class CapturePracticeRollup(BaseModel):
+    practice: str | None
+    capturable_exams_all: int
+    captured_exams_all: int
+    pct_captured_all: float | None
+    capturable_exams_enabled: int
+    captured_exams_enabled: int
+    pct_captured_enabled: float | None
+    rads_live_on_capture: int
+    rads_capture_enabled: int
+    enablement_date: date | None
+    pct_change_since_enablement: float | None
+
+
+class CaptureRadiologistItem(BaseModel):
+    npi: int
+    radiologist_name: str | None
+    practice: str | None
+    capture_enabled: bool | None
+    capturable_exams: int
+    captured_exams: int
+    pct_captured: float | None
+
+
+class CaptureUtilizationTrendPracticePoint(BaseModel):
+    period: str
+    granularity: str
+    practice: str | None
+    capturable_exams_all: int
+    captured_exams_all: int
+    pct_captured_all: float | None
+    capturable_exams_enabled: int
+    captured_exams_enabled: int
+    pct_captured_enabled: float | None
+    pct_change_all: float | None
+    pct_change_enabled: float | None
+
+
+class CaptureUtilizationTrendRadiologistPoint(BaseModel):
+    period: str
+    granularity: str
+    npi: int
+    radiologist_name: str | None
+    practice: str | None
+    capture_enabled: bool | None
+    capturable_exams: int
+    captured_exams: int
+    pct_captured: float | None
+    pct_change: float | None
+
+
+class CaptureEfficiencyTrendPracticePoint(BaseModel):
+    period: str
+    granularity: str
+    practice: str | None
+    capture_tbwu_per_min: float | None
+    capture_baseline_tbwu_per_min: float | None
+    pct_change: float | None
+
+
+class CaptureEfficiencyTrendRadiologistPoint(BaseModel):
+    period: str
+    granularity: str
+    npi: int
+    radiologist_name: str | None
+    practice: str | None
+    capture_tbwu_per_min: float | None
+    capture_baseline_tbwu_per_min: float | None
+    pct_change: float | None
 
 
 class RadSummaryStat(BaseModel):
@@ -216,6 +304,51 @@ class RadSummaryStat(BaseModel):
     captured_us: int
     pct_captured: float | None
     drafting_groups: list[str]
+
+
+class RadiologistScorecard(BaseModel):
+    npi: int
+    radiologist_name: str | None
+    team: str | None
+    practice: str | None
+    mosaic_go_live_date: date | None
+    shifts_used_top5: int
+    addl_capacity_top5: float | None
+    new_efficiency_top5: float | None
+    new_utilization_top5: float | None
+    shifts_used_top10: int
+    addl_capacity_top10: float | None
+    new_efficiency_top10: float | None
+    new_utilization_top10: float | None
+    shifts_used_top15: int
+    addl_capacity_top15: float | None
+    new_efficiency_top15: float | None
+    new_utilization_top15: float | None
+    shifts_used_top20: int
+    addl_capacity_top20: float | None
+    new_efficiency_top20: float | None
+    new_utilization_top20: float | None
+    shifts_used_top25: int
+    addl_capacity_top25: float | None
+    new_efficiency_top25: float | None
+    new_utilization_top25: float | None
+    shifts_used_top30: int
+    addl_capacity_top30: float | None
+    new_efficiency_top30: float | None
+    new_utilization_top30: float | None
+    shifts_used_all: int
+    addl_capacity_all: float | None
+    new_efficiency_all: float | None
+    new_utilization_all: float | None
+
+
+class UndraftedCategoryPoint(BaseModel):
+    week_start: date
+    local_practice: str | None
+    category: str
+    category_sort_order: int
+    exam_count: int
+    tbwu: float
 
 
 class CapacityPracticeRollup(BaseModel):

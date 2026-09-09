@@ -14,11 +14,15 @@ const SELECT_STYLE: CSSProperties = {
 interface Props {
   practices: string[];
   showCaptureEnabled?: boolean;
+  showLocal?: boolean;
+  showMonth?: boolean;
 }
 
 // Interactive filter bar shared across pages - state lives in FilterContext, so a change
 // here immediately re-filters every table/chart on the current page that reads useFilters().
-export function FilterBar({ practices, showCaptureEnabled = false }: Props) {
+// showLocal/showMonth default to true; pages whose data has no team/date field to match
+// against pass false so the control isn't shown as a false affordance.
+export function FilterBar({ practices, showCaptureEnabled = false, showLocal = true, showMonth = true }: Props) {
   const { practice, local, radiologistSearch, captureEnabledOnly, month, setPractice, setLocal, setRadiologistSearch, setCaptureEnabledOnly, setMonth, reset } =
     useFilters();
 
@@ -33,14 +37,16 @@ export function FilterBar({ practices, showCaptureEnabled = false }: Props) {
         ))}
       </select>
 
-      <select value={local} onChange={(e) => setLocal(e.target.value as typeof local)} style={SELECT_STYLE}>
-        <option value="">All Regions (Local)</option>
-        {LOCAL_REGIONS.map((r) => (
-          <option key={r} value={r}>
-            {r}
-          </option>
-        ))}
-      </select>
+      {showLocal && (
+        <select value={local} onChange={(e) => setLocal(e.target.value as typeof local)} style={SELECT_STYLE}>
+          <option value="">All Regions (Local)</option>
+          {LOCAL_REGIONS.map((r) => (
+            <option key={r} value={r}>
+              {r}
+            </option>
+          ))}
+        </select>
+      )}
 
       <input
         value={radiologistSearch}
@@ -49,13 +55,15 @@ export function FilterBar({ practices, showCaptureEnabled = false }: Props) {
         style={{ ...SELECT_STYLE, minWidth: 220 }}
       />
 
-      <input
-        type="month"
-        value={month}
-        onChange={(e) => setMonth(e.target.value)}
-        style={SELECT_STYLE}
-        title="Filters trend/date-based charts where a monthly breakdown is available"
-      />
+      {showMonth && (
+        <input
+          type="month"
+          value={month}
+          onChange={(e) => setMonth(e.target.value)}
+          style={SELECT_STYLE}
+          title="Filters trend/date-based charts where a monthly breakdown is available"
+        />
+      )}
 
       {showCaptureEnabled && (
         <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13, color: "var(--text-secondary)" }}>

@@ -5,6 +5,9 @@ from app.models.mosaic import (
     BlockerByPractice,
     CapacityPracticeRollup,
     CapacityRadiologistItem,
+    CaptureOverview,
+    CapturePracticeRollup,
+    CaptureRadiologistItem,
     DeploymentFunnel,
     DeploymentFunnelStage,
     DeploymentPracticeRollup,
@@ -13,6 +16,7 @@ from app.models.mosaic import (
     RadiologistRosterItem,
     RadSummaryStat,
     RpceTrendPoint,
+    UndraftedCategoryPoint,
     UtilizationPracticeRollup,
 )
 
@@ -338,6 +342,35 @@ def get_efficiency_trend_by_category() -> list[dict]:
     )
 
 
+def get_efficiency_trend_by_practice_category() -> list[dict]:
+    """Same as get_efficiency_trend_by_category but also grouped by Practice - a deliberately
+    small cardinality increase (month x practice x category), unlike the full
+    practice/subspecialty/modality/procedure grain that function's docstring explicitly
+    ruled out for the 780K-row efficiency_matrix."""
+    return run_query(
+        """
+        SELECT
+          CAST(CAST(DATE_TRUNC('MONTH', Exam_Date) AS DATE) AS STRING) AS period,
+          Practice AS practice,
+          MAX(mpcat) AS exam_category,
+          SUM(CASE WHEN Is_Reporting_Row = 1 THEN TotalTBWU ELSE 0 END) AS reporting_tbwu,
+          SUM(CASE WHEN Is_Reporting_Row = 1 THEN TotalTime ELSE 0 END) AS reporting_time,
+          SUM(CASE WHEN Is_Reporting_Row = 1 THEN Weighted_Baseline_Contrib_Excl ELSE 0 END) AS reporting_baseline_contrib,
+          COUNT(DISTINCT CASE WHEN Is_Reporting_Row = 1 THEN Physician_NPI END) AS reporting_rad_count,
+          SUM(CASE WHEN Is_Reporting_Row = 1 THEN ExamCount ELSE 0 END) AS reporting_exam_count,
+          SUM(CASE WHEN Is_Drafting_Row = 1 THEN TotalTBWU ELSE 0 END) AS drafting_tbwu,
+          SUM(CASE WHEN Is_Drafting_Row = 1 THEN TotalTime ELSE 0 END) AS drafting_time,
+          SUM(CASE WHEN Is_Drafting_Row = 1 THEN Weighted_Baseline_Contrib_Excl ELSE 0 END) AS drafting_baseline_contrib,
+          COUNT(DISTINCT CASE WHEN Is_Drafting_Row = 1 THEN Physician_NPI END) AS drafting_rad_count,
+          SUM(CASE WHEN Is_Drafting_Row = 1 THEN ExamCount ELSE 0 END) AS drafting_exam_count
+        FROM edw_dev.bipa_analytics.radiologist_metrics_optimized
+        WHERE Exam_Date >= '2024-11-01'
+        GROUP BY DATE_TRUNC('MONTH', Exam_Date), Practice, mpcat
+        ORDER BY period
+        """
+    )
+
+
 def get_efficiency_trend_rp_avg() -> list[dict]:
     """Company-wide (ignores every filter) monthly efficiency, for the two "RP Avg" reference
     lines - Drafting Only and Full Mosaic (no RP Avg for Reporting/Non-Drafted, per spec)."""
@@ -352,6 +385,45 @@ def get_efficiency_trend_rp_avg() -> list[dict]:
         FROM edw_dev.bipa_analytics.radiologist_metrics_optimized
         WHERE Exam_Date >= '2024-11-01'
         GROUP BY DATE_TRUNC('MONTH', Exam_Date)
+        ORDER BY period
+        """
+    )
+
+
+def get_capture_efficiency_trend_by_practice(granularity: str) -> list[dict]:
+    """Same shape as get_efficiency_trend_by_practice_category but scoped to Is_Capture_Row
+    (already US+BD combined at the ETL level, see get_efficiency_matrix) with no exam_category
+    dimension - capture efficiency isn't broken out by category anywhere else in this app."""
+    trunc = "WEEK" if granularity == "week" else "MONTH"
+    return run_query(
+        f"""
+        SELECT
+          CAST(CAST(DATE_TRUNC('{trunc}', Exam_Date) AS DATE) AS STRING) AS period,
+          Practice AS practice,
+          SUM(CASE WHEN Is_Capture_Row = 1 THEN TotalTBWU ELSE 0 END) AS capture_tbwu,
+          SUM(CASE WHEN Is_Capture_Row = 1 THEN TotalTime ELSE 0 END) AS capture_time,
+          SUM(CASE WHEN Is_Capture_Row = 1 THEN Weighted_Baseline_USBD_Contrib_Excl ELSE 0 END) AS capture_baseline_contrib
+        FROM edw_dev.bipa_analytics.radiologist_metrics_optimized
+        WHERE Exam_Date >= '2024-11-01'
+        GROUP BY DATE_TRUNC('{trunc}', Exam_Date), Practice
+        ORDER BY period
+        """
+    )
+
+
+def get_capture_efficiency_trend_by_radiologist(granularity: str) -> list[dict]:
+    trunc = "WEEK" if granularity == "week" else "MONTH"
+    return run_query(
+        f"""
+        SELECT
+          CAST(CAST(DATE_TRUNC('{trunc}', Exam_Date) AS DATE) AS STRING) AS period,
+          Physician_NPI AS npi,
+          SUM(CASE WHEN Is_Capture_Row = 1 THEN TotalTBWU ELSE 0 END) AS capture_tbwu,
+          SUM(CASE WHEN Is_Capture_Row = 1 THEN TotalTime ELSE 0 END) AS capture_time,
+          SUM(CASE WHEN Is_Capture_Row = 1 THEN Weighted_Baseline_USBD_Contrib_Excl ELSE 0 END) AS capture_baseline_contrib
+        FROM edw_dev.bipa_analytics.radiologist_metrics_optimized
+        WHERE Exam_Date >= '2024-11-01'
+        GROUP BY DATE_TRUNC('{trunc}', Exam_Date), Physician_NPI
         ORDER BY period
         """
     )
@@ -423,6 +495,64 @@ def get_capacity_by_practice() -> list[CapacityPracticeRollup]:
         """
     )
     return [CapacityPracticeRollup(**row) for row in rows]
+
+
+def get_radiologist_scorecard() -> list[dict]:
+    """Addl Capacity/Shift, New Efficiency, New Utilization (all Top-N variants) for every
+    radiologist live on Mosaic, computed over their N most recent shifts since go-live.
+    Uses presentation_rpt_vra_capacity_enhance_vw (not the _enhancetest_vw variant the
+    Capacity page uses) - the test view currently throws NUMERIC_VALUE_OUT_OF_RANGE on this
+    same data (a pre-existing upstream EDW bug, confirmed independently), while this sibling
+    view has the identical shape without it. N is precomputed for every offered dropdown
+    value (5/10/15/20/25/30/all) in one pass so the frontend never has to refetch when the
+    user changes the N selector."""
+    return run_query(
+        """
+        WITH ranked AS (
+          SELECT
+            NPI, Rad_name, Team, localpractice AS practice, Mosaic_go_live_date,
+            on_shift_capacity_vs_baseline_RPWU AS addl_capacity,
+            on_shift_efficiency_RPWU AS new_efficiency,
+            on_shift_utilization_RPWU_pct AS new_utilization,
+            ROW_NUMBER() OVER (PARTITION BY NPI ORDER BY ShiftDate DESC) AS shift_rank
+          FROM edw_dev.bipa_analytics.presentation_rpt_vra_capacity_enhance_vw
+          WHERE Mosaic_go_live_date IS NOT NULL AND ShiftDate >= Mosaic_go_live_date
+        )
+        SELECT
+          NPI AS npi, MAX(Rad_name) AS radiologist_name, MAX(Team) AS team,
+          MAX(practice) AS practice, CAST(MAX(Mosaic_go_live_date) AS STRING) AS mosaic_go_live_date,
+          COUNT(CASE WHEN shift_rank <= 5 THEN 1 END) AS shifts_used_top5,
+          AVG(CASE WHEN shift_rank <= 5 THEN addl_capacity END) AS addl_capacity_top5,
+          AVG(CASE WHEN shift_rank <= 5 THEN new_efficiency END) AS new_efficiency_top5,
+          AVG(CASE WHEN shift_rank <= 5 THEN new_utilization END) AS new_utilization_top5,
+          COUNT(CASE WHEN shift_rank <= 10 THEN 1 END) AS shifts_used_top10,
+          AVG(CASE WHEN shift_rank <= 10 THEN addl_capacity END) AS addl_capacity_top10,
+          AVG(CASE WHEN shift_rank <= 10 THEN new_efficiency END) AS new_efficiency_top10,
+          AVG(CASE WHEN shift_rank <= 10 THEN new_utilization END) AS new_utilization_top10,
+          COUNT(CASE WHEN shift_rank <= 15 THEN 1 END) AS shifts_used_top15,
+          AVG(CASE WHEN shift_rank <= 15 THEN addl_capacity END) AS addl_capacity_top15,
+          AVG(CASE WHEN shift_rank <= 15 THEN new_efficiency END) AS new_efficiency_top15,
+          AVG(CASE WHEN shift_rank <= 15 THEN new_utilization END) AS new_utilization_top15,
+          COUNT(CASE WHEN shift_rank <= 20 THEN 1 END) AS shifts_used_top20,
+          AVG(CASE WHEN shift_rank <= 20 THEN addl_capacity END) AS addl_capacity_top20,
+          AVG(CASE WHEN shift_rank <= 20 THEN new_efficiency END) AS new_efficiency_top20,
+          AVG(CASE WHEN shift_rank <= 20 THEN new_utilization END) AS new_utilization_top20,
+          COUNT(CASE WHEN shift_rank <= 25 THEN 1 END) AS shifts_used_top25,
+          AVG(CASE WHEN shift_rank <= 25 THEN addl_capacity END) AS addl_capacity_top25,
+          AVG(CASE WHEN shift_rank <= 25 THEN new_efficiency END) AS new_efficiency_top25,
+          AVG(CASE WHEN shift_rank <= 25 THEN new_utilization END) AS new_utilization_top25,
+          COUNT(CASE WHEN shift_rank <= 30 THEN 1 END) AS shifts_used_top30,
+          AVG(CASE WHEN shift_rank <= 30 THEN addl_capacity END) AS addl_capacity_top30,
+          AVG(CASE WHEN shift_rank <= 30 THEN new_efficiency END) AS new_efficiency_top30,
+          AVG(CASE WHEN shift_rank <= 30 THEN new_utilization END) AS new_utilization_top30,
+          COUNT(1) AS shifts_used_all,
+          AVG(addl_capacity) AS addl_capacity_all,
+          AVG(new_efficiency) AS new_efficiency_all,
+          AVG(new_utilization) AS new_utilization_all
+        FROM ranked
+        GROUP BY NPI
+        """
+    )
 
 
 def get_mosaic_intelligence_snapshot() -> MosaicIntelligenceSnapshot:
@@ -499,6 +629,99 @@ def get_mosaic_intelligence_snapshot() -> MosaicIntelligenceSnapshot:
     )
 
 
+def get_mosaic_intelligence_by_practice() -> list[MosaicIntelligenceSnapshot]:
+    """Same metrics as get_mosaic_intelligence_snapshot, widened by practice. rpce_status_counts()
+    stays company-wide on every row (it's a hardcoded practice-status audit list, not an EDW
+    aggregate, so there's nothing to widen)."""
+    volume_rows = run_query(
+        f"""
+        SELECT
+          COALESCE(dp.practice_rollup, v.Team) AS practice,
+          COUNT(DISTINCT CASE WHEN v.Mosaic_flag = 1 THEN v.NPI END) AS rads_live_on_mosaic,
+          COUNT(DISTINCT CASE WHEN v.modality_code IN ('US', 'BD') AND v.mosaic_draft_flag = 1
+                              AND v.Mexproc IS NOT NULL THEN v.NPI END) AS rads_live_on_capture,
+          (SUM(CASE WHEN v.Mosaic_flag = 1 THEN 1 ELSE 0 END) * 1.0
+            / NULLIF(SUM(CASE WHEN v.Source_System_Code IN ({_RPCE_SOURCE_SYSTEMS_SQL}) THEN 1 ELSE 0 END), 0))
+            + {_RPCE_PCT_ADJUSTMENT} AS pct_rpce_reporting,
+          (SUM(CASE WHEN v.mosaic_draft_flag = 1 THEN 1 ELSE 0 END) * 1.0
+            / NULLIF(SUM(CASE WHEN v.Source_System_Code IN ({_RPCE_SOURCE_SYSTEMS_SQL}) THEN 1 ELSE 0 END), 0))
+            + {_RPCE_PCT_ADJUSTMENT} AS pct_rpce_drafting
+        FROM edw_dev.bipa_analytics.presentation_mosaicdailyvolume_vw v
+        LEFT JOIN {settings.qualified}.dim_mosaic_practice dp ON dp.team_code = v.Team
+        WHERE v.Calendar_Date >= '2025-04-01'
+        GROUP BY COALESCE(dp.practice_rollup, v.Team)
+        """
+    )
+
+    drafting_rows = run_query(
+        f"""
+        WITH drafting_activity AS (
+          SELECT COALESCE(dp.practice_rollup, v.Team) AS practice, v.NPI AS NPI, SUM(v.mosaic_draft_flag) AS total_drafts
+          FROM edw_dev.bipa_analytics.presentation_mosaicdailyvolume_vw v
+          LEFT JOIN {settings.qualified}.dim_mosaic_practice dp ON dp.team_code = v.Team
+          WHERE v.Calendar_Date >= '2025-04-01'
+          GROUP BY COALESCE(dp.practice_rollup, v.Team), v.NPI
+        )
+        SELECT da.practice AS practice, COUNT(DISTINCT da.NPI) AS rads_live_on_ai_drafting
+        FROM drafting_activity da
+        JOIN `edw_prod`.`dataverse_m365-vra-dynamics-prod`.rad_onboarding ro
+          ON CAST(REPLACE(ro.npi, ',', '') AS DECIMAL(10,0)) = da.NPI
+        WHERE da.total_drafts >= 1
+          AND (
+            (NULLIF(ro.added_to_ad_group_cxr_abd_msk, 'None') IS NOT NULL
+              AND TO_DATE(ro.added_to_ad_group_cxr_abd_msk, 'M/d/yyyy') <> DATE'1900-01-01')
+            OR (NULLIF(ro.added_to_ad_group_ct_head, 'None') IS NOT NULL
+              AND TO_DATE(ro.added_to_ad_group_ct_head, 'M/d/yyyy') <> DATE'1900-01-01')
+            OR (NULLIF(ro.added_to_ad_group_ct_abd_pelvis, 'None') IS NOT NULL
+              AND TO_DATE(ro.added_to_ad_group_ct_abd_pelvis, 'M/d/yyyy') <> DATE'1900-01-01')
+          )
+        GROUP BY da.practice
+        """
+    )
+    drafting_by_practice = {row["practice"]: row["rads_live_on_ai_drafting"] for row in drafting_rows}
+
+    # rad_onboarding carries no Team/practice column, so resolve capture-enabled counts to a
+    # practice via dim_mosaic_radiologist.home_practice (same table/columns already used by
+    # get_deployment_by_practice) in Python, then group here.
+    capture_flags = run_query(
+        """
+        SELECT NPI, capture_enabled FROM (
+          SELECT
+            CAST(REPLACE(npi, ',', '') AS DECIMAL(10,0)) AS NPI,
+            NULLIF(capture_enabled, 'None') = 'Yes' AS capture_enabled,
+            ROW_NUMBER() OVER (PARTITION BY CAST(REPLACE(npi, ',', '') AS DECIMAL(10,0)) ORDER BY modified_on DESC) AS rn
+          FROM `edw_prod`.`dataverse_m365-vra-dynamics-prod`.rad_onboarding
+          WHERE npi IS NOT NULL AND npi <> '0000000000'
+        ) WHERE rn = 1
+        """
+    )
+    dim_rows = run_query(f"SELECT NPI AS npi, home_practice FROM {settings.qualified}.dim_mosaic_radiologist")
+    practice_by_npi = {row["npi"]: row["home_practice"] for row in dim_rows}
+    capture_enabled_counts: dict[str, int] = {}
+    for row in capture_flags:
+        if row["capture_enabled"]:
+            practice = practice_by_npi.get(row["NPI"])
+            if practice:
+                capture_enabled_counts[practice] = capture_enabled_counts.get(practice, 0) + 1
+
+    rpce_counts = rpce_status_counts()
+    return [
+        MosaicIntelligenceSnapshot(
+            practice=row["practice"],
+            rads_live_on_mosaic=row["rads_live_on_mosaic"],
+            rads_live_on_ai_drafting=drafting_by_practice.get(row["practice"], 0),
+            pct_rpce_reporting=row["pct_rpce_reporting"],
+            pct_rpce_drafting=row["pct_rpce_drafting"],
+            rads_live_on_capture=row["rads_live_on_capture"],
+            rads_capture_enabled=capture_enabled_counts.get(row["practice"], 0),
+            practices_fully_on_rpce=rpce_counts["Fully on RPCE"],
+            practices_split_integration=rpce_counts["Split Integration"],
+            practices_not_on_rpce=rpce_counts["Not on RPCE"],
+        )
+        for row in volume_rows
+    ]
+
+
 def get_rpce_trend() -> list[RpceTrendPoint]:
     rows = run_query(
         f"""
@@ -519,6 +742,251 @@ def get_rpce_trend() -> list[RpceTrendPoint]:
         """
     )
     return [RpceTrendPoint(**row) for row in rows]
+
+
+def get_rpce_trend_by_practice() -> list[RpceTrendPoint]:
+    rows = run_query(
+        f"""
+        SELECT
+          CAST(v.Calendar_Date AS STRING) AS period,
+          COALESCE(dp.practice_rollup, v.Team) AS practice,
+          SUM(CASE WHEN v.Mosaic_flag = 1 THEN 1 ELSE 0 END) AS mosaic_exam_ct,
+          SUM(CASE WHEN v.mosaic_draft_flag = 1 THEN 1 ELSE 0 END) AS drafting_exam_ct,
+          (SUM(CASE WHEN v.Mosaic_flag = 1 THEN 1 ELSE 0 END) * 1.0
+            / NULLIF(SUM(CASE WHEN v.Source_System_Code IN ({_RPCE_SOURCE_SYSTEMS_SQL}) THEN 1 ELSE 0 END), 0))
+            + {_RPCE_PCT_ADJUSTMENT} AS pct_rpce_reporting,
+          (SUM(CASE WHEN v.mosaic_draft_flag = 1 THEN 1 ELSE 0 END) * 1.0
+            / NULLIF(SUM(CASE WHEN v.Source_System_Code IN ({_RPCE_SOURCE_SYSTEMS_SQL}) THEN 1 ELSE 0 END), 0))
+            + {_RPCE_PCT_ADJUSTMENT} AS pct_rpce_drafting
+        FROM edw_dev.bipa_analytics.presentation_mosaicdailyvolume_vw v
+        LEFT JOIN {settings.qualified}.dim_mosaic_practice dp ON dp.team_code = v.Team
+        WHERE v.Calendar_Date >= '2025-04-01'
+        GROUP BY v.Calendar_Date, COALESCE(dp.practice_rollup, v.Team)
+        ORDER BY v.Calendar_Date
+        """
+    )
+    return [RpceTrendPoint(**row) for row in rows]
+
+
+def _get_capture_enabled_npis() -> list[int]:
+    """Dedup'd rad_onboarding.capture_enabled='Yes' NPI list - same pattern already used
+    inline in get_mosaic_intelligence_by_practice's capture_flags query, factored out here
+    for reuse across all the new Capture-module queries below."""
+    rows = run_query(
+        """
+        SELECT NPI FROM (
+          SELECT
+            CAST(REPLACE(npi, ',', '') AS DECIMAL(10,0)) AS NPI,
+            NULLIF(capture_enabled, 'None') AS capture_enabled,
+            ROW_NUMBER() OVER (PARTITION BY CAST(REPLACE(npi, ',', '') AS DECIMAL(10,0)) ORDER BY modified_on DESC) AS rn
+          FROM `edw_prod`.`dataverse_m365-vra-dynamics-prod`.rad_onboarding
+          WHERE npi IS NOT NULL AND npi <> '0000000000'
+        ) WHERE rn = 1 AND capture_enabled = 'Yes'
+        """
+    )
+    return [int(row["NPI"]) for row in rows]
+
+
+def _npi_sql_list(npis: list[int]) -> str:
+    return ", ".join(str(n) for n in npis) if npis else "-1"
+
+
+def get_capture_overview() -> CaptureOverview:
+    """Overall US+BD capture utilization (captured / capturable exams), both for all rads
+    and for capture-enabled rads only. Efficiency fields are left None here - cache_service
+    fills them in live from efficiency_store.aggregate(mode="capture"), the same machinery
+    that already powers the existing "Capture Only" Efficiency mode, so this function has
+    no reason to touch radiologist_metrics_optimized at all."""
+    enabled_sql = _npi_sql_list(_get_capture_enabled_npis())
+    row = run_query_one(
+        f"""
+        SELECT
+          SUM(CASE WHEN Mexproc IS NOT NULL THEN 1 ELSE 0 END) AS capturable_exams_all,
+          SUM(CASE WHEN Mexproc IS NOT NULL AND mosaic_draft_flag = 1 THEN 1 ELSE 0 END) AS captured_exams_all,
+          SUM(CASE WHEN Mexproc IS NOT NULL AND NPI IN ({enabled_sql}) THEN 1 ELSE 0 END) AS capturable_exams_enabled,
+          SUM(CASE WHEN Mexproc IS NOT NULL AND mosaic_draft_flag = 1 AND NPI IN ({enabled_sql}) THEN 1 ELSE 0 END) AS captured_exams_enabled,
+          COUNT(DISTINCT CASE WHEN mosaic_draft_flag = 1 THEN NPI END) AS rads_live_on_capture
+        FROM edw_dev.bipa_analytics.presentation_mosaicdailyvolume_vw
+        WHERE modality_code IN ('US', 'BD') AND Calendar_Date >= '2025-04-01'
+        """
+    )
+    capturable_all = (row["capturable_exams_all"] if row else 0) or 0
+    captured_all = (row["captured_exams_all"] if row else 0) or 0
+    capturable_enabled = (row["capturable_exams_enabled"] if row else 0) or 0
+    captured_enabled = (row["captured_exams_enabled"] if row else 0) or 0
+    return CaptureOverview(
+        capturable_exams_all=capturable_all,
+        captured_exams_all=captured_all,
+        pct_captured_all=(captured_all / capturable_all) if capturable_all else None,
+        capturable_exams_enabled=capturable_enabled,
+        captured_exams_enabled=captured_enabled,
+        pct_captured_enabled=(captured_enabled / capturable_enabled) if capturable_enabled else None,
+        rads_live_on_capture=(row["rads_live_on_capture"] if row else 0) or 0,
+        rads_capture_enabled=enabled_sql.count(",") + 1 if enabled_sql != "-1" else 0,
+        capture_mosaic_tbwu_per_min=None,
+        capture_baseline_tbwu_per_min=None,
+        capture_pct_change_vs_baseline=None,
+    )
+
+
+def get_capture_by_practice() -> list[CapturePracticeRollup]:
+    enabled_npis = _get_capture_enabled_npis()
+    enabled_sql = _npi_sql_list(enabled_npis)
+    rows = run_query(
+        f"""
+        SELECT
+          COALESCE(dp.practice_rollup, v.Team) AS practice,
+          SUM(CASE WHEN v.Mexproc IS NOT NULL THEN 1 ELSE 0 END) AS capturable_exams_all,
+          SUM(CASE WHEN v.Mexproc IS NOT NULL AND v.mosaic_draft_flag = 1 THEN 1 ELSE 0 END) AS captured_exams_all,
+          SUM(CASE WHEN v.Mexproc IS NOT NULL AND v.NPI IN ({enabled_sql}) THEN 1 ELSE 0 END) AS capturable_exams_enabled,
+          SUM(CASE WHEN v.Mexproc IS NOT NULL AND v.mosaic_draft_flag = 1 AND v.NPI IN ({enabled_sql}) THEN 1 ELSE 0 END) AS captured_exams_enabled,
+          MIN(CASE WHEN v.mosaic_draft_flag = 1 THEN v.Calendar_Date END) AS enablement_date,
+          COUNT(DISTINCT CASE WHEN v.mosaic_draft_flag = 1 THEN v.NPI END) AS rads_live_on_capture
+        FROM edw_dev.bipa_analytics.presentation_mosaicdailyvolume_vw v
+        LEFT JOIN {settings.qualified}.dim_mosaic_practice dp ON dp.team_code = v.Team
+        WHERE v.modality_code IN ('US', 'BD') AND v.Calendar_Date >= '2025-04-01'
+        GROUP BY COALESCE(dp.practice_rollup, v.Team)
+        """
+    )
+    dim_rows = run_query(f"SELECT NPI AS npi, home_practice FROM {settings.qualified}.dim_mosaic_radiologist")
+    practice_by_npi = {row["npi"]: row["home_practice"] for row in dim_rows}
+    enabled_counts: dict[str, int] = {}
+    for npi in enabled_npis:
+        practice = practice_by_npi.get(npi)
+        if practice:
+            enabled_counts[practice] = enabled_counts.get(practice, 0) + 1
+
+    result = []
+    for row in rows:
+        capturable_all = row["capturable_exams_all"] or 0
+        captured_all = row["captured_exams_all"] or 0
+        capturable_enabled = row["capturable_exams_enabled"] or 0
+        captured_enabled = row["captured_exams_enabled"] or 0
+        result.append(
+            CapturePracticeRollup(
+                practice=row["practice"],
+                capturable_exams_all=capturable_all,
+                captured_exams_all=captured_all,
+                pct_captured_all=(captured_all / capturable_all) if capturable_all else None,
+                capturable_exams_enabled=capturable_enabled,
+                captured_exams_enabled=captured_enabled,
+                pct_captured_enabled=(captured_enabled / capturable_enabled) if capturable_enabled else None,
+                rads_live_on_capture=row["rads_live_on_capture"] or 0,
+                rads_capture_enabled=enabled_counts.get(row["practice"], 0),
+                enablement_date=row["enablement_date"],
+                # pct_change_since_enablement is filled in by cache_service, which cross-
+                # references the monthly utilization trend cache for the baseline period.
+                pct_change_since_enablement=None,
+            )
+        )
+    return result
+
+
+def get_capture_by_radiologist() -> list[CaptureRadiologistItem]:
+    rows = run_query(
+        """
+        SELECT
+          NPI AS npi,
+          SUM(CASE WHEN Mexproc IS NOT NULL THEN 1 ELSE 0 END) AS capturable_exams,
+          SUM(CASE WHEN Mexproc IS NOT NULL AND mosaic_draft_flag = 1 THEN 1 ELSE 0 END) AS captured_exams
+        FROM edw_dev.bipa_analytics.presentation_mosaicdailyvolume_vw
+        WHERE modality_code IN ('US', 'BD') AND Calendar_Date >= '2025-04-01'
+        GROUP BY NPI
+        """
+    )
+    enabled_npis = set(_get_capture_enabled_npis())
+    dim_rows = run_query(
+        f"SELECT NPI AS npi, radiologist_name, home_practice FROM {settings.qualified}.dim_mosaic_radiologist"
+    )
+    dim_by_npi = {row["npi"]: row for row in dim_rows}
+
+    result = []
+    for row in rows:
+        npi = row["npi"]
+        dim = dim_by_npi.get(npi)
+        capturable = row["capturable_exams"] or 0
+        captured = row["captured_exams"] or 0
+        result.append(
+            CaptureRadiologistItem(
+                npi=npi,
+                radiologist_name=dim["radiologist_name"] if dim else None,
+                practice=dim["home_practice"] if dim else None,
+                capture_enabled=npi in enabled_npis,
+                capturable_exams=capturable,
+                captured_exams=captured,
+                pct_captured=(captured / capturable) if capturable else None,
+            )
+        )
+    return result
+
+
+def get_capture_utilization_trend_by_practice(granularity: str) -> list[dict]:
+    trunc = "WEEK" if granularity == "week" else "MONTH"
+    enabled_sql = _npi_sql_list(_get_capture_enabled_npis())
+    return run_query(
+        f"""
+        SELECT
+          CAST(CAST(DATE_TRUNC('{trunc}', v.Calendar_Date) AS DATE) AS STRING) AS period,
+          COALESCE(dp.practice_rollup, v.Team) AS practice,
+          SUM(CASE WHEN v.Mexproc IS NOT NULL THEN 1 ELSE 0 END) AS capturable_exams_all,
+          SUM(CASE WHEN v.Mexproc IS NOT NULL AND v.mosaic_draft_flag = 1 THEN 1 ELSE 0 END) AS captured_exams_all,
+          SUM(CASE WHEN v.Mexproc IS NOT NULL AND v.NPI IN ({enabled_sql}) THEN 1 ELSE 0 END) AS capturable_exams_enabled,
+          SUM(CASE WHEN v.Mexproc IS NOT NULL AND v.mosaic_draft_flag = 1 AND v.NPI IN ({enabled_sql}) THEN 1 ELSE 0 END) AS captured_exams_enabled
+        FROM edw_dev.bipa_analytics.presentation_mosaicdailyvolume_vw v
+        LEFT JOIN {settings.qualified}.dim_mosaic_practice dp ON dp.team_code = v.Team
+        WHERE v.modality_code IN ('US', 'BD') AND v.Calendar_Date >= '2025-04-01'
+        GROUP BY DATE_TRUNC('{trunc}', v.Calendar_Date), COALESCE(dp.practice_rollup, v.Team)
+        ORDER BY period
+        """
+    )
+
+
+def get_capture_utilization_trend_by_radiologist(granularity: str) -> list[dict]:
+    trunc = "WEEK" if granularity == "week" else "MONTH"
+    return run_query(
+        f"""
+        SELECT
+          CAST(CAST(DATE_TRUNC('{trunc}', Calendar_Date) AS DATE) AS STRING) AS period,
+          NPI AS npi,
+          SUM(CASE WHEN Mexproc IS NOT NULL THEN 1 ELSE 0 END) AS capturable_exams,
+          SUM(CASE WHEN Mexproc IS NOT NULL AND mosaic_draft_flag = 1 THEN 1 ELSE 0 END) AS captured_exams
+        FROM edw_dev.bipa_analytics.presentation_mosaicdailyvolume_vw
+        WHERE modality_code IN ('US', 'BD') AND Calendar_Date >= '2025-04-01'
+        GROUP BY DATE_TRUNC('{trunc}', Calendar_Date), NPI
+        ORDER BY period
+        """
+    )
+
+
+def get_undrafted_analysis() -> list[UndraftedCategoryPoint]:
+    """Draftable-but-not-drafted exam breakdown by reason, from the view built jointly
+    with the Clinical Transformation team (edw_dev.bipa_analytics.examsnotdraftedbutdraftable_vw).
+    That view's own grain also carries team/site/radiologist/exam_category/drafting_model,
+    which this dashboard doesn't expose as filters yet, so they're summed away here rather
+    than in EDW. week_end is aliased to week_start: the view's column name is pinned to
+    "week_end" for its other (Power BI) consumers, but the value it holds is the Monday the
+    week starts on, and this app has no reason to carry that naming mismatch forward.
+
+    "Drafted" (category_sort_order 0) is included, not filtered out, so the frontend can
+    compute each week's "% Undrafted" total as 1 - (Drafted / week total) - see
+    UndraftedStackedChart, which hides the Drafted segment itself but needs it in the
+    denominator.
+    """
+    rows = run_query(
+        """
+        SELECT
+          week_end AS week_start,
+          local_practice,
+          category,
+          category_sort_order,
+          SUM(exam_count) AS exam_count,
+          SUM(tbwu) AS tbwu
+        FROM edw_dev.bipa_analytics.examsnotdraftedbutdraftable_vw
+        GROUP BY week_end, local_practice, category, category_sort_order
+        ORDER BY week_end, category_sort_order
+        """
+    )
+    return [UndraftedCategoryPoint(**row) for row in rows]
 
 
 def get_rad_summary_stats() -> list[RadSummaryStat]:

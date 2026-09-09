@@ -70,8 +70,8 @@ export function MosaicIntelligence() {
   const [groupFilter, setGroupFilter] = useState("");
   const filters = useFilters();
 
-  const snapshot = useFetch(() => mosaicApi.getMosaicIntelligence(), []);
-  const trend = useFetch(() => mosaicApi.getRpceTrend(), []);
+  const snapshot = useFetch(() => mosaicApi.getMosaicIntelligence(filters.practice || undefined), [filters.practice]);
+  const trend = useFetch(() => mosaicApi.getRpceTrend(filters.practice || undefined), [filters.practice]);
   const radStats = useFetch(() => mosaicApi.getRadSummaryStats(), []);
 
   const anyError = snapshot.error || trend.error || radStats.error;
@@ -112,7 +112,7 @@ export function MosaicIntelligence() {
         </div>
       )}
 
-      <FilterBar practices={practices} />
+      <FilterBar practices={practices} showLocal={false} />
 
       <div style={{ display: "flex", gap: 16, flexWrap: "wrap" }}>
         <StatTile label="Rads Live on Mosaic" value={snapshot.data ? fmt(snapshot.data.rads_live_on_mosaic) : "…"} />

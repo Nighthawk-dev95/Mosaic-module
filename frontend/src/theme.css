@@ -18,6 +18,7 @@
   --domain-efficiency: #9085e9; /* slot 7 violet */
   --domain-capacity: #d95926; /* slot 2 orange */
   --domain-feedback: #e66767; /* slot 8 red */
+  --domain-capture: #0ea5c4; /* slot 9 cyan - validated via dataviz skill's palette checker against slots 1-8 in dark mode */
 
   /* Categorical series colors for in-chart identities (not domain identity) -
      slots 4/5 of the fixed 8-hue order, unused by the domain colors above */
@@ -38,6 +39,19 @@
   --blocker-training-not-sent: var(--series-6-green);
   --blocker-training-not-completed: var(--domain-feedback);
   --blocker-other: var(--text-muted);
+
+  /* Fixed categorical order for the Non-Drafted Analysis stacked chart, keyed to
+     category_sort_order 1-7 from examsnotdraftedbutdraftable_vw (0 = Drafted, never
+     plotted as its own segment - see UndraftedStackedChart). Reuses the same validated
+     8-hue slots as the blocker charts above, under names describing this chart's roles;
+     slot 8 (red/domain-feedback) is intentionally unused here. */
+  --undrafted-rad-declined: var(--domain-deployment);
+  --undrafted-ops-declined: var(--series-4-yellow);
+  --undrafted-incomplete-process: var(--domain-capacity);
+  --undrafted-practice-not-enabled: var(--series-5-magenta);
+  --undrafted-opened-under-5min: var(--domain-utilization);
+  --undrafted-opened-over-5min: var(--domain-efficiency);
+  --undrafted-never-opened: var(--series-6-green);
 
   /* Status palette - fixed, reserved for state (never series identity) */
   --status-good: #0ca30c;

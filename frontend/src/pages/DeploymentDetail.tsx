@@ -1,9 +1,9 @@
-import type { CSSProperties } from "react";
 import { useMemo } from "react";
 import { mosaicApi } from "../api/client";
 import { useFetch } from "../hooks/useFetch";
 import { DataTable } from "../components/DataTable";
 import type { DataTableColumn } from "../components/DataTable";
+import { TABLE_SECTION_STYLE, TABLE_SCROLL_STYLE } from "../styles/tableLayout";
 import { DeploymentFunnelChart } from "../components/DeploymentFunnelChart";
 import { BlockerStackedChart } from "../components/BlockerStackedChart";
 import { FilterBar } from "../components/FilterBar";
@@ -32,21 +32,6 @@ const RAD_COLUMNS: DataTableColumn<DeploymentRadiologistItem>[] = [
   { key: "xr_drafts_last_14d", label: "XR (14d)" },
   { key: "ct_abdpel_drafts_last_14d", label: "CT Abd/Pel (14d)" },
 ];
-
-const TABLE_SECTION_STYLE: CSSProperties = {
-  background: "var(--surface-1)",
-  border: "1px solid var(--border)",
-  borderRadius: 8,
-  padding: 16,
-  display: "flex",
-  flexDirection: "column",
-  minHeight: 0,
-};
-
-const TABLE_SCROLL_STYLE: CSSProperties = {
-  maxHeight: 480,
-  overflow: "auto",
-};
 
 export function DeploymentDetail() {
   const byPractice = useFetch(() => mosaicApi.getDeploymentByPractice(), []);
@@ -92,7 +77,7 @@ export function DeploymentDetail() {
   );
 
   return (
-    <div style={{ padding: 24, display: "flex", flexDirection: "column", gap: 20, flex: 1, overflowY: "auto" }}>
+    <div style={{ padding: 24, display: "flex", flexDirection: "column", gap: 20, flex: 1, minHeight: 0, overflowY: "auto" }}>
       <div>
         <h1 style={{ margin: 0, fontSize: 20 }}>Deployment</h1>
         <div style={{ color: "var(--text-muted)", fontSize: 13 }}>
@@ -108,7 +93,7 @@ export function DeploymentDetail() {
         </div>
       )}
 
-      <FilterBar practices={practices} />
+      <FilterBar practices={practices} showLocal={false} showMonth={false} />
       <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: -12 }}>
         Practice/Radiologist filters narrow the tables and blocker charts below. The waterfalls are company-wide
         totals and aren't broken down by practice.

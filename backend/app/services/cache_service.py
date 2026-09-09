@@ -11,6 +11,13 @@ from app.models.mosaic import (
     BlockerByPractice,
     CapacityPracticeRollup,
     CapacityRadiologistItem,
+    CaptureEfficiencyTrendPracticePoint,
+    CaptureEfficiencyTrendRadiologistPoint,
+    CaptureOverview,
+    CapturePracticeRollup,
+    CaptureRadiologistItem,
+    CaptureUtilizationTrendPracticePoint,
+    CaptureUtilizationTrendRadiologistPoint,
     DeploymentFunnel,
     DeploymentPracticeRollup,
     DeploymentRadiologistItem,
@@ -23,8 +30,10 @@ from app.models.mosaic import (
     MosaicIntelligenceSnapshot,
     PopulationEfficiency,
     RadiologistRosterItem,
+    RadiologistScorecard,
     RadSummaryStat,
     RpceTrendPoint,
+    UndraftedCategoryPoint,
     UtilizationPracticeRollup,
 )
 
@@ -44,23 +53,39 @@ def _read_time_change(current: float | None, baseline: float | None) -> float | 
     return (baseline / current) - 1
 
 
-def get_mosaic_intelligence_snapshot() -> MosaicIntelligenceSnapshot:
+def _empty_mosaic_intelligence_snapshot(practice: str | None) -> MosaicIntelligenceSnapshot:
+    return MosaicIntelligenceSnapshot(
+        practice=practice,
+        rads_live_on_mosaic=0,
+        rads_live_on_ai_drafting=0,
+        pct_rpce_reporting=None,
+        pct_rpce_drafting=None,
+        rads_live_on_capture=0,
+        rads_capture_enabled=0,
+        practices_fully_on_rpce=0,
+        practices_split_integration=0,
+        practices_not_on_rpce=0,
+    )
+
+
+def get_mosaic_intelligence_snapshot(practice: str | None = None) -> MosaicIntelligenceSnapshot:
+    if practice:
+        payload, _ = cache_store.load("mosaic_intelligence_by_practice")
+        match = next((row for row in (payload or []) if row.get("practice") == practice), None)
+        if match is None:
+            return _empty_mosaic_intelligence_snapshot(practice)
+        return MosaicIntelligenceSnapshot(**match)
+
     payload, _ = cache_store.load("mosaic_intelligence_snapshot")
     if payload is None:
-        return MosaicIntelligenceSnapshot(
-            rads_live_on_mosaic=0,
-            rads_live_on_ai_drafting=0,
-            pct_rpce_reporting=None,
-            pct_rpce_drafting=None,
-            rads_live_on_capture=0,
-            practices_fully_on_rpce=0,
-            practices_split_integration=0,
-            practices_not_on_rpce=0,
-        )
+        return _empty_mosaic_intelligence_snapshot(None)
     return MosaicIntelligenceSnapshot(**payload)
 
 
-def get_rpce_trend() -> list[RpceTrendPoint]:
+def get_rpce_trend(practice: str | None = None) -> list[RpceTrendPoint]:
+    if practice:
+        payload, _ = cache_store.load("rpce_trend_by_practice")
+        return [RpceTrendPoint(**row) for row in (payload or []) if row.get("practice") == practice]
     payload, _ = cache_store.load("rpce_trend")
     return [RpceTrendPoint(**row) for row in (payload or [])]
 
@@ -238,9 +263,12 @@ def _rate(tbwu: float | None, time_sec: float | None) -> float | None:
     return (tbwu or 0) / (time_sec / 60.0)
 
 
-def get_efficiency_trend(exam_category: str | None = None) -> list[EfficiencyTrendPoint]:
-    payload, _ = cache_store.load("efficiency_trend_by_category")
+def get_efficiency_trend(exam_category: str | None = None, practice: str | None = None) -> list[EfficiencyTrendPoint]:
+    cache_key = "efficiency_trend_by_practice_category" if practice else "efficiency_trend_by_category"
+    payload, _ = cache_store.load(cache_key)
     rows = payload or []
+    if practice:
+        rows = [r for r in rows if r.get("practice") == practice]
     if exam_category:
         rows = [r for r in rows if r.get("exam_category") == exam_category]
 
@@ -278,6 +306,7 @@ def get_efficiency_trend(exam_category: str | None = None) -> list[EfficiencyTre
         points.append(
             EfficiencyTrendPoint(
                 period=period,
+                practice=practice,
                 exam_category=exam_category,
                 reporting_tbwu_per_min=reporting_eff,
                 drafting_tbwu_per_min=drafting_eff,
@@ -310,6 +339,285 @@ def get_efficiency_trend_rp_avg() -> list[EfficiencyTrendRpAvgPoint]:
     return points
 
 
+def get_capture_overview() -> CaptureOverview:
+    payload, _ = cache_store.load("capture_overview")
+    if payload is None:
+        return CaptureOverview(
+            capturable_exams_all=0, captured_exams_all=0, pct_captured_all=None,
+            capturable_exams_enabled=0, captured_exams_enabled=0, pct_captured_enabled=None,
+            rads_live_on_capture=0, rads_capture_enabled=0,
+            capture_mosaic_tbwu_per_min=None, capture_baseline_tbwu_per_min=None,
+            capture_pct_change_vs_baseline=None,
+        )
+    # Efficiency fields are filled in live from efficiency_store, the same "Capture Only"
+    # mode machinery that already powers /efficiency?mode=capture - not cached separately.
+    eff = efficiency_store.aggregate(mode="capture")
+    data = dict(payload)
+    data.update(
+        capture_mosaic_tbwu_per_min=eff["mosaic_tbwu_per_min"],
+        capture_baseline_tbwu_per_min=eff["baseline_tbwu_per_min"],
+        capture_pct_change_vs_baseline=_pct_change(eff["mosaic_tbwu_per_min"], eff["baseline_tbwu_per_min"]),
+    )
+    return CaptureOverview(**data)
+
+
+def _capture_baseline_period(enablement_date) -> str | None:
+    """First full calendar month after a practice's derived enablement date (the following
+    month if enablement didn't land on the 1st, to avoid a partial-month understatement)."""
+    if not enablement_date:
+        return None
+    if isinstance(enablement_date, str):
+        year, month = int(enablement_date[:4]), int(enablement_date[5:7])
+        day = int(enablement_date[8:10])
+    else:
+        year, month, day = enablement_date.year, enablement_date.month, enablement_date.day
+    if day > 1:
+        month += 1
+        if month > 12:
+            month = 1
+            year += 1
+    return f"{year:04d}-{month:02d}"
+
+
+def get_capture_by_practice(practice: str | None = None) -> list[CapturePracticeRollup]:
+    payload, _ = cache_store.load("capture_by_practice")
+    items = [CapturePracticeRollup(**row) for row in (payload or [])]
+
+    trend_payload, _ = cache_store.load("capture_utilization_trend_monthly_by_practice")
+    by_practice_period: dict[str, dict[str, dict]] = {}
+    for row in trend_payload or []:
+        by_practice_period.setdefault(row["practice"], {})[row["period"][:7]] = row
+
+    result = []
+    for item in items:
+        periods = by_practice_period.get(item.practice, {})
+        baseline_period = _capture_baseline_period(item.enablement_date)
+        pct_change = None
+        if baseline_period and periods:
+            latest_period = max(periods)
+            baseline_row = periods.get(baseline_period)
+            latest_row = periods.get(latest_period)
+            if baseline_row and latest_row and latest_period != baseline_period:
+                baseline_capturable = baseline_row.get("capturable_exams_enabled") or 0
+                latest_capturable = latest_row.get("capturable_exams_enabled") or 0
+                baseline_rate = (
+                    (baseline_row.get("captured_exams_enabled") or 0) / baseline_capturable
+                    if baseline_capturable
+                    else None
+                )
+                latest_rate = (
+                    (latest_row.get("captured_exams_enabled") or 0) / latest_capturable if latest_capturable else None
+                )
+                pct_change = _pct_change(latest_rate, baseline_rate)
+        result.append(item.model_copy(update={"pct_change_since_enablement": pct_change}))
+
+    if practice:
+        result = [r for r in result if r.practice == practice]
+    return result
+
+
+def get_capture_by_radiologist(practice: str | None = None) -> list[CaptureRadiologistItem]:
+    payload, _ = cache_store.load("capture_by_radiologist")
+    items = [CaptureRadiologistItem(**row) for row in (payload or [])]
+    if practice:
+        items = [r for r in items if r.practice == practice]
+    return items
+
+
+def get_capture_utilization_trend_by_practice(
+    granularity: str = "week", practice: str | None = None
+) -> list[CaptureUtilizationTrendPracticePoint]:
+    cache_key = (
+        "capture_utilization_trend_weekly_by_practice"
+        if granularity == "week"
+        else "capture_utilization_trend_monthly_by_practice"
+    )
+    payload, _ = cache_store.load(cache_key)
+    rows = payload or []
+    if practice:
+        rows = [r for r in rows if r.get("practice") == practice]
+
+    by_practice: dict[str, list[dict]] = {}
+    for row in rows:
+        by_practice.setdefault(row["practice"], []).append(row)
+
+    points = []
+    for prac, prac_rows in by_practice.items():
+        prac_rows.sort(key=lambda r: r["period"])
+        prev_pct_all = None
+        prev_pct_enabled = None
+        for row in prac_rows:
+            capturable_all = row.get("capturable_exams_all") or 0
+            captured_all = row.get("captured_exams_all") or 0
+            capturable_enabled = row.get("capturable_exams_enabled") or 0
+            captured_enabled = row.get("captured_exams_enabled") or 0
+            pct_all = (captured_all / capturable_all) if capturable_all else None
+            pct_enabled = (captured_enabled / capturable_enabled) if capturable_enabled else None
+            points.append(
+                CaptureUtilizationTrendPracticePoint(
+                    period=row["period"],
+                    granularity=granularity,
+                    practice=prac,
+                    capturable_exams_all=capturable_all,
+                    captured_exams_all=captured_all,
+                    pct_captured_all=pct_all,
+                    capturable_exams_enabled=capturable_enabled,
+                    captured_exams_enabled=captured_enabled,
+                    pct_captured_enabled=pct_enabled,
+                    pct_change_all=_pct_change(pct_all, prev_pct_all),
+                    pct_change_enabled=_pct_change(pct_enabled, prev_pct_enabled),
+                )
+            )
+            prev_pct_all = pct_all
+            prev_pct_enabled = pct_enabled
+    points.sort(key=lambda p: (p.practice or "", p.period))
+    return points
+
+
+def get_capture_utilization_trend_by_radiologist(
+    granularity: str = "week", practice: str | None = None, npi: int | None = None
+) -> list[CaptureUtilizationTrendRadiologistPoint]:
+    cache_key = (
+        "capture_utilization_trend_weekly_by_radiologist"
+        if granularity == "week"
+        else "capture_utilization_trend_monthly_by_radiologist"
+    )
+    payload, _ = cache_store.load(cache_key)
+    rows = payload or []
+
+    dim_payload, _ = cache_store.load("capture_by_radiologist")
+    dim_by_npi = {row["npi"]: row for row in (dim_payload or [])}
+
+    if practice:
+        rows = [r for r in rows if dim_by_npi.get(r["npi"], {}).get("practice") == practice]
+    if npi:
+        rows = [r for r in rows if r["npi"] == npi]
+
+    by_npi: dict[int, list[dict]] = {}
+    for row in rows:
+        by_npi.setdefault(row["npi"], []).append(row)
+
+    points = []
+    for rad_npi, npi_rows in by_npi.items():
+        npi_rows.sort(key=lambda r: r["period"])
+        dim = dim_by_npi.get(rad_npi, {})
+        prev_pct = None
+        for row in npi_rows:
+            capturable = row.get("capturable_exams") or 0
+            captured = row.get("captured_exams") or 0
+            pct = (captured / capturable) if capturable else None
+            points.append(
+                CaptureUtilizationTrendRadiologistPoint(
+                    period=row["period"],
+                    granularity=granularity,
+                    npi=rad_npi,
+                    radiologist_name=dim.get("radiologist_name"),
+                    practice=dim.get("practice"),
+                    capture_enabled=dim.get("capture_enabled"),
+                    capturable_exams=capturable,
+                    captured_exams=captured,
+                    pct_captured=pct,
+                    pct_change=_pct_change(pct, prev_pct),
+                )
+            )
+            prev_pct = pct
+    points.sort(key=lambda p: (p.practice or "", p.radiologist_name or "", p.period))
+    return points
+
+
+def get_capture_efficiency_trend_by_practice(
+    granularity: str = "week", practice: str | None = None
+) -> list[CaptureEfficiencyTrendPracticePoint]:
+    cache_key = (
+        "capture_efficiency_trend_weekly_by_practice"
+        if granularity == "week"
+        else "capture_efficiency_trend_monthly_by_practice"
+    )
+    payload, _ = cache_store.load(cache_key)
+    rows = payload or []
+    if practice:
+        rows = [r for r in rows if r.get("practice") == practice]
+
+    by_practice: dict[str, list[dict]] = {}
+    for row in rows:
+        by_practice.setdefault(row["practice"], []).append(row)
+
+    points = []
+    for prac, prac_rows in by_practice.items():
+        prac_rows.sort(key=lambda r: r["period"])
+        prev_rate = None
+        for row in prac_rows:
+            tbwu = row.get("capture_tbwu") or 0
+            time_sec = row.get("capture_time") or 0
+            baseline_contrib = row.get("capture_baseline_contrib") or 0
+            rate = _rate(tbwu, time_sec)
+            baseline_rate = (baseline_contrib / time_sec) if time_sec else None
+            points.append(
+                CaptureEfficiencyTrendPracticePoint(
+                    period=row["period"],
+                    granularity=granularity,
+                    practice=prac,
+                    capture_tbwu_per_min=rate,
+                    capture_baseline_tbwu_per_min=baseline_rate,
+                    pct_change=_pct_change(rate, prev_rate),
+                )
+            )
+            prev_rate = rate
+    points.sort(key=lambda p: (p.practice or "", p.period))
+    return points
+
+
+def get_capture_efficiency_trend_by_radiologist(
+    granularity: str = "week", practice: str | None = None, npi: int | None = None
+) -> list[CaptureEfficiencyTrendRadiologistPoint]:
+    cache_key = (
+        "capture_efficiency_trend_weekly_by_radiologist"
+        if granularity == "week"
+        else "capture_efficiency_trend_monthly_by_radiologist"
+    )
+    payload, _ = cache_store.load(cache_key)
+    rows = payload or []
+
+    dim_payload, _ = cache_store.load("capture_by_radiologist")
+    dim_by_npi = {row["npi"]: row for row in (dim_payload or [])}
+
+    if practice:
+        rows = [r for r in rows if dim_by_npi.get(r["npi"], {}).get("practice") == practice]
+    if npi:
+        rows = [r for r in rows if r["npi"] == npi]
+
+    by_npi: dict[int, list[dict]] = {}
+    for row in rows:
+        by_npi.setdefault(row["npi"], []).append(row)
+
+    points = []
+    for rad_npi, npi_rows in by_npi.items():
+        npi_rows.sort(key=lambda r: r["period"])
+        dim = dim_by_npi.get(rad_npi, {})
+        prev_rate = None
+        for row in npi_rows:
+            tbwu = row.get("capture_tbwu") or 0
+            time_sec = row.get("capture_time") or 0
+            baseline_contrib = row.get("capture_baseline_contrib") or 0
+            rate = _rate(tbwu, time_sec)
+            baseline_rate = (baseline_contrib / time_sec) if time_sec else None
+            points.append(
+                CaptureEfficiencyTrendRadiologistPoint(
+                    period=row["period"],
+                    granularity=granularity,
+                    npi=rad_npi,
+                    radiologist_name=dim.get("radiologist_name"),
+                    practice=dim.get("practice"),
+                    capture_tbwu_per_min=rate,
+                    capture_baseline_tbwu_per_min=baseline_rate,
+                    pct_change=_pct_change(rate, prev_rate),
+                )
+            )
+            prev_rate = rate
+    points.sort(key=lambda p: (p.practice or "", p.radiologist_name or "", p.period))
+    return points
+
+
 def get_capacity_by_radiologist(limit: int = 500, offset: int = 0) -> list[CapacityRadiologistItem]:
     payload, _ = cache_store.load("capacity_by_radiologist")
     items = [CapacityRadiologistItem(**row) for row in (payload or [])]
@@ -321,3 +629,16 @@ def get_capacity_by_radiologist(limit: int = 500, offset: int = 0) -> list[Capac
 def get_capacity_by_practice() -> list[CapacityPracticeRollup]:
     payload, _ = cache_store.load("capacity_by_practice")
     return [CapacityPracticeRollup(**row) for row in (payload or [])]
+
+
+def get_radiologist_scorecard(practice: str | None = None) -> list[RadiologistScorecard]:
+    payload, _ = cache_store.load("radiologist_scorecard")
+    items = [RadiologistScorecard(**row) for row in (payload or [])]
+    if practice:
+        items = [r for r in items if r.practice == practice]
+    return items
+
+
+def get_undrafted_analysis() -> list[UndraftedCategoryPoint]:
+    payload, _ = cache_store.load("undrafted_analysis")
+    return [UndraftedCategoryPoint(**row) for row in (payload or [])]

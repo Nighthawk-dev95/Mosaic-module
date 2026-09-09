@@ -1,4 +1,5 @@
 export interface MosaicIntelligenceSnapshot {
+  practice: string | null;
   rads_live_on_mosaic: number;
   rads_live_on_ai_drafting: number;
   pct_rpce_reporting: number | null;
@@ -12,10 +13,96 @@ export interface MosaicIntelligenceSnapshot {
 
 export interface RpceTrendPoint {
   period: string;
+  practice: string | null;
   pct_rpce_reporting: number | null;
   pct_rpce_drafting: number | null;
   mosaic_exam_ct: number;
   drafting_exam_ct: number;
+}
+
+export interface CaptureOverview {
+  capturable_exams_all: number;
+  captured_exams_all: number;
+  pct_captured_all: number | null;
+  capturable_exams_enabled: number;
+  captured_exams_enabled: number;
+  pct_captured_enabled: number | null;
+  rads_live_on_capture: number;
+  rads_capture_enabled: number;
+  capture_mosaic_tbwu_per_min: number | null;
+  capture_baseline_tbwu_per_min: number | null;
+  capture_pct_change_vs_baseline: number | null;
+}
+
+export interface CapturePracticeRollup {
+  practice: string | null;
+  capturable_exams_all: number;
+  captured_exams_all: number;
+  pct_captured_all: number | null;
+  capturable_exams_enabled: number;
+  captured_exams_enabled: number;
+  pct_captured_enabled: number | null;
+  rads_live_on_capture: number;
+  rads_capture_enabled: number;
+  enablement_date: string | null;
+  pct_change_since_enablement: number | null;
+}
+
+export interface CaptureRadiologistItem {
+  npi: number;
+  radiologist_name: string | null;
+  practice: string | null;
+  capture_enabled: boolean | null;
+  capturable_exams: number;
+  captured_exams: number;
+  pct_captured: number | null;
+}
+
+export interface CaptureUtilizationTrendPracticePoint {
+  period: string;
+  granularity: string;
+  practice: string | null;
+  capturable_exams_all: number;
+  captured_exams_all: number;
+  pct_captured_all: number | null;
+  capturable_exams_enabled: number;
+  captured_exams_enabled: number;
+  pct_captured_enabled: number | null;
+  pct_change_all: number | null;
+  pct_change_enabled: number | null;
+}
+
+export interface CaptureUtilizationTrendRadiologistPoint {
+  period: string;
+  granularity: string;
+  npi: number;
+  radiologist_name: string | null;
+  practice: string | null;
+  capture_enabled: boolean | null;
+  capturable_exams: number;
+  captured_exams: number;
+  pct_captured: number | null;
+  pct_change: number | null;
+}
+
+export interface CaptureEfficiencyTrendPracticePoint {
+  period: string;
+  granularity: string;
+  practice: string | null;
+  capture_tbwu_per_min: number | null;
+  capture_baseline_tbwu_per_min: number | null;
+  pct_change: number | null;
+}
+
+export interface CaptureEfficiencyTrendRadiologistPoint {
+  period: string;
+  granularity: string;
+  npi: number;
+  radiologist_name: string | null;
+  practice: string | null;
+  capture_tbwu_per_min: number | null;
+  capture_baseline_tbwu_per_min: number | null;
+  pct_change: number | null;
 }
 
 export interface RadSummaryStat {
@@ -163,6 +250,7 @@ export interface EfficiencyFilterOptions {
 
 export interface EfficiencyTrendPoint {
   period: string;
+  practice: string | null;
   exam_category: string | null;
   reporting_tbwu_per_min: number | null;
   drafting_tbwu_per_min: number | null;
@@ -220,4 +308,52 @@ export interface CapacityRadiologistItem extends CapacityMeasures {
 
 export interface CapacityPracticeRollup extends CapacityMeasures {
   practice: string | null;
+}
+
+export interface RadiologistScorecard {
+  npi: number;
+  radiologist_name: string | null;
+  team: string | null;
+  practice: string | null;
+  mosaic_go_live_date: string | null;
+  shifts_used_top5: number;
+  addl_capacity_top5: number | null;
+  new_efficiency_top5: number | null;
+  new_utilization_top5: number | null;
+  shifts_used_top10: number;
+  addl_capacity_top10: number | null;
+  new_efficiency_top10: number | null;
+  new_utilization_top10: number | null;
+  shifts_used_top15: number;
+  addl_capacity_top15: number | null;
+  new_efficiency_top15: number | null;
+  new_utilization_top15: number | null;
+  shifts_used_top20: number;
+  addl_capacity_top20: number | null;
+  new_efficiency_top20: number | null;
+  new_utilization_top20: number | null;
+  shifts_used_top25: number;
+  addl_capacity_top25: number | null;
+  new_efficiency_top25: number | null;
+  new_utilization_top25: number | null;
+  shifts_used_top30: number;
+  addl_capacity_top30: number | null;
+  new_efficiency_top30: number | null;
+  new_utilization_top30: number | null;
+  shifts_used_all: number;
+  addl_capacity_all: number | null;
+  new_efficiency_all: number | null;
+  new_utilization_all: number | null;
+}
+
+// week_start is the Monday the week begins; category_sort_order 0 is "Drafted" - included
+// so a % Undrafted total can be computed as 1 - (Drafted / week total), but never rendered
+// as its own stacked segment (see UndraftedStackedChart).
+export interface UndraftedCategoryPoint {
+  week_start: string;
+  local_practice: string | null;
+  category: string;
+  category_sort_order: number;
+  exam_count: number;
+  tbwu: number;
 }

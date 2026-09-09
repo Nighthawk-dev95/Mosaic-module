@@ -37,7 +37,9 @@ def _store_efficiency_matrix(rows: list[dict]) -> None:
 # per-request.
 DATASETS: list[tuple[str, object, object]] = [
     ("mosaic_intelligence_snapshot", lambda: edw.get_mosaic_intelligence_snapshot(), None),
+    ("mosaic_intelligence_by_practice", lambda: edw.get_mosaic_intelligence_by_practice(), None),
     ("rpce_trend", lambda: edw.get_rpce_trend(), None),
+    ("rpce_trend_by_practice", lambda: edw.get_rpce_trend_by_practice(), None),
     ("rad_summary_stats", lambda: edw.get_rad_summary_stats(), None),
     ("radiologist_roster", lambda: edw.get_radiologist_roster(limit=5000), None),
     ("utilization_by_practice", lambda: edw.get_utilization_by_practice(days_back=30), None),
@@ -50,9 +52,23 @@ DATASETS: list[tuple[str, object, object]] = [
     ("ct_abdpel_blockers_by_practice", lambda: edw.get_ct_abdpel_blockers_by_practice(), None),
     ("efficiency_matrix", lambda: edw.get_efficiency_matrix(), _store_efficiency_matrix),
     ("efficiency_trend_by_category", lambda: edw.get_efficiency_trend_by_category(), None),
+    ("efficiency_trend_by_practice_category", lambda: edw.get_efficiency_trend_by_practice_category(), None),
     ("efficiency_trend_rp_avg", lambda: edw.get_efficiency_trend_rp_avg(), None),
+    ("capture_overview", lambda: edw.get_capture_overview(), None),
+    ("capture_by_practice", lambda: edw.get_capture_by_practice(), None),
+    ("capture_by_radiologist", lambda: edw.get_capture_by_radiologist(), None),
+    ("capture_utilization_trend_weekly_by_practice", lambda: edw.get_capture_utilization_trend_by_practice("week"), None),
+    ("capture_utilization_trend_monthly_by_practice", lambda: edw.get_capture_utilization_trend_by_practice("month"), None),
+    ("capture_utilization_trend_weekly_by_radiologist", lambda: edw.get_capture_utilization_trend_by_radiologist("week"), None),
+    ("capture_utilization_trend_monthly_by_radiologist", lambda: edw.get_capture_utilization_trend_by_radiologist("month"), None),
+    ("capture_efficiency_trend_weekly_by_practice", lambda: edw.get_capture_efficiency_trend_by_practice("week"), None),
+    ("capture_efficiency_trend_monthly_by_practice", lambda: edw.get_capture_efficiency_trend_by_practice("month"), None),
+    ("capture_efficiency_trend_weekly_by_radiologist", lambda: edw.get_capture_efficiency_trend_by_radiologist("week"), None),
+    ("capture_efficiency_trend_monthly_by_radiologist", lambda: edw.get_capture_efficiency_trend_by_radiologist("month"), None),
     ("capacity_by_radiologist", lambda: edw.get_capacity_by_radiologist(limit=5000), None),
     ("capacity_by_practice", lambda: edw.get_capacity_by_practice(), None),
+    ("radiologist_scorecard", lambda: edw.get_radiologist_scorecard(), None),
+    ("undrafted_analysis", lambda: edw.get_undrafted_analysis(), None),
 ]
 
 _refresh_lock = threading.Lock()

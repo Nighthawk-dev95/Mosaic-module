@@ -2,6 +2,13 @@ import type {
   BlockerByPractice,
   CapacityPracticeRollup,
   CapacityRadiologistItem,
+  CaptureEfficiencyTrendPracticePoint,
+  CaptureEfficiencyTrendRadiologistPoint,
+  CaptureOverview,
+  CapturePracticeRollup,
+  CaptureRadiologistItem,
+  CaptureUtilizationTrendPracticePoint,
+  CaptureUtilizationTrendRadiologistPoint,
   DeploymentFunnel,
   DeploymentPracticeRollup,
   DeploymentRadiologistItem,
@@ -13,8 +20,10 @@ import type {
   MosaicIntelligenceSnapshot,
   PopulationEfficiency,
   RadiologistRosterItem,
+  RadiologistScorecard,
   RadSummaryStat,
   RpceTrendPoint,
+  UndraftedCategoryPoint,
   UtilizationPracticeRollup,
 } from "./types";
 
@@ -43,8 +52,10 @@ export interface RefreshStatus {
 }
 
 export const mosaicApi = {
-  getMosaicIntelligence: () => get<MosaicIntelligenceSnapshot>("/mosaic-intelligence"),
-  getRpceTrend: () => get<RpceTrendPoint[]>("/rpce-trend"),
+  getMosaicIntelligence: (practice?: string) =>
+    get<MosaicIntelligenceSnapshot>(`/mosaic-intelligence${practice ? `?practice=${encodeURIComponent(practice)}` : ""}`),
+  getRpceTrend: (practice?: string) =>
+    get<RpceTrendPoint[]>(`/rpce-trend${practice ? `?practice=${encodeURIComponent(practice)}` : ""}`),
   getRadSummaryStats: (params: { practice?: string; drafting_group?: string } = {}) => {
     const search = new URLSearchParams();
     if (params.practice) search.set("practice", params.practice);
@@ -90,11 +101,44 @@ export const mosaicApi = {
     return get<PopulationEfficiency>(`/efficiency/population?${search.toString()}`);
   },
   getEfficiencyFilters: () => get<EfficiencyFilterOptions>("/efficiency/filters"),
-  getEfficiencyTrend: (examCategory?: string) =>
-    get<EfficiencyTrendPoint[]>(`/efficiency/trend${examCategory ? `?exam_category=${encodeURIComponent(examCategory)}` : ""}`),
+  getEfficiencyTrend: (examCategory?: string, practice?: string) => {
+    const search = new URLSearchParams();
+    if (examCategory) search.set("exam_category", examCategory);
+    if (practice) search.set("practice", practice);
+    const qs = search.toString();
+    return get<EfficiencyTrendPoint[]>(`/efficiency/trend${qs ? `?${qs}` : ""}`);
+  },
   getEfficiencyTrendRpAvg: () => get<EfficiencyTrendRpAvgPoint[]>("/efficiency/trend/rp-avg"),
+  getCaptureOverview: () => get<CaptureOverview>("/capture/overview"),
+  getCaptureByPractice: (practice?: string) =>
+    get<CapturePracticeRollup[]>(`/capture/by-practice${practice ? `?practice=${encodeURIComponent(practice)}` : ""}`),
+  getCaptureByRadiologist: (practice?: string) =>
+    get<CaptureRadiologistItem[]>(`/capture/by-radiologist${practice ? `?practice=${encodeURIComponent(practice)}` : ""}`),
+  getCaptureTrendUtilizationByPractice: (granularity: "week" | "month", practice?: string) => {
+    const search = new URLSearchParams({ granularity });
+    if (practice) search.set("practice", practice);
+    return get<CaptureUtilizationTrendPracticePoint[]>(`/capture/trend/utilization/by-practice?${search.toString()}`);
+  },
+  getCaptureTrendUtilizationByRadiologist: (granularity: "week" | "month", practice?: string) => {
+    const search = new URLSearchParams({ granularity });
+    if (practice) search.set("practice", practice);
+    return get<CaptureUtilizationTrendRadiologistPoint[]>(`/capture/trend/utilization/by-radiologist?${search.toString()}`);
+  },
+  getCaptureTrendEfficiencyByPractice: (granularity: "week" | "month", practice?: string) => {
+    const search = new URLSearchParams({ granularity });
+    if (practice) search.set("practice", practice);
+    return get<CaptureEfficiencyTrendPracticePoint[]>(`/capture/trend/efficiency/by-practice?${search.toString()}`);
+  },
+  getCaptureTrendEfficiencyByRadiologist: (granularity: "week" | "month", practice?: string) => {
+    const search = new URLSearchParams({ granularity });
+    if (practice) search.set("practice", practice);
+    return get<CaptureEfficiencyTrendRadiologistPoint[]>(`/capture/trend/efficiency/by-radiologist?${search.toString()}`);
+  },
   getCapacityByRadiologist: () => get<CapacityRadiologistItem[]>("/capacity/by-radiologist"),
   getCapacityByPractice: () => get<CapacityPracticeRollup[]>("/capacity/by-practice"),
+  getRadiologistScorecard: (practice?: string) =>
+    get<RadiologistScorecard[]>(`/radiologist-scorecard${practice ? `?practice=${encodeURIComponent(practice)}` : ""}`),
+  getUndraftedAnalysis: () => get<UndraftedCategoryPoint[]>("/undrafted-analysis"),
   getRefreshStatus: () => get<RefreshStatus>("/refresh/status"),
   triggerRefresh: () => post<{ status: string }>("/refresh"),
 };
