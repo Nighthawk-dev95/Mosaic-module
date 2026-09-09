@@ -25,6 +25,7 @@ from app.models.mosaic import (
     RadSummaryStat,
     RpceTrendPoint,
     UndraftedCategoryPoint,
+    UndraftedFilterOptions,
     UtilizationPracticeRollup,
 )
 from app.services import cache_service, refresh_service
@@ -202,8 +203,13 @@ async def radiologist_scorecard(practice: str | None = None):
 
 
 @router.get("/undrafted-analysis", response_model=list[UndraftedCategoryPoint])
-async def undrafted_analysis():
-    return cache_service.get_undrafted_analysis()
+async def undrafted_analysis(practice: str | None = None, exam_category: str | None = None, site: str | None = None):
+    return cache_service.get_undrafted_analysis(practice, exam_category, site)
+
+
+@router.get("/undrafted-analysis/filters", response_model=UndraftedFilterOptions)
+async def undrafted_analysis_filters():
+    return cache_service.get_undrafted_filter_options()
 
 
 @router.post("/refresh")

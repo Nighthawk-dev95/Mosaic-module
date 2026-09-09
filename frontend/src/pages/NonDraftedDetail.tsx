@@ -3,8 +3,43 @@ import { mosaicApi } from "../api/client";
 import { useFetch } from "../hooks/useFetch";
 import { FilterBar } from "../components/FilterBar";
 import { useFilters, matchesPractice } from "../context/FilterContext";
+import { getLocalRegion } from "../utils/localRegion";
 import { UndraftedStackedChart } from "../components/UndraftedStackedChart";
 import type { UndraftedDisplayMode, UndraftedMetric } from "../components/UndraftedStackedChart";
+
+function FilterSelect({
+  value,
+  onChange,
+  options,
+  placeholder,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  options: string[];
+  placeholder: string;
+}) {
+  return (
+    <select
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      style={{
+        fontSize: 13,
+        padding: "6px 10px",
+        borderRadius: 6,
+        border: "1px solid var(--border)",
+        background: "var(--surface-raised)",
+        color: "var(--text-primary)",
+      }}
+    >
+      <option value="">{placeholder}</option>
+      {options.map((o) => (
+        <option key={o} value={o}>
+          {o}
+        </option>
+      ))}
+    </select>
+  );
+}
 
 function ToggleGroup<T extends string>({
   options,
@@ -41,9 +76,18 @@ function ToggleGroup<T extends string>({
 export function NonDraftedDetail() {
   const [metric, setMetric] = useState<UndraftedMetric>("exams");
   const [displayMode, setDisplayMode] = useState<UndraftedDisplayMode>("percent");
+  const [examCategory, setExamCategory] = useState("");
+  const [site, setSite] = useState("");
   const filters = useFilters();
 
-  const undrafted = useFetch(() => mosaicApi.getUndraftedAnalysis(), []);
+  // exam_category/site are high-cardinality dimensions the backend collapses away from the
+  // default response (unfiltered, they'd be ~845K rows / 120MB+) - narrowing by either
+  // means a real refetch, unlike practice/month/local which filter client-side below.
+  const undrafted = useFetch(
+    () => mosaicApi.getUndraftedAnalysis({ exam_category: examCategory || undefined, site: site || undefined }),
+    [examCategory, site]
+  );
+  const filterOptions = useFetch(() => mosaicApi.getUndraftedAnalysisFilters(), []);
 
   const practices = useMemo(() => {
     if (!undrafted.data) return [];
@@ -53,7 +97,10 @@ export function NonDraftedDetail() {
   const filteredRows = useMemo(
     () =>
       (undrafted.data ?? []).filter(
-        (r) => matchesPractice(filters, r.local_practice) && (!filters.month || r.week_start.startsWith(filters.month))
+        (r) =>
+          matchesPractice(filters, r.local_practice) &&
+          (!filters.month || r.week_start.startsWith(filters.month)) &&
+          (!filters.local || getLocalRegion(r.team) === filters.local)
       ),
     [undrafted.data, filters]
   );
@@ -94,7 +141,17 @@ export function NonDraftedDetail() {
         />
       </div>
 
-      <FilterBar practices={practices} showLocal={false} />
+      <FilterBar practices={practices} />
+
+      <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
+        <FilterSelect
+          value={examCategory}
+          onChange={setExamCategory}
+          options={filterOptions.data?.exam_categories ?? []}
+          placeholder="All Exam Categories"
+        />
+        <FilterSelect value={site} onChange={setSite} options={filterOptions.data?.sites ?? []} placeholder="All Sites" />
+      </div>
 
       <div style={{ background: "var(--surface-1)", border: "1px solid var(--border)", borderRadius: 8, padding: 16 }}>
         <div style={{ color: "var(--text-muted)", fontSize: 13, marginBottom: 12, textTransform: "uppercase", letterSpacing: 0.5 }}>

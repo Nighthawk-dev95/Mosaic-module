@@ -16,7 +16,6 @@ from app.models.mosaic import (
     RadiologistRosterItem,
     RadSummaryStat,
     RpceTrendPoint,
-    UndraftedCategoryPoint,
     UtilizationPracticeRollup,
 )
 
@@ -962,35 +961,47 @@ def get_capture_utilization_trend_by_radiologist(granularity: str) -> list[dict]
     )
 
 
-def get_undrafted_analysis() -> list[UndraftedCategoryPoint]:
+def get_undrafted_analysis() -> list[dict]:
     """Draftable-but-not-drafted exam breakdown by reason, from the view built jointly
     with the Clinical Transformation team (edw_dev.bipa_analytics.examsnotdraftedbutdraftable_vw).
-    That view's own grain also carries team/site/radiologist/exam_category/drafting_model,
-    which this dashboard doesn't expose as filters yet, so they're summed away here rather
-    than in EDW. week_end is aliased to week_start: the view's column name is pinned to
-    "week_end" for its other (Power BI) consumers, but the value it holds is the Monday the
-    week starts on, and this app has no reason to carry that naming mismatch forward.
+    That view's own grain also carries radiologist/drafting_model, which this dashboard
+    still doesn't expose as filters. team/site/exam_category ARE kept at this raw/cached
+    grain (unlike before) so cache_service can filter by them - but this is at (week,
+    practice, team, site, exam_category, category) grain, which is ~845K rows / 120MB+ for
+    the full history. That's fine to cache server-side (SQLite, never re-queried live) but
+    FAR too large to ever return whole over HTTP - cache_service.get_undrafted_analysis()
+    filters by exam_category/site first, then collapses those two high-cardinality
+    dimensions back down to the small (week, practice, team, category) shape the frontend
+    chart actually needs before returning `list[UndraftedCategoryPoint]`. Returns raw dicts,
+    not the Pydantic model, since the model no longer carries site/exam_category at all -
+    those exist only as filter criteria, never as response fields.
+
+    week_end is aliased to week_start: the view's column name is pinned to "week_end" for
+    its other (Power BI) consumers, but the value it holds is the Monday the week starts on,
+    and this app has no reason to carry that naming mismatch forward.
 
     "Drafted" (category_sort_order 0) is included, not filtered out, so the frontend can
     compute each week's "% Undrafted" total as 1 - (Drafted / week total) - see
     UndraftedStackedChart, which hides the Drafted segment itself but needs it in the
     denominator.
     """
-    rows = run_query(
+    return run_query(
         """
         SELECT
           week_end AS week_start,
           local_practice,
+          Team AS team,
+          site,
+          exam_category,
           category,
           category_sort_order,
           SUM(exam_count) AS exam_count,
           SUM(tbwu) AS tbwu
         FROM edw_dev.bipa_analytics.examsnotdraftedbutdraftable_vw
-        GROUP BY week_end, local_practice, category, category_sort_order
+        GROUP BY week_end, local_practice, Team, site, exam_category, category, category_sort_order
         ORDER BY week_end, category_sort_order
         """
     )
-    return [UndraftedCategoryPoint(**row) for row in rows]
 
 
 def get_rad_summary_stats() -> list[RadSummaryStat]:

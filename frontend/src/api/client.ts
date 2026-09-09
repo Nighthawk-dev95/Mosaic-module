@@ -24,6 +24,7 @@ import type {
   RadSummaryStat,
   RpceTrendPoint,
   UndraftedCategoryPoint,
+  UndraftedFilterOptions,
   UtilizationPracticeRollup,
 } from "./types";
 
@@ -138,7 +139,15 @@ export const mosaicApi = {
   getCapacityByPractice: () => get<CapacityPracticeRollup[]>("/capacity/by-practice"),
   getRadiologistScorecard: (practice?: string) =>
     get<RadiologistScorecard[]>(`/radiologist-scorecard${practice ? `?practice=${encodeURIComponent(practice)}` : ""}`),
-  getUndraftedAnalysis: () => get<UndraftedCategoryPoint[]>("/undrafted-analysis"),
+  getUndraftedAnalysis: (params: { practice?: string; exam_category?: string; site?: string } = {}) => {
+    const search = new URLSearchParams();
+    if (params.practice) search.set("practice", params.practice);
+    if (params.exam_category) search.set("exam_category", params.exam_category);
+    if (params.site) search.set("site", params.site);
+    const qs = search.toString();
+    return get<UndraftedCategoryPoint[]>(`/undrafted-analysis${qs ? `?${qs}` : ""}`);
+  },
+  getUndraftedAnalysisFilters: () => get<UndraftedFilterOptions>("/undrafted-analysis/filters"),
   getRefreshStatus: () => get<RefreshStatus>("/refresh/status"),
   triggerRefresh: () => post<{ status: string }>("/refresh"),
 };

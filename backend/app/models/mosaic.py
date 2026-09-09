@@ -345,10 +345,16 @@ class RadiologistScorecard(BaseModel):
 class UndraftedCategoryPoint(BaseModel):
     week_start: date
     local_practice: str | None
+    team: str | None
     category: str
     category_sort_order: int
     exam_count: int
     tbwu: float
+
+
+class UndraftedFilterOptions(BaseModel):
+    exam_categories: list[str]
+    sites: list[str]
 
 
 class CapacityPracticeRollup(BaseModel):

@@ -349,9 +349,15 @@ export interface RadiologistScorecard {
 // week_start is the Monday the week begins; category_sort_order 0 is "Drafted" - included
 // so a % Undrafted total can be computed as 1 - (Drafted / week total), but never rendered
 // as its own stacked segment (see UndraftedStackedChart).
+export interface UndraftedFilterOptions {
+  exam_categories: string[];
+  sites: string[];
+}
+
 export interface UndraftedCategoryPoint {
   week_start: string;
   local_practice: string | null;
+  team: string | null;
   category: string;
   category_sort_order: number;
   exam_count: number;

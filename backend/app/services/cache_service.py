@@ -34,6 +34,7 @@ from app.models.mosaic import (
     RadSummaryStat,
     RpceTrendPoint,
     UndraftedCategoryPoint,
+    UndraftedFilterOptions,
     UtilizationPracticeRollup,
 )
 
@@ -639,6 +640,47 @@ def get_radiologist_scorecard(practice: str | None = None) -> list[RadiologistSc
     return items
 
 
-def get_undrafted_analysis() -> list[UndraftedCategoryPoint]:
+def get_undrafted_filter_options() -> UndraftedFilterOptions:
     payload, _ = cache_store.load("undrafted_analysis")
-    return [UndraftedCategoryPoint(**row) for row in (payload or [])]
+    rows = payload or []
+    return UndraftedFilterOptions(
+        exam_categories=sorted({r["exam_category"] for r in rows if r.get("exam_category")}),
+        sites=sorted({r["site"] for r in rows if r.get("site")}),
+    )
+
+
+def get_undrafted_analysis(
+    practice: str | None = None, exam_category: str | None = None, site: str | None = None
+) -> list[UndraftedCategoryPoint]:
+    payload, _ = cache_store.load("undrafted_analysis")
+    rows = payload or []
+    if practice:
+        rows = [r for r in rows if r.get("local_practice") == practice]
+    if exam_category:
+        rows = [r for r in rows if r.get("exam_category") == exam_category]
+    if site:
+        rows = [r for r in rows if r.get("site") == site]
+
+    # Collapse site/exam_category away after filtering - they're only ever used as filter
+    # criteria; shipping every (week, practice, team, site, exam_category, category)
+    # combination to the browser would be ~845K rows / 120MB+ for the unfiltered case, far
+    # more than the chart (which only ever groups by week/practice/team/category) needs.
+    collapsed: dict[tuple, dict] = {}
+    for row in rows:
+        key = (row["week_start"], row.get("local_practice"), row.get("team"), row["category"], row["category_sort_order"])
+        acc = collapsed.setdefault(key, {"exam_count": 0, "tbwu": 0.0})
+        acc["exam_count"] += row.get("exam_count") or 0
+        acc["tbwu"] += row.get("tbwu") or 0
+
+    return [
+        UndraftedCategoryPoint(
+            week_start=key[0],
+            local_practice=key[1],
+            team=key[2],
+            category=key[3],
+            category_sort_order=key[4],
+            exam_count=acc["exam_count"],
+            tbwu=acc["tbwu"],
+        )
+        for key, acc in collapsed.items()
+    ]

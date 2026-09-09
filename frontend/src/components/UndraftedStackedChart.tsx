@@ -29,9 +29,19 @@ function formatWeekTick(weekStart: string): string {
   return d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
 }
 
-function fmtValue(value: number, displayMode: UndraftedDisplayMode, metric: UndraftedMetric): string {
+// "90000" -> "90k", "1200000" -> "1.2M" - keeps absolute-mode axis ticks/labels short enough
+// to fit the many-weeks-wide chart without crowding into neighboring bars.
+function formatCompactNumber(value: number): string {
+  const abs = Math.abs(value);
+  const trim = (s: string) => (s.endsWith(".0") ? s.slice(0, -2) : s);
+  if (abs >= 1_000_000) return `${trim((value / 1_000_000).toFixed(1))}M`;
+  if (abs >= 1_000) return `${trim((value / 1_000).toFixed(1))}k`;
+  return value.toLocaleString(undefined, { maximumFractionDigits: 1 });
+}
+
+function fmtValue(value: number, displayMode: UndraftedDisplayMode, _metric: UndraftedMetric): string {
   if (displayMode === "percent") return `${(value * 100).toFixed(1)}%`;
-  return metric === "tbwu" ? value.toLocaleString(undefined, { maximumFractionDigits: 1 }) : value.toLocaleString();
+  return formatCompactNumber(value);
 }
 
 function CustomTooltip({ active, payload, label, displayMode, metric }: any) {
@@ -60,16 +70,6 @@ function CustomTooltip({ active, payload, label, displayMode, metric }: any) {
       ))}
     </div>
   );
-}
-
-// A segment's own label is only worth printing if it's not going to be squeezed
-// illegibly thin - selective direct labels, not a number crammed onto every sliver.
-function segmentLabelFormatter(displayMode: UndraftedDisplayMode) {
-  return (value: number) => {
-    if (!value) return "";
-    if (displayMode === "percent" && value < 0.03) return "";
-    return displayMode === "percent" ? `${(value * 100).toFixed(0)}%` : value.toLocaleString();
-  };
 }
 
 export function UndraftedStackedChart({ data, metric, displayMode }: Props) {
@@ -108,12 +108,14 @@ export function UndraftedStackedChart({ data, metric, displayMode }: Props) {
           <CartesianGrid stroke="var(--gridline)" strokeDasharray="0" vertical={false} />
           <XAxis
             dataKey="weekTick"
+            interval="preserveStartEnd"
+            minTickGap={24}
             tick={{ fill: "var(--text-secondary)", fontSize: 12 }}
             axisLine={{ stroke: "var(--gridline)" }}
             tickLine={false}
           />
           <YAxis
-            tickFormatter={(v) => (displayMode === "percent" ? `${Math.round(v * 100)}%` : v.toLocaleString())}
+            tickFormatter={(v) => (displayMode === "percent" ? `${Math.round(v * 100)}%` : formatCompactNumber(v))}
             tick={{ fill: "var(--text-muted)", fontSize: 11 }}
             axisLine={false}
             tickLine={false}
@@ -125,12 +127,6 @@ export function UndraftedStackedChart({ data, metric, displayMode }: Props) {
           />
           {CATEGORY_ORDER.map((cat) => (
             <Bar key={cat.key} dataKey={cat.key} stackId="undrafted" fill={cat.color} isAnimationActive={false}>
-              <LabelList
-                dataKey={cat.key}
-                position="inside"
-                formatter={segmentLabelFormatter(displayMode)}
-                style={{ fill: "#ffffff", fontSize: 11, fontWeight: 600 }}
-              />
               {cat.key === lastCategoryKey && (
                 <LabelList
                   dataKey="totalLabel"
