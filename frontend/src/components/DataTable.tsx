@@ -18,9 +18,14 @@ function defaultRender(value: unknown): ReactNode {
   return String(value);
 }
 
+// A row-hover highlight needs a real CSS rule (inline styles can't express :hover) - this is
+// the one deliberate exception to the rest of the app's all-inline-styles convention.
+const HOVER_STYLE = `.dt-row:hover td { background: var(--surface-raised); }`;
+
 export function DataTable<T>({ columns, rows, rowKey }: DataTableProps<T>) {
   return (
     <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 14 }}>
+      <style>{HOVER_STYLE}</style>
       <thead>
         <tr>
           {columns.map((c) => (
@@ -31,7 +36,7 @@ export function DataTable<T>({ columns, rows, rowKey }: DataTableProps<T>) {
                 color: "var(--text-muted)",
                 borderBottom: "1px solid var(--gridline)",
                 padding: "10px 14px",
-                fontWeight: 600,
+                fontWeight: 700,
                 whiteSpace: "nowrap",
                 position: "sticky",
                 top: 0,
@@ -46,7 +51,7 @@ export function DataTable<T>({ columns, rows, rowKey }: DataTableProps<T>) {
       </thead>
       <tbody>
         {rows.map((row) => (
-          <tr key={rowKey(row)}>
+          <tr key={rowKey(row)} className="dt-row">
             {columns.map((c) => (
               <td
                 key={c.key}
@@ -55,6 +60,7 @@ export function DataTable<T>({ columns, rows, rowKey }: DataTableProps<T>) {
                   borderBottom: "1px solid var(--gridline)",
                   color: "var(--text-primary)",
                   whiteSpace: "nowrap",
+                  transition: "background 0.1s ease",
                 }}
               >
                 {c.render ? c.render(row) : defaultRender((row as unknown as Record<string, unknown>)[c.key])}

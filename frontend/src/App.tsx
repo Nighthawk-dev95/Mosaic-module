@@ -1,5 +1,6 @@
 import { Routes, Route } from "react-router-dom";
 import { Sidebar } from "./components/Sidebar";
+import { MosaicShell } from "./components/MosaicShell";
 import { FilterProvider } from "./context/FilterContext";
 import { MosaicIntelligence } from "./pages/MosaicIntelligence";
 import { RadiologistRoster } from "./pages/RadiologistRoster";
@@ -16,14 +17,16 @@ export default function App() {
       <div style={{ display: "flex", height: "100vh" }}>
         <Sidebar />
         <Routes>
-          <Route path="/" element={<MosaicIntelligence />} />
-          <Route path="/roster" element={<RadiologistRoster />} />
-          <Route path="/deployment" element={<DeploymentDetail />} />
-          <Route path="/efficiency" element={<EfficiencyDetail />} />
-          <Route path="/capacity" element={<CapacityDetail />} />
-          <Route path="/non-drafted" element={<NonDraftedDetail />} />
-          <Route path="/capture" element={<CaptureDetail />} />
-          <Route path="/scorecard" element={<ScorecardDetail />} />
+          <Route element={<MosaicShell />}>
+            <Route path="/" element={<MosaicIntelligence />} />
+            <Route path="/roster" element={<RadiologistRoster />} />
+            <Route path="/deployment" element={<DeploymentDetail />} />
+            <Route path="/efficiency" element={<EfficiencyDetail />} />
+            <Route path="/capacity" element={<CapacityDetail />} />
+            <Route path="/non-drafted" element={<NonDraftedDetail />} />
+            <Route path="/capture" element={<CaptureDetail />} />
+            <Route path="/scorecard" element={<ScorecardDetail />} />
+          </Route>
         </Routes>
       </div>
     </FilterProvider>

@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { mosaicApi } from "../api/client";
+import { Badge } from "./Badge";
 
 function oldestTimestamp(refreshedAt: Record<string, string>): Date | null {
   const values = Object.values(refreshedAt);
@@ -40,29 +41,31 @@ export function RefreshStatus() {
     }
   };
 
+  const label = !status || !status.hasData
+    ? "No data loaded yet"
+    : status.inProgress
+      ? "Refreshing…"
+      : `Data through ${status.oldest?.toLocaleDateString()}`;
+  const color = !status || !status.hasData ? "var(--text-muted)" : status.inProgress ? "var(--status-warning)" : "var(--status-good)";
+
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 6, fontSize: 12 }}>
-      <div style={{ color: "var(--text-muted)" }}>
-        {!status || !status.hasData
-          ? "No data loaded yet"
-          : status.inProgress
-            ? "Refreshing…"
-            : `Data as of ${status.oldest?.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`}
-      </div>
+    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+      <Badge label={label} color={color} dot />
       <button
         onClick={handleRefresh}
         disabled={triggering || status?.inProgress}
+        title="Trigger a manual refresh"
         style={{
-          fontSize: 12,
-          padding: "6px 10px",
-          borderRadius: 6,
+          fontSize: 11,
+          padding: "3px 8px",
+          borderRadius: 999,
           border: "1px solid var(--border)",
           background: "var(--surface-raised)",
           color: "var(--text-secondary)",
           cursor: triggering || status?.inProgress ? "default" : "pointer",
         }}
       >
-        {triggering || status?.inProgress ? "Refreshing…" : "Refresh Now"}
+        {triggering || status?.inProgress ? "…" : "Refresh"}
       </button>
     </div>
   );

@@ -190,10 +190,12 @@ export function CaptureDetail() {
               ? fmtPct(filters.captureEnabledOnly ? overview.data.pct_captured_enabled : overview.data.pct_captured_all)
               : "…"
           }
+          accent="var(--domain-capture)"
         />
         <StatTile
           label="Overall Capture Efficiency Rate"
           value={overview.data?.capture_mosaic_tbwu_per_min != null ? `${overview.data.capture_mosaic_tbwu_per_min.toFixed(3)} TBWU/min` : "…"}
+          accent="var(--domain-capture)"
           sublabel={
             overview.data?.capture_pct_change_vs_baseline != null
               ? `${(overview.data.capture_pct_change_vs_baseline * 100).toFixed(1)}% vs baseline`

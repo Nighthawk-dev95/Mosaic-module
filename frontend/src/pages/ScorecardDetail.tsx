@@ -257,12 +257,12 @@ export function ScorecardDetail() {
           </div>
 
           <div style={{ display: "flex", gap: 16, flexWrap: "wrap" }}>
-            <StatTile label="Addl Capacity/Shift (RPWU)" value={fmtRpwu(metrics.addl_capacity_per_shift)} />
-            <StatTile label="Efficiency (TBWU per shift)" value={fmtRpwu(metrics.efficiency)} />
-            <StatTile label="Shift Utilization" value={fmtPctValue(metrics.shift_utilization)} />
-            <StatTile label="Avg Units/Shift (RPWU)" value={fmtRpwu(metrics.avg_units_per_shift)} />
-            <StatTile label="Case Count" value={fmtCount(metrics.case_count)} />
-            <StatTile label="Shifts Worked" value={fmtCount(metrics.shifts_worked)} />
+            <StatTile label="Addl Capacity/Shift (RPWU)" value={fmtRpwu(metrics.addl_capacity_per_shift)} accent="var(--series-5-magenta)" />
+            <StatTile label="Efficiency (TBWU per shift)" value={fmtRpwu(metrics.efficiency)} accent="var(--series-5-magenta)" />
+            <StatTile label="Shift Utilization" value={fmtPctValue(metrics.shift_utilization)} accent="var(--series-5-magenta)" />
+            <StatTile label="Avg Units/Shift (RPWU)" value={fmtRpwu(metrics.avg_units_per_shift)} accent="var(--series-5-magenta)" />
+            <StatTile label="Case Count" value={fmtCount(metrics.case_count)} accent="var(--series-5-magenta)" />
+            <StatTile label="Shifts Worked" value={fmtCount(metrics.shifts_worked)} accent="var(--series-5-magenta)" />
           </div>
 
           <div style={{ display: "flex", gap: 16, flexWrap: "wrap" }}>

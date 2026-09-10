@@ -2,10 +2,26 @@ import type { CSSProperties } from "react";
 import { useFilters } from "../context/FilterContext";
 import { LOCAL_REGIONS } from "../utils/localRegion";
 
+// Pill-shaped dropdown chrome: fully-rounded corners + a small chevron drawn via
+// background-image (appearance:none removes the native arrow so the custom one shows).
 const SELECT_STYLE: CSSProperties = {
   fontSize: 13,
-  padding: "6px 10px",
-  borderRadius: 6,
+  padding: "6px 28px 6px 14px",
+  borderRadius: 999,
+  border: "1px solid var(--border)",
+  background:
+    'var(--surface-raised) url(\'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="10" height="6" viewBox="0 0 10 6"><path d="M1 1l4 4 4-4" stroke="%23898781" stroke-width="1.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>\') no-repeat right 10px center',
+  color: "var(--text-primary)",
+  appearance: "none",
+  WebkitAppearance: "none",
+  cursor: "pointer",
+};
+
+// Same pill shape for text/month inputs, without the chevron (no appearance override needed).
+const INPUT_STYLE: CSSProperties = {
+  fontSize: 13,
+  padding: "6px 14px",
+  borderRadius: 999,
   border: "1px solid var(--border)",
   background: "var(--surface-raised)",
   color: "var(--text-primary)",
@@ -52,7 +68,7 @@ export function FilterBar({ practices, showCaptureEnabled = false, showLocal = t
         value={radiologistSearch}
         onChange={(e) => setRadiologistSearch(e.target.value)}
         placeholder="Search radiologist (name or NPI)"
-        style={{ ...SELECT_STYLE, minWidth: 220 }}
+        style={{ ...INPUT_STYLE, minWidth: 220 }}
       />
 
       {showMonth && (
@@ -60,7 +76,7 @@ export function FilterBar({ practices, showCaptureEnabled = false, showLocal = t
           type="month"
           value={month}
           onChange={(e) => setMonth(e.target.value)}
-          style={SELECT_STYLE}
+          style={INPUT_STYLE}
           title="Filters trend/date-based charts where a monthly breakdown is available"
         />
       )}
@@ -77,8 +93,8 @@ export function FilterBar({ practices, showCaptureEnabled = false, showLocal = t
           onClick={reset}
           style={{
             fontSize: 12,
-            padding: "6px 10px",
-            borderRadius: 6,
+            padding: "6px 14px",
+            borderRadius: 999,
             border: "1px solid var(--border)",
             background: "transparent",
             color: "var(--text-muted)",

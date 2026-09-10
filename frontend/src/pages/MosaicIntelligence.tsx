@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { mosaicApi } from "../api/client";
 import { useFetch } from "../hooks/useFetch";
 import { StatTile } from "../components/StatTile";
+import { Badge } from "../components/Badge";
 import { RpceTrendChart } from "../components/RpceTrendChart";
 import { DataTable, fmtPct } from "../components/DataTable";
 import type { DataTableColumn } from "../components/DataTable";
@@ -34,18 +35,7 @@ const RAD_COLUMNS: DataTableColumn<RadSummaryStat>[] = [
     render: (r) => (
       <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
         {r.drafting_groups.map((g) => (
-          <span
-            key={g}
-            style={{
-              fontSize: 11,
-              padding: "2px 8px",
-              borderRadius: 999,
-              border: `1px solid ${DRAFTING_GROUP_COLORS[g] ?? "var(--border)"}`,
-              color: DRAFTING_GROUP_COLORS[g] ?? "var(--text-secondary)",
-            }}
-          >
-            {g}
-          </span>
+          <Badge key={g} label={g} color={DRAFTING_GROUP_COLORS[g] ?? "var(--text-secondary)"} />
         ))}
       </div>
     ),
@@ -115,26 +105,37 @@ export function MosaicIntelligence() {
       <FilterBar practices={practices} showLocal={false} />
 
       <div style={{ display: "flex", gap: 16, flexWrap: "wrap" }}>
-        <StatTile label="Rads Live on Mosaic" value={snapshot.data ? fmt(snapshot.data.rads_live_on_mosaic) : "…"} />
+        <StatTile
+          label="Rads Live on Mosaic"
+          value={snapshot.data ? fmt(snapshot.data.rads_live_on_mosaic) : "…"}
+          accent="var(--domain-deployment)"
+        />
         <StatTile
           label="Rads Live on AI Drafting"
           value={snapshot.data ? fmt(snapshot.data.rads_live_on_ai_drafting) : "…"}
+          accent="var(--domain-deployment)"
         />
         <StatTile
           label="% RPCE Reporting"
           value={snapshot.data ? fmtPct(snapshot.data.pct_rpce_reporting) : "…"}
+          accent="var(--domain-efficiency)"
+          trend={trend.data?.map((t) => t.pct_rpce_reporting ?? 0)}
         />
         <StatTile
           label="% RPCE Drafting"
           value={snapshot.data ? fmtPct(snapshot.data.pct_rpce_drafting) : "…"}
+          accent="var(--domain-efficiency)"
+          trend={trend.data?.map((t) => t.pct_rpce_drafting ?? 0)}
         />
         <StatTile
           label="Rads Live on Capture"
           value={snapshot.data ? fmt(snapshot.data.rads_live_on_capture) : "…"}
+          accent="var(--domain-capture)"
         />
         <StatTile
           label="Rads Capture Enabled"
           value={snapshot.data ? fmt(snapshot.data.rads_capture_enabled) : "…"}
+          accent="var(--domain-capture)"
         />
       </div>
 
