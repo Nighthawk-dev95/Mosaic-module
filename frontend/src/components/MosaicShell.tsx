@@ -41,7 +41,7 @@ export function MosaicShell() {
                 fontWeight: 600,
                 textDecoration: "none",
                 color: isActive ? "var(--text-primary)" : "var(--text-secondary)",
-                borderBottom: isActive ? "2px solid var(--domain-efficiency)" : "2px solid transparent",
+                borderBottom: isActive ? "2px solid var(--domain-deployment)" : "2px solid transparent",
                 marginBottom: -1,
               })}
             >

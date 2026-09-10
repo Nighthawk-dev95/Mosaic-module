@@ -1,14 +1,16 @@
 :root {
   color-scheme: dark;
 
-  /* Chart chrome & ink - dark mode, from the validated reference palette */
-  --surface-1: #1a1a19;
-  --page-plane: #0d0d0d;
-  --surface-raised: #232322;
+  /* Chart chrome & ink - dark mode. Navy-tinted (not neutral near-black), to match the
+     Practice Command Centre mockups: a clear page->card->raised depth ladder instead of
+     everything collapsing into flat black. */
+  --page-plane: #0b0e14;
+  --surface-1: #131722;
+  --surface-raised: #1b2130;
   --text-primary: #ffffff;
-  --text-secondary: #c3c2b7;
-  --text-muted: #898781;
-  --gridline: #2c2c2a;
+  --text-secondary: #c3c7d1;
+  --text-muted: #7d8494;
+  --gridline: #262d3d;
   --border: rgba(255, 255, 255, 0.10);
   --success-text: #0ca30c;
 
