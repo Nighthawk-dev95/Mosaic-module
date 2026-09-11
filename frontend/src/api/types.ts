@@ -46,6 +46,7 @@ export interface CapturePracticeRollup {
   rads_capture_enabled: number;
   enablement_date: string | null;
   pct_change_since_enablement: number | null;
+  opted_out: boolean;
 }
 
 export interface CaptureRadiologistItem {
@@ -103,6 +104,44 @@ export interface CaptureEfficiencyTrendRadiologistPoint {
   capture_tbwu_per_min: number | null;
   capture_baseline_tbwu_per_min: number | null;
   pct_change: number | null;
+}
+
+export interface LikertDistribution {
+  label: string;
+  distribution: Record<string, number>;
+  mean: number;
+  top2box_pct: number | null;
+  na_count: number | null;
+}
+
+export interface ThemeStat {
+  theme: string;
+  pct: number;
+}
+
+export interface PracticeNpsStat {
+  practice: string;
+  n: number;
+  nps: number;
+  mean: number;
+}
+
+export interface RadSurveySummary {
+  sent: number;
+  responses: number;
+  response_rate: number;
+  median_completion_minutes: number;
+  nps: number;
+  nps_distribution: Record<string, number>;
+  promoters: number;
+  passives: number;
+  detractors: number;
+  agreement_statements: LikertDistribution[];
+  feature_satisfaction: LikertDistribution[];
+  problem_frequency: LikertDistribution[];
+  top_frustration_themes: ThemeStat[];
+  top_praised_themes: ThemeStat[];
+  by_practice: PracticeNpsStat[];
 }
 
 export interface RadSummaryStat {
@@ -270,21 +309,19 @@ export interface EfficiencyTrendRpAvgPoint {
   full_mosaic_tbwu_per_min: number | null;
 }
 
-export interface FocusRadiologistMonth {
-  period: string;
-  mode: string;
-  tbwu_per_min: number | null;
-  baseline_tbwu_per_min: number | null;
-  pct_change_vs_baseline: number | null;
-}
-
 export interface FocusRadiologistItem {
   npi: number;
   radiologist_name: string | null;
   practice: string | null;
   subspecialty: string | null;
-  flagged_modes: string[];
-  months: FocusRadiologistMonth[];
+  priority_tier: string;
+  baseline_capacity_per_shift: number | null;
+  dc_efficiency_change_pct: number | null;
+  capacity_change_pct: number | null;
+  ct_drafting_change_pct: number | null;
+  xr_drafting_change_pct: number | null;
+  us_capture_change_pct: number | null;
+  current_dc_exam_count: number;
 }
 
 interface CapacityMeasures {

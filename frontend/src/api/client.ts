@@ -23,6 +23,7 @@ import type {
   RadiologistRosterItem,
   RadiologistScorecard,
   RadSummaryStat,
+  RadSurveySummary,
   RpceTrendPoint,
   UndraftedCategoryPoint,
   UndraftedFilterOptions,
@@ -112,6 +113,7 @@ export const mosaicApi = {
   },
   getEfficiencyTrendRpAvg: () => get<EfficiencyTrendRpAvgPoint[]>("/efficiency/trend/rp-avg"),
   getFocusRadiologists: () => get<FocusRadiologistItem[]>("/efficiency/focus-radiologists"),
+  getRadSentiment: () => get<RadSurveySummary>("/survey/rad-sentiment"),
   getCaptureOverview: () => get<CaptureOverview>("/capture/overview"),
   getCaptureByPractice: (practice?: string) =>
     get<CapturePracticeRollup[]>(`/capture/by-practice${practice ? `?practice=${encodeURIComponent(practice)}` : ""}`),

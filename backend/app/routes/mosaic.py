@@ -24,6 +24,7 @@ from app.models.mosaic import (
     RadiologistRosterItem,
     RadiologistScorecard,
     RadSummaryStat,
+    RadSurveySummary,
     RpceTrendPoint,
     UndraftedCategoryPoint,
     UndraftedFilterOptions,
@@ -144,6 +145,13 @@ async def efficiency_trend_rp_avg():
 @router.get("/efficiency/focus-radiologists", response_model=list[FocusRadiologistItem])
 async def efficiency_focus_radiologists():
     return cache_service.get_focus_radiologists()
+
+
+@router.get("/survey/rad-sentiment", response_model=RadSurveySummary)
+async def survey_rad_sentiment():
+    # Static, hand-compiled from an offline survey export (see app/data/rad_survey.py) -
+    # not EDW-derived, so no cache_store/refresh_service involvement, same as rpce_audit.py.
+    return cache_service.get_rad_survey_summary()
 
 
 @router.get("/capture/overview", response_model=CaptureOverview)

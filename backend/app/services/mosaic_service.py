@@ -341,25 +341,80 @@ def get_efficiency_trend_by_category() -> list[dict]:
     )
 
 
-def get_efficiency_monthly_by_radiologist() -> list[dict]:
-    """Same table/window as get_efficiency_trend_by_category, grouped by (month, NPI) instead
-    of (month, exam category) - feeds the "Focus Rads" alert (2 consecutive months below
-    baseline), which needs a per-radiologist series rather than a company-wide one."""
+# Both MVP queries below share the same two-window period discriminator: a fixed baseline
+# (the real Mosaic Value Project baseline, May-Jul 2026) vs. "current" = the most recent full
+# calendar month (computed relative to CURRENT_DATE(), not hardcoded, so this keeps working as
+# time passes without a code change).
+_MVP_PERIOD_CASE_SQL = """
+  CASE
+    WHEN {date_col} BETWEEN DATE'2026-05-01' AND DATE'2026-07-31' THEN 'baseline'
+    WHEN {date_col} BETWEEN DATE_TRUNC('MONTH', ADD_MONTHS(CURRENT_DATE(), -1))
+                        AND LAST_DAY(ADD_MONTHS(CURRENT_DATE(), -1)) THEN 'current'
+  END
+"""
+_MVP_PERIOD_WHERE_SQL = """
+  ({date_col} BETWEEN DATE'2026-05-01' AND DATE'2026-07-31')
+  OR ({date_col} BETWEEN DATE_TRUNC('MONTH', ADD_MONTHS(CURRENT_DATE(), -1))
+                     AND LAST_DAY(ADD_MONTHS(CURRENT_DATE(), -1)))
+"""
+
+
+def get_mvp_efficiency_by_radiologist() -> list[dict]:
+    """Per-(NPI, period) D&C (Drafting+Capture combined - Is_Drafting_Row=1 OR Is_Capture_Row=1
+    is the correct non-double-counting filter, confirmed live: US/BD capture rows carry both
+    flags set to 1) efficiency, plus the 3 per-modality breakdowns (CT/XR Drafting, US Capture)
+    the real Mosaic Value Project's Priority Tier 3 rule needs. period is 'baseline' (fixed
+    May-Jul 2026, MVP's real baseline window) or 'current' (most recent full calendar month).
+    Feeds the "Focus Rads" alert, reworked to match MVP's actual methodology instead of a
+    simple 2-consecutive-months rule.
+
+    TotalTime is capped at 3600s (1h) per row: confirmed live that ~14 of 1.36M rows in a
+    single quarter have TotalTime in the hours-to-weeks range (max observed: 5.07M seconds,
+    ~58 days for one exam - clearly a stuck/corrupted session, not real read time; p99 is
+    1281s). Aggregated over thousands of radiologists this noise washes out, but a single
+    such row can dominate one radiologist's per-modality baseline sum and produce a
+    nonsensical >1000% "efficiency change" for this specific per-rad, per-modality
+    comparison - confirmed by reproducing exactly this against EDW before adding the cap."""
+    period_case = _MVP_PERIOD_CASE_SQL.format(date_col="Exam_Date")
+    period_where = _MVP_PERIOD_WHERE_SQL.format(date_col="Exam_Date")
+    capped_time = "LEAST(TotalTime, 3600)"
     return run_query(
-        """
+        f"""
         SELECT
-          CAST(CAST(DATE_TRUNC('MONTH', Exam_Date) AS DATE) AS STRING) AS period,
           Physician_NPI AS npi,
-          SUM(CASE WHEN Is_Reporting_Row = 1 THEN TotalTBWU ELSE 0 END) AS reporting_tbwu,
-          SUM(CASE WHEN Is_Reporting_Row = 1 THEN TotalTime ELSE 0 END) AS reporting_time,
-          SUM(CASE WHEN Is_Reporting_Row = 1 THEN Weighted_Baseline_Contrib_Excl ELSE 0 END) AS reporting_baseline_contrib,
-          SUM(CASE WHEN Is_Drafting_Row = 1 THEN TotalTBWU ELSE 0 END) AS drafting_tbwu,
-          SUM(CASE WHEN Is_Drafting_Row = 1 THEN TotalTime ELSE 0 END) AS drafting_time,
-          SUM(CASE WHEN Is_Drafting_Row = 1 THEN Weighted_Baseline_Contrib_Excl ELSE 0 END) AS drafting_baseline_contrib
+          {period_case} AS period_label,
+          SUM(CASE WHEN Is_Drafting_Row = 1 OR Is_Capture_Row = 1 THEN TotalTBWU ELSE 0 END) AS dc_tbwu,
+          SUM(CASE WHEN Is_Drafting_Row = 1 OR Is_Capture_Row = 1 THEN {capped_time} ELSE 0 END) AS dc_time,
+          SUM(CASE WHEN Is_Drafting_Row = 1 OR Is_Capture_Row = 1 THEN ExamCount ELSE 0 END) AS dc_exam_count,
+          SUM(CASE WHEN Is_Drafting_Row = 1 AND Modality_Code = 'CT' THEN TotalTBWU ELSE 0 END) AS ct_drafting_tbwu,
+          SUM(CASE WHEN Is_Drafting_Row = 1 AND Modality_Code = 'CT' THEN {capped_time} ELSE 0 END) AS ct_drafting_time,
+          SUM(CASE WHEN Is_Drafting_Row = 1 AND Modality_Code = 'CR' THEN TotalTBWU ELSE 0 END) AS xr_drafting_tbwu,
+          SUM(CASE WHEN Is_Drafting_Row = 1 AND Modality_Code = 'CR' THEN {capped_time} ELSE 0 END) AS xr_drafting_time,
+          SUM(CASE WHEN Is_Capture_Row = 1 THEN TotalTBWU ELSE 0 END) AS us_capture_tbwu,
+          SUM(CASE WHEN Is_Capture_Row = 1 THEN {capped_time} ELSE 0 END) AS us_capture_time
         FROM edw_dev.bipa_analytics.radiologist_metrics_optimized
-        WHERE Exam_Date >= '2024-11-01'
-        GROUP BY DATE_TRUNC('MONTH', Exam_Date), Physician_NPI
-        ORDER BY period
+        WHERE {period_where}
+        GROUP BY Physician_NPI, {period_case}
+        """
+    )
+
+
+def get_mvp_capacity_by_radiologist() -> list[dict]:
+    """Per-(NPI, period) avg capacity/shift (TBWU/9h - matches MVP's "Baseline Capacity- Avg
+    Capacity Per Shift" / "TBWU/9 Hour" fields exactly), same baseline/current windows as
+    get_mvp_efficiency_by_radiologist."""
+    period_case = _MVP_PERIOD_CASE_SQL.format(date_col="ShiftDate")
+    period_where = _MVP_PERIOD_WHERE_SQL.format(date_col="ShiftDate")
+    return run_query(
+        f"""
+        SELECT
+          NPI AS npi,
+          {period_case} AS period_label,
+          AVG(on_shift_capacity_RPWU) AS capacity_per_shift,
+          COUNT(1) AS shift_count
+        FROM edw_dev.bipa_analytics.presentation_rpt_vra_capacity_enhance_vw
+        WHERE {period_where}
+        GROUP BY NPI, {period_case}
         """
     )
 

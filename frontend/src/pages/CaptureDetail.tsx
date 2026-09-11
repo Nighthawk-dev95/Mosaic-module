@@ -6,6 +6,7 @@ import type { DataTableColumn } from "../components/DataTable";
 import { FilterBar } from "../components/FilterBar";
 import { StatTile } from "../components/StatTile";
 import { TrendDelta } from "../components/TrendDelta";
+import { Badge } from "../components/Badge";
 import { CaptureTrendChart } from "../components/CaptureTrendChart";
 import { TABLE_SECTION_STYLE, TABLE_SCROLL_STYLE } from "../styles/tableLayout";
 import { useFilters, matchesPractice, matchesRadiologistSearch } from "../context/FilterContext";
@@ -130,7 +131,16 @@ export function CaptureDetail() {
   }, [utilTrendByRadiologist.data]);
 
   const PRACTICE_COLUMNS: DataTableColumn<CapturePracticeRollup>[] = [
-    { key: "practice", label: "Practice" },
+    {
+      key: "practice",
+      label: "Practice",
+      render: (r) => (
+        <span style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          {r.practice}
+          {r.opted_out && <Badge label="Opted Out" color="var(--status-critical)" />}
+        </span>
+      ),
+    },
     {
       key: "pct_captured_all",
       label: "Utilization Rate",

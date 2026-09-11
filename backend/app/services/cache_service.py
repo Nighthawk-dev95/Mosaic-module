@@ -6,6 +6,7 @@ since the underlying EDW queries in app.services.mosaic_service are no longer ca
 per-request - only by the background/manual refresh job.
 """
 
+from app.data import capture_enablement, rad_survey
 from app.db import cache_store, efficiency_store
 from app.models.mosaic import (
     BlockerByPractice,
@@ -28,14 +29,17 @@ from app.models.mosaic import (
     EfficiencyTrendPoint,
     EfficiencyTrendRpAvgPoint,
     FocusRadiologistItem,
-    FocusRadiologistMonth,
     MosaicIntelligenceSnapshot,
     PopulationEfficiency,
     RadiologistRosterItem,
+    LikertDistribution,
+    PracticeNpsStat,
     RadiologistScorecard,
+    RadSurveySummary,
     ScorecardMetrics,
     RadSummaryStat,
     RpceTrendPoint,
+    ThemeStat,
     UndraftedCategoryPoint,
     UndraftedFilterOptions,
     UtilizationPracticeRollup,
@@ -343,80 +347,84 @@ def get_efficiency_trend_rp_avg() -> list[EfficiencyTrendRpAvgPoint]:
     return points
 
 
-def _last_two_periods(rows: list[dict]) -> list[dict]:
-    return sorted(rows, key=lambda r: r["period"])[-2:]
-
-
-def _evaluate_focus_mode(rows: list[dict], mode: str, tbwu_fn, time_fn, baseline_fn) -> tuple[bool, list[FocusRadiologistMonth]]:
-    """Computes rate/baseline/pct_change_vs_baseline for each of the (exactly 2) months already
-    selected by the caller, and whether every one of them is below baseline - the "Focus Rad"
-    gate for this mode."""
-    months = []
-    all_negative = len(rows) == 2
-    for row in rows:
-        tbwu = tbwu_fn(row)
-        time_sec = time_fn(row)
-        baseline_contrib = baseline_fn(row)
-        rate = _rate(tbwu, time_sec)
-        baseline = (baseline_contrib / time_sec) if time_sec else None
-        pct = _pct_change(rate, baseline)
-        if pct is None or pct >= 0:
-            all_negative = False
-        months.append(
-            FocusRadiologistMonth(period=row["period"], mode=mode, tbwu_per_min=rate, baseline_tbwu_per_min=baseline, pct_change_vs_baseline=pct)
-        )
-    return all_negative, months
+def _mvp_rate_change(baseline_row: dict, current_row: dict, tbwu_key: str, time_key: str) -> float | None:
+    baseline_rate = _rate(baseline_row.get(tbwu_key) or 0, baseline_row.get(time_key) or 0)
+    current_rate = _rate(current_row.get(tbwu_key) or 0, current_row.get(time_key) or 0)
+    return _pct_change(current_rate, baseline_rate)
 
 
 def get_focus_radiologists() -> list[FocusRadiologistItem]:
-    """Flags a radiologist as a Focus Rad when pct_change_vs_baseline is negative in each of
-    their last 2 available months, independently for each of the 4 Efficiency modes."""
-    monthly_payload, _ = cache_store.load("efficiency_monthly_by_radiologist")
-    by_npi_monthly: dict[int, list[dict]] = {}
-    for row in monthly_payload or []:
-        by_npi_monthly.setdefault(row["npi"], []).append(row)
+    """Flags radiologists per the real Mosaic Value Project (MVP) methodology: fixed baseline
+    (May-Jul 2026) vs. most recent full month, gated by a >=100 current-period D&C exam volume
+    floor and an "already gaining capacity" exclusion (>1% capacity gain), then tiered by
+    baseline capacity x efficiency-loss severity:
+      Tier 1: baseline capacity >= 80 TBWU/shift AND D&C efficiency change < 20%
+      Tier 2: baseline capacity 60-79 TBWU/shift AND D&C efficiency change < 20%
+      Tier 3: baseline capacity >= 60 AND any one modality (CT/XR Drafting, US Capture)
+              change < -10%, even when overall D&C change is positive
+    Tier assignment is a priority chain (Tier 1 checked first, then 2, then 3) - since Tier 1/2
+    both require D&C change < 20%, a rad with a >=20% overall gain but one bad modality falls
+    through to Tier 3 rather than Tier 1, which already achieves MVP's own documented
+    judgment call ("don't prioritize a rad who's +80% overall but -3% on one model") without a
+    separate demotion step.
+    Not modeled (no EDW source - lives only in MVP's manually-maintained CRM export):
+    "Q3 go-live practice" and "Do Not Revisit" exclusions."""
+    eff_payload, _ = cache_store.load("mvp_efficiency_by_radiologist")
+    eff_by_npi: dict[int, dict[str, dict]] = {}
+    for row in eff_payload or []:
+        label = row.get("period_label")
+        if label:
+            eff_by_npi.setdefault(row["npi"], {})[label] = row
 
-    capture_payload, _ = cache_store.load("capture_efficiency_trend_monthly_by_radiologist")
-    by_npi_capture: dict[int, list[dict]] = {}
-    for row in capture_payload or []:
-        by_npi_capture.setdefault(row["npi"], []).append(row)
+    cap_payload, _ = cache_store.load("mvp_capacity_by_radiologist")
+    cap_by_npi: dict[int, dict[str, dict]] = {}
+    for row in cap_payload or []:
+        label = row.get("period_label")
+        if label:
+            cap_by_npi.setdefault(row["npi"], {})[label] = row
 
     roster_payload, _ = cache_store.load("radiologist_roster")
     roster_by_npi = {row["npi"]: row for row in (roster_payload or [])}
 
     results: list[FocusRadiologistItem] = []
-    for npi in set(by_npi_monthly) | set(by_npi_capture):
-        flagged_modes: list[str] = []
-        months: list[FocusRadiologistMonth] = []
+    for npi in set(eff_by_npi) & set(cap_by_npi):
+        eff_periods = eff_by_npi[npi]
+        cap_periods = cap_by_npi[npi]
+        if "baseline" not in eff_periods or "current" not in eff_periods:
+            continue
+        if "baseline" not in cap_periods or "current" not in cap_periods:
+            continue
 
-        monthly_rows = _last_two_periods(by_npi_monthly.get(npi, []))
-        if len(monthly_rows) == 2:
-            for mode, tbwu_fn, time_fn, baseline_fn in (
-                ("reporting", lambda r: r.get("reporting_tbwu") or 0, lambda r: r.get("reporting_time") or 0, lambda r: r.get("reporting_baseline_contrib") or 0),
-                ("drafting", lambda r: r.get("drafting_tbwu") or 0, lambda r: r.get("drafting_time") or 0, lambda r: r.get("drafting_baseline_contrib") or 0),
-                (
-                    "full_mosaic",
-                    lambda r: (r.get("reporting_tbwu") or 0) + (r.get("drafting_tbwu") or 0),
-                    lambda r: (r.get("reporting_time") or 0) + (r.get("drafting_time") or 0),
-                    lambda r: (r.get("reporting_baseline_contrib") or 0) + (r.get("drafting_baseline_contrib") or 0),
-                ),
-            ):
-                negative, mode_months = _evaluate_focus_mode(monthly_rows, mode, tbwu_fn, time_fn, baseline_fn)
-                if negative:
-                    flagged_modes.append(mode)
-                    months.extend(mode_months)
+        baseline_eff, current_eff = eff_periods["baseline"], eff_periods["current"]
+        baseline_cap, current_cap = cap_periods["baseline"], cap_periods["current"]
 
-        capture_rows = _last_two_periods(by_npi_capture.get(npi, []))
-        if len(capture_rows) == 2:
-            negative, mode_months = _evaluate_focus_mode(
-                capture_rows, "capture",
-                lambda r: r.get("capture_tbwu") or 0, lambda r: r.get("capture_time") or 0, lambda r: r.get("capture_baseline_contrib") or 0,
-            )
-            if negative:
-                flagged_modes.append("capture")
-                months.extend(mode_months)
+        current_dc_exam_count = int(current_eff.get("dc_exam_count") or 0)
+        if current_dc_exam_count < 100:
+            continue
 
-        if not flagged_modes:
+        baseline_capacity = baseline_cap.get("capacity_per_shift")
+        if baseline_capacity is None:
+            continue
+        capacity_change_pct = _pct_change(current_cap.get("capacity_per_shift"), baseline_capacity)
+        if capacity_change_pct is not None and capacity_change_pct > 0.01:
+            continue  # already gaining capacity - MVP excludes these
+
+        dc_change_pct = _mvp_rate_change(baseline_eff, current_eff, "dc_tbwu", "dc_time")
+        ct_change_pct = _mvp_rate_change(baseline_eff, current_eff, "ct_drafting_tbwu", "ct_drafting_time")
+        xr_change_pct = _mvp_rate_change(baseline_eff, current_eff, "xr_drafting_tbwu", "xr_drafting_time")
+        us_change_pct = _mvp_rate_change(baseline_eff, current_eff, "us_capture_tbwu", "us_capture_time")
+
+        tier: str | None = None
+        if baseline_capacity >= 80 and dc_change_pct is not None and dc_change_pct < 0.20:
+            tier = "Tier 1"
+        elif 60 <= baseline_capacity < 80 and dc_change_pct is not None and dc_change_pct < 0.20:
+            tier = "Tier 2"
+        elif baseline_capacity >= 60 and any(
+            c is not None and c < -0.10 for c in (ct_change_pct, xr_change_pct, us_change_pct)
+        ):
+            tier = "Tier 3"
+
+        if tier is None:
             continue
 
         roster = roster_by_npi.get(npi, {})
@@ -426,13 +434,41 @@ def get_focus_radiologists() -> list[FocusRadiologistItem]:
                 radiologist_name=roster.get("radiologist_name"),
                 practice=roster.get("home_practice"),
                 subspecialty=roster.get("working_subspecialty"),
-                flagged_modes=flagged_modes,
-                months=months,
+                priority_tier=tier,
+                baseline_capacity_per_shift=baseline_capacity,
+                dc_efficiency_change_pct=dc_change_pct,
+                capacity_change_pct=capacity_change_pct,
+                ct_drafting_change_pct=ct_change_pct,
+                xr_drafting_change_pct=xr_change_pct,
+                us_capture_change_pct=us_change_pct,
+                current_dc_exam_count=current_dc_exam_count,
             )
         )
 
-    results.sort(key=lambda r: (-len(r.flagged_modes), r.radiologist_name or ""))
+    results.sort(key=lambda r: (r.priority_tier, r.radiologist_name or ""))
     return results
+
+
+def get_rad_survey_summary() -> RadSurveySummary:
+    """Static, hand-compiled snapshot - see app/data/rad_survey.py for provenance. No EDW/cache
+    dependency, unlike everything else in this file."""
+    return RadSurveySummary(
+        sent=rad_survey.SENT,
+        responses=rad_survey.RESPONSES,
+        response_rate=rad_survey.RESPONSE_RATE,
+        median_completion_minutes=rad_survey.MEDIAN_COMPLETION_MINUTES,
+        nps=rad_survey.NPS,
+        nps_distribution=rad_survey.NPS_DISTRIBUTION,
+        promoters=rad_survey.PROMOTERS,
+        passives=rad_survey.PASSIVES,
+        detractors=rad_survey.DETRACTORS,
+        agreement_statements=[LikertDistribution(**row) for row in rad_survey.AGREEMENT_STATEMENTS],
+        feature_satisfaction=[LikertDistribution(**row) for row in rad_survey.FEATURE_SATISFACTION],
+        problem_frequency=[LikertDistribution(**row) for row in rad_survey.PROBLEM_FREQUENCY],
+        top_frustration_themes=[ThemeStat(**row) for row in rad_survey.TOP_FRUSTRATION_THEMES],
+        top_praised_themes=[ThemeStat(**row) for row in rad_survey.TOP_PRAISED_THEMES],
+        by_practice=[PracticeNpsStat(**row) for row in rad_survey.BY_PRACTICE],
+    )
 
 
 def get_capture_overview() -> CaptureOverview:
@@ -486,6 +522,14 @@ def get_capture_by_practice(practice: str | None = None) -> list[CapturePractice
 
     result = []
     for item in items:
+        # Prefer the real practice-level enablement date from the Capture Deployment/Phase 3
+        # trackers (see app/data/capture_enablement.py) over the derived "first captured exam"
+        # proxy, when a real one is known.
+        real_date, opted_out = capture_enablement.capture_enablement_for(item.practice)
+        if real_date:
+            item = item.model_copy(update={"enablement_date": real_date})
+        item = item.model_copy(update={"opted_out": opted_out})
+
         periods = by_practice_period.get(item.practice, {})
         baseline_period = _capture_baseline_period(item.enablement_date)
         pct_change = None

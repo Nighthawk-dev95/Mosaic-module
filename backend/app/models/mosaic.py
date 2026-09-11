@@ -145,21 +145,25 @@ class EfficiencyTrendRpAvgPoint(BaseModel):
     full_mosaic_tbwu_per_min: float | None
 
 
-class FocusRadiologistMonth(BaseModel):
-    period: str
-    mode: str
-    tbwu_per_min: float | None
-    baseline_tbwu_per_min: float | None
-    pct_change_vs_baseline: float | None
-
-
 class FocusRadiologistItem(BaseModel):
+    """A radiologist flagged by the real Mosaic Value Project (MVP) methodology: a fixed
+    baseline period (May-Jul 2026) vs. the most recent full month, gated by a minimum D&C
+    exam-volume floor and tiered by baseline capacity x efficiency-loss severity. Does not
+    model MVP's Dynamics-CRM-only exclusions ("Q3 go-live practice", "Do Not Revisit" flags) -
+    those live in a manually-maintained CRM export, not EDW."""
+
     npi: int
     radiologist_name: str | None
     practice: str | None
     subspecialty: str | None
-    flagged_modes: list[str]
-    months: list[FocusRadiologistMonth]
+    priority_tier: str  # "Tier 1" | "Tier 2" | "Tier 3"
+    baseline_capacity_per_shift: float | None
+    dc_efficiency_change_pct: float | None
+    capacity_change_pct: float | None
+    ct_drafting_change_pct: float | None
+    xr_drafting_change_pct: float | None
+    us_capture_change_pct: float | None
+    current_dc_exam_count: int
 
 
 class CapacityRadiologistItem(BaseModel):
@@ -243,6 +247,7 @@ class CapturePracticeRollup(BaseModel):
     rads_capture_enabled: int
     enablement_date: date | None
     pct_change_since_enablement: float | None
+    opted_out: bool = False
 
 
 class CaptureRadiologistItem(BaseModel):
@@ -369,6 +374,44 @@ class UndraftedCategoryPoint(BaseModel):
 class UndraftedFilterOptions(BaseModel):
     exam_categories: list[str]
     sites: list[str]
+
+
+class LikertDistribution(BaseModel):
+    label: str
+    distribution: dict[str, int]  # "1".."5" -> respondent count
+    mean: float
+    top2box_pct: float | None = None  # agreement statements only
+    na_count: int | None = None  # feature satisfaction only (option 6 = N/A)
+
+
+class ThemeStat(BaseModel):
+    theme: str
+    pct: float
+
+
+class PracticeNpsStat(BaseModel):
+    practice: str
+    n: int
+    nps: float
+    mean: float
+
+
+class RadSurveySummary(BaseModel):
+    sent: int
+    responses: int
+    response_rate: float
+    median_completion_minutes: float
+    nps: float
+    nps_distribution: dict[str, int]  # "0".."10" -> respondent count
+    promoters: int
+    passives: int
+    detractors: int
+    agreement_statements: list[LikertDistribution]
+    feature_satisfaction: list[LikertDistribution]
+    problem_frequency: list[LikertDistribution]
+    top_frustration_themes: list[ThemeStat]
+    top_praised_themes: list[ThemeStat]
+    by_practice: list[PracticeNpsStat]
 
 
 class CapacityPracticeRollup(BaseModel):

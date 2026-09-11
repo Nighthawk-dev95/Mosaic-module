@@ -3,12 +3,51 @@ import { mosaicApi } from "../api/client";
 import { useFetch } from "../hooks/useFetch";
 import { StatTile } from "../components/StatTile";
 import { Badge } from "../components/Badge";
+import { TrendDelta } from "../components/TrendDelta";
 import { RpceTrendChart } from "../components/RpceTrendChart";
 import { DataTable, fmtPct } from "../components/DataTable";
 import type { DataTableColumn } from "../components/DataTable";
 import { FilterBar } from "../components/FilterBar";
 import { useFilters, matchesPractice, matchesRadiologistSearch } from "../context/FilterContext";
-import type { RadSummaryStat } from "../api/types";
+import type { RadSummaryStat, ThemeStat, LikertDistribution, PracticeNpsStat } from "../api/types";
+
+const CARD_STYLE = { background: "var(--surface-1)", border: "1px solid var(--border)", borderRadius: 8, padding: 16 } as const;
+
+// Ranked horizontal bars for magnitude comparison (same pattern/reasoning as ScorecardDetail's
+// Modality/Priority Mix bars: one sequential hue, rank+label already carry identity).
+function ThemeBarCard({ title, themes }: { title: string; themes: ThemeStat[] }) {
+  const sorted = [...themes].sort((a, b) => b.pct - a.pct);
+  const maxPct = sorted.length ? sorted[0].pct : 0;
+  return (
+    <div style={{ ...CARD_STYLE, flex: "1 1 280px" }}>
+      <div style={{ color: "var(--text-muted)", fontSize: 13, marginBottom: 10, textTransform: "uppercase", letterSpacing: 0.5 }}>{title}</div>
+      {sorted.map((t) => (
+        <div key={t.theme} style={{ display: "flex", alignItems: "center", gap: 8, padding: "3px 0" }}>
+          <span style={{ color: "var(--text-secondary)", fontSize: 12, width: 140, flexShrink: 0 }}>{t.theme}</span>
+          <div style={{ flex: 1, background: "var(--gridline)", height: 16, position: "relative" }}>
+            <div style={{ width: `${maxPct ? (t.pct / maxPct) * 100 : 0}%`, height: "100%", background: "var(--series-5-magenta)", borderRadius: "0 4px 4px 0" }} />
+          </div>
+          <span style={{ color: "var(--text-primary)", fontSize: 12, fontWeight: 600, width: 42, textAlign: "right", flexShrink: 0 }}>{t.pct.toFixed(1)}%</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function LikertRow({ stat }: { stat: LikertDistribution }) {
+  const top2 = (stat.distribution["4"] || 0) + (stat.distribution["5"] || 0);
+  const total = Object.values(stat.distribution).reduce((a, b) => a + b, 0);
+  const top2Pct = total ? (top2 / total) * 100 : 0;
+  return (
+    <div style={{ display: "flex", justifyContent: "space-between", padding: "4px 0", fontSize: 13 }}>
+      <span style={{ color: "var(--text-secondary)" }}>{stat.label}</span>
+      <span style={{ color: "var(--text-primary)" }}>
+        {stat.mean.toFixed(2)} avg · {top2Pct.toFixed(0)}% top-2-box
+        {stat.na_count ? ` · ${stat.na_count} N/A` : ""}
+      </span>
+    </div>
+  );
+}
 
 function fmt(value: number | null | undefined): string {
   return value === null || value === undefined ? "—" : value.toLocaleString();
@@ -63,6 +102,7 @@ export function MosaicIntelligence() {
   const snapshot = useFetch(() => mosaicApi.getMosaicIntelligence(filters.practice || undefined), [filters.practice]);
   const trend = useFetch(() => mosaicApi.getRpceTrend(filters.practice || undefined), [filters.practice]);
   const radStats = useFetch(() => mosaicApi.getRadSummaryStats(), []);
+  const survey = useFetch(() => mosaicApi.getRadSentiment(), []);
 
   const anyError = snapshot.error || trend.error || radStats.error;
 
@@ -185,6 +225,69 @@ export function MosaicIntelligence() {
         </div>
         {trend.data && <RpceTrendChart data={filteredTrend} />}
       </div>
+
+      {survey.data && (
+        <>
+          <div>
+            <div style={{ color: "var(--text-muted)", fontSize: 13, textTransform: "uppercase", letterSpacing: 0.5 }}>Rad Sentiment</div>
+            <div style={{ color: "var(--text-muted)", fontSize: 11, marginTop: 2 }}>
+              Mosaic General Survey · {survey.data.responses.toLocaleString()} respondents ({(survey.data.response_rate * 100).toFixed(1)}% response
+              rate) · fielded Aug 7 – Sep 2, 2026
+            </div>
+          </div>
+
+          <div style={{ display: "flex", gap: 16, flexWrap: "wrap" }}>
+            <StatTile
+              label="Net Promoter Score"
+              value={survey.data.nps.toFixed(1)}
+              accent="var(--status-critical)"
+              sublabel={`${survey.data.promoters} promoters · ${survey.data.passives} passives · ${survey.data.detractors} detractors`}
+            />
+          </div>
+
+          <div style={{ display: "flex", gap: 16, flexWrap: "wrap" }}>
+            <ThemeBarCard title="Top Frustration Themes" themes={survey.data.top_frustration_themes} />
+            <ThemeBarCard title="Top Praised Themes" themes={survey.data.top_praised_themes} />
+          </div>
+
+          <div style={{ display: "flex", gap: 16, flexWrap: "wrap" }}>
+            <div style={{ ...CARD_STYLE, flex: "1 1 320px" }}>
+              <div style={{ color: "var(--text-muted)", fontSize: 13, marginBottom: 10, textTransform: "uppercase", letterSpacing: 0.5 }}>
+                Feature Satisfaction (1-5)
+              </div>
+              {survey.data.feature_satisfaction.map((s) => (
+                <LikertRow key={s.label} stat={s} />
+              ))}
+            </div>
+            <div style={{ ...CARD_STYLE, flex: "1 1 320px" }}>
+              <div style={{ color: "var(--text-muted)", fontSize: 13, marginBottom: 10, textTransform: "uppercase", letterSpacing: 0.5 }}>
+                Agreement Statements (1-5)
+              </div>
+              {survey.data.agreement_statements.map((s) => (
+                <LikertRow key={s.label} stat={s} />
+              ))}
+            </div>
+          </div>
+
+          <div style={CARD_STYLE}>
+            <div style={{ color: "var(--text-muted)", fontSize: 13, marginBottom: 12, textTransform: "uppercase", letterSpacing: 0.5 }}>
+              NPS by Practice (n≥15 respondents) — every practice is net-negative
+            </div>
+            <DataTable
+              columns={
+                [
+                  { key: "practice", label: "Practice" },
+                  { key: "n", label: "Respondents" },
+                  { key: "nps", label: "NPS", render: (r: PracticeNpsStat) => <TrendDelta value={r.nps / 100} /> },
+                  { key: "mean", label: "Avg Score (0-10)" },
+                ] as DataTableColumn<PracticeNpsStat>[]
+              }
+              rows={survey.data.by_practice}
+              rowKey={(r) => r.practice}
+            />
+          </div>
+        </>
+      )}
 
       <div
         style={{

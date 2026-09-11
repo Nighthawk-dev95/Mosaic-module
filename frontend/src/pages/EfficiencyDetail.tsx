@@ -7,12 +7,13 @@ import { TABLE_SECTION_STYLE, TABLE_SCROLL_STYLE } from "../styles/tableLayout";
 import { EfficiencyTrendChart } from "../components/EfficiencyTrendChart";
 import { FilterBar } from "../components/FilterBar";
 import { TrendDelta } from "../components/TrendDelta";
+import { Badge } from "../components/Badge";
 import { useFilters, matchesPractice, matchesRadiologistSearch } from "../context/FilterContext";
 import type {
   EfficiencyMode,
   EfficiencyPracticeRollup,
   EfficiencyRadiologistItem,
-  FocusRadiologistMonth,
+  FocusRadiologistItem,
   PopulationEfficiency,
 } from "../api/types";
 
@@ -20,54 +21,19 @@ function fmtRate(value: number | null | undefined): string {
   return value === null || value === undefined ? "—" : value.toFixed(3);
 }
 
-const FOCUS_MODE_LABELS: Record<string, string> = {
-  full_mosaic: "Full Mosaic",
-  reporting: "Reporting",
-  drafting: "Drafting",
-  capture: "Capture",
+const TIER_COLORS: Record<string, string> = {
+  "Tier 1": "var(--status-critical)",
+  "Tier 2": "var(--status-warning)",
+  "Tier 3": "var(--text-secondary)",
 };
 
-function fmtMonth(period: string): string {
-  // period is a date-only "YYYY-MM-DD" string (the 1st of the month). new Date(period) parses
-  // it as UTC midnight, which toLocaleDateString then renders in local time - in any
-  // behind-UTC timezone that shifts the date back a day, which can roll the *month* label back
-  // too right at the 1st. Build the Date from the numeric parts instead, always at local
-  // midnight, so the displayed month always matches the period.
-  const [year, month] = period.split("-").map(Number);
-  return new Date(year, month - 1, 1).toLocaleDateString(undefined, { month: "short", year: "2-digit" });
-}
-
-interface FocusRadRow {
-  npi: number;
-  radiologist_name: string | null;
-  practice: string | null;
-  mode: string;
-  month1: FocusRadiologistMonth;
-  month2: FocusRadiologistMonth;
-}
-
-const FOCUS_RAD_COLUMNS: DataTableColumn<FocusRadRow>[] = [
+const FOCUS_RAD_COLUMNS: DataTableColumn<FocusRadiologistItem>[] = [
   { key: "radiologist_name", label: "Radiologist" },
   { key: "practice", label: "Practice" },
-  { key: "mode", label: "Mode", render: (r) => FOCUS_MODE_LABELS[r.mode] ?? r.mode },
-  {
-    key: "month1",
-    label: "Prior Month",
-    render: (r) => (
-      <span>
-        {fmtMonth(r.month1.period)} <TrendDelta value={r.month1.pct_change_vs_baseline} />
-      </span>
-    ),
-  },
-  {
-    key: "month2",
-    label: "Latest Month",
-    render: (r) => (
-      <span>
-        {fmtMonth(r.month2.period)} <TrendDelta value={r.month2.pct_change_vs_baseline} />
-      </span>
-    ),
-  },
+  { key: "priority_tier", label: "Priority Tier", render: (r) => <Badge label={r.priority_tier} color={TIER_COLORS[r.priority_tier] ?? "var(--text-secondary)"} /> },
+  { key: "baseline_capacity_per_shift", label: "Baseline Capacity/Shift", render: (r) => fmtRate(r.baseline_capacity_per_shift) },
+  { key: "dc_efficiency_change_pct", label: "D&C Efficiency Δ", render: (r) => <TrendDelta value={r.dc_efficiency_change_pct} /> },
+  { key: "capacity_change_pct", label: "Capacity Δ", render: (r) => <TrendDelta value={r.capacity_change_pct} /> },
 ];
 
 const MODES: { value: EfficiencyMode; label: string }[] = [
@@ -235,31 +201,12 @@ export function EfficiencyDetail() {
   const rpAvgTrend = useFetch(() => mosaicApi.getEfficiencyTrendRpAvg(), []);
   const focusRads = useFetch(() => mosaicApi.getFocusRadiologists(), []);
 
-  const focusRadRows: FocusRadRow[] = useMemo(() => {
-    const rows: FocusRadRow[] = [];
-    for (const item of focusRads.data ?? []) {
-      for (const flaggedMode of item.flagged_modes) {
-        const monthsForMode = item.months.filter((m) => m.mode === flaggedMode).sort((a, b) => a.period.localeCompare(b.period));
-        if (monthsForMode.length !== 2) continue;
-        rows.push({
-          npi: item.npi,
-          radiologist_name: item.radiologist_name,
-          practice: item.practice,
-          mode: flaggedMode,
-          month1: monthsForMode[0],
-          month2: monthsForMode[1],
-        });
-      }
-    }
-    return rows;
-  }, [focusRads.data]);
-
   const filteredFocusRadRows = useMemo(
     () =>
-      focusRadRows.filter(
+      (focusRads.data ?? []).filter(
         (r) => matchesPractice(filters, r.practice) && matchesRadiologistSearch(filters, r.radiologist_name, r.npi)
       ),
-    [focusRadRows, filters]
+    [focusRads.data, filters]
   );
 
   const [population, setPopulation] = useState<PopulationEfficiency | null>(null);
@@ -384,15 +331,17 @@ export function EfficiencyDetail() {
           Focus Rads
         </div>
         <div style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 12 }}>
-          Radiologists whose Mosaic efficiency has been below their own re-baselined efficiency for 2 consecutive
-          months, per mode (Full Mosaic / Reporting / Drafting / Capture).
+          Real Mosaic Value Project (MVP) methodology: fixed May–Jul 2026 baseline vs. the most recent full month,
+          gated by a 100+ exam volume floor and an "already gaining capacity" exclusion, tiered by baseline
+          capacity × efficiency-loss severity. Doesn't model MVP's CRM-only exclusions ("Q3 go-live practice",
+          "Do Not Revisit" flags) — those live in a manually-maintained tracker, not EDW.
         </div>
-        {focusRadRows.length === 0 ? (
+        {(focusRads.data ?? []).length === 0 ? (
           <div style={{ color: "var(--text-muted)", fontSize: 13 }}>No radiologists currently flagged.</div>
         ) : filteredFocusRadRows.length === 0 ? (
           <div style={{ color: "var(--text-muted)", fontSize: 13 }}>No flagged radiologists match the current filters.</div>
         ) : (
-          <DataTable columns={FOCUS_RAD_COLUMNS} rows={filteredFocusRadRows} rowKey={(r) => `${r.npi}-${r.mode}`} />
+          <DataTable columns={FOCUS_RAD_COLUMNS} rows={filteredFocusRadRows} rowKey={(r) => r.npi} />
         )}
       </div>
 
