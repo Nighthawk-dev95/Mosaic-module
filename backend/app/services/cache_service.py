@@ -27,6 +27,8 @@ from app.models.mosaic import (
     EfficiencyRadiologistItem,
     EfficiencyTrendPoint,
     EfficiencyTrendRpAvgPoint,
+    FocusRadiologistItem,
+    FocusRadiologistMonth,
     MosaicIntelligenceSnapshot,
     PopulationEfficiency,
     RadiologistRosterItem,
@@ -339,6 +341,98 @@ def get_efficiency_trend_rp_avg() -> list[EfficiencyTrendRpAvgPoint]:
             )
         )
     return points
+
+
+def _last_two_periods(rows: list[dict]) -> list[dict]:
+    return sorted(rows, key=lambda r: r["period"])[-2:]
+
+
+def _evaluate_focus_mode(rows: list[dict], mode: str, tbwu_fn, time_fn, baseline_fn) -> tuple[bool, list[FocusRadiologistMonth]]:
+    """Computes rate/baseline/pct_change_vs_baseline for each of the (exactly 2) months already
+    selected by the caller, and whether every one of them is below baseline - the "Focus Rad"
+    gate for this mode."""
+    months = []
+    all_negative = len(rows) == 2
+    for row in rows:
+        tbwu = tbwu_fn(row)
+        time_sec = time_fn(row)
+        baseline_contrib = baseline_fn(row)
+        rate = _rate(tbwu, time_sec)
+        baseline = (baseline_contrib / time_sec) if time_sec else None
+        pct = _pct_change(rate, baseline)
+        if pct is None or pct >= 0:
+            all_negative = False
+        months.append(
+            FocusRadiologistMonth(period=row["period"], mode=mode, tbwu_per_min=rate, baseline_tbwu_per_min=baseline, pct_change_vs_baseline=pct)
+        )
+    return all_negative, months
+
+
+def get_focus_radiologists() -> list[FocusRadiologistItem]:
+    """Flags a radiologist as a Focus Rad when pct_change_vs_baseline is negative in each of
+    their last 2 available months, independently for each of the 4 Efficiency modes."""
+    monthly_payload, _ = cache_store.load("efficiency_monthly_by_radiologist")
+    by_npi_monthly: dict[int, list[dict]] = {}
+    for row in monthly_payload or []:
+        by_npi_monthly.setdefault(row["npi"], []).append(row)
+
+    capture_payload, _ = cache_store.load("capture_efficiency_trend_monthly_by_radiologist")
+    by_npi_capture: dict[int, list[dict]] = {}
+    for row in capture_payload or []:
+        by_npi_capture.setdefault(row["npi"], []).append(row)
+
+    roster_payload, _ = cache_store.load("radiologist_roster")
+    roster_by_npi = {row["npi"]: row for row in (roster_payload or [])}
+
+    results: list[FocusRadiologistItem] = []
+    for npi in set(by_npi_monthly) | set(by_npi_capture):
+        flagged_modes: list[str] = []
+        months: list[FocusRadiologistMonth] = []
+
+        monthly_rows = _last_two_periods(by_npi_monthly.get(npi, []))
+        if len(monthly_rows) == 2:
+            for mode, tbwu_fn, time_fn, baseline_fn in (
+                ("reporting", lambda r: r.get("reporting_tbwu") or 0, lambda r: r.get("reporting_time") or 0, lambda r: r.get("reporting_baseline_contrib") or 0),
+                ("drafting", lambda r: r.get("drafting_tbwu") or 0, lambda r: r.get("drafting_time") or 0, lambda r: r.get("drafting_baseline_contrib") or 0),
+                (
+                    "full_mosaic",
+                    lambda r: (r.get("reporting_tbwu") or 0) + (r.get("drafting_tbwu") or 0),
+                    lambda r: (r.get("reporting_time") or 0) + (r.get("drafting_time") or 0),
+                    lambda r: (r.get("reporting_baseline_contrib") or 0) + (r.get("drafting_baseline_contrib") or 0),
+                ),
+            ):
+                negative, mode_months = _evaluate_focus_mode(monthly_rows, mode, tbwu_fn, time_fn, baseline_fn)
+                if negative:
+                    flagged_modes.append(mode)
+                    months.extend(mode_months)
+
+        capture_rows = _last_two_periods(by_npi_capture.get(npi, []))
+        if len(capture_rows) == 2:
+            negative, mode_months = _evaluate_focus_mode(
+                capture_rows, "capture",
+                lambda r: r.get("capture_tbwu") or 0, lambda r: r.get("capture_time") or 0, lambda r: r.get("capture_baseline_contrib") or 0,
+            )
+            if negative:
+                flagged_modes.append("capture")
+                months.extend(mode_months)
+
+        if not flagged_modes:
+            continue
+
+        roster = roster_by_npi.get(npi, {})
+        results.append(
+            FocusRadiologistItem(
+                npi=npi,
+                radiologist_name=roster.get("radiologist_name"),
+                practice=roster.get("home_practice"),
+                subspecialty=roster.get("working_subspecialty"),
+                flagged_modes=flagged_modes,
+                months=months,
+            )
+        )
+
+    results.sort(key=lambda r: (-len(r.flagged_modes), r.radiologist_name or ""))
+    return results
 
 
 def get_capture_overview() -> CaptureOverview:

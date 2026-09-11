@@ -270,6 +270,23 @@ export interface EfficiencyTrendRpAvgPoint {
   full_mosaic_tbwu_per_min: number | null;
 }
 
+export interface FocusRadiologistMonth {
+  period: string;
+  mode: string;
+  tbwu_per_min: number | null;
+  baseline_tbwu_per_min: number | null;
+  pct_change_vs_baseline: number | null;
+}
+
+export interface FocusRadiologistItem {
+  npi: number;
+  radiologist_name: string | null;
+  practice: string | null;
+  subspecialty: string | null;
+  flagged_modes: string[];
+  months: FocusRadiologistMonth[];
+}
+
 interface CapacityMeasures {
   total_shifts: number;
   total_hours: number | null;

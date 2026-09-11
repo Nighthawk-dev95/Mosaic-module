@@ -17,6 +17,7 @@ import type {
   EfficiencyMode,
   EfficiencyTrendPoint,
   EfficiencyTrendRpAvgPoint,
+  FocusRadiologistItem,
   MosaicIntelligenceSnapshot,
   PopulationEfficiency,
   RadiologistRosterItem,
@@ -110,6 +111,7 @@ export const mosaicApi = {
     return get<EfficiencyTrendPoint[]>(`/efficiency/trend${qs ? `?${qs}` : ""}`);
   },
   getEfficiencyTrendRpAvg: () => get<EfficiencyTrendRpAvgPoint[]>("/efficiency/trend/rp-avg"),
+  getFocusRadiologists: () => get<FocusRadiologistItem[]>("/efficiency/focus-radiologists"),
   getCaptureOverview: () => get<CaptureOverview>("/capture/overview"),
   getCaptureByPractice: (practice?: string) =>
     get<CapturePracticeRollup[]>(`/capture/by-practice${practice ? `?practice=${encodeURIComponent(practice)}` : ""}`),

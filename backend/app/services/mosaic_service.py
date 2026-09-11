@@ -341,6 +341,29 @@ def get_efficiency_trend_by_category() -> list[dict]:
     )
 
 
+def get_efficiency_monthly_by_radiologist() -> list[dict]:
+    """Same table/window as get_efficiency_trend_by_category, grouped by (month, NPI) instead
+    of (month, exam category) - feeds the "Focus Rads" alert (2 consecutive months below
+    baseline), which needs a per-radiologist series rather than a company-wide one."""
+    return run_query(
+        """
+        SELECT
+          CAST(CAST(DATE_TRUNC('MONTH', Exam_Date) AS DATE) AS STRING) AS period,
+          Physician_NPI AS npi,
+          SUM(CASE WHEN Is_Reporting_Row = 1 THEN TotalTBWU ELSE 0 END) AS reporting_tbwu,
+          SUM(CASE WHEN Is_Reporting_Row = 1 THEN TotalTime ELSE 0 END) AS reporting_time,
+          SUM(CASE WHEN Is_Reporting_Row = 1 THEN Weighted_Baseline_Contrib_Excl ELSE 0 END) AS reporting_baseline_contrib,
+          SUM(CASE WHEN Is_Drafting_Row = 1 THEN TotalTBWU ELSE 0 END) AS drafting_tbwu,
+          SUM(CASE WHEN Is_Drafting_Row = 1 THEN TotalTime ELSE 0 END) AS drafting_time,
+          SUM(CASE WHEN Is_Drafting_Row = 1 THEN Weighted_Baseline_Contrib_Excl ELSE 0 END) AS drafting_baseline_contrib
+        FROM edw_dev.bipa_analytics.radiologist_metrics_optimized
+        WHERE Exam_Date >= '2024-11-01'
+        GROUP BY DATE_TRUNC('MONTH', Exam_Date), Physician_NPI
+        ORDER BY period
+        """
+    )
+
+
 def get_efficiency_trend_by_practice_category() -> list[dict]:
     """Same as get_efficiency_trend_by_category but also grouped by Practice - a deliberately
     small cardinality increase (month x practice x category), unlike the full

@@ -6,17 +6,69 @@ import type { DataTableColumn } from "../components/DataTable";
 import { TABLE_SECTION_STYLE, TABLE_SCROLL_STYLE } from "../styles/tableLayout";
 import { EfficiencyTrendChart } from "../components/EfficiencyTrendChart";
 import { FilterBar } from "../components/FilterBar";
+import { TrendDelta } from "../components/TrendDelta";
 import { useFilters, matchesPractice, matchesRadiologistSearch } from "../context/FilterContext";
 import type {
   EfficiencyMode,
   EfficiencyPracticeRollup,
   EfficiencyRadiologistItem,
+  FocusRadiologistMonth,
   PopulationEfficiency,
 } from "../api/types";
 
 function fmtRate(value: number | null | undefined): string {
   return value === null || value === undefined ? "—" : value.toFixed(3);
 }
+
+const FOCUS_MODE_LABELS: Record<string, string> = {
+  full_mosaic: "Full Mosaic",
+  reporting: "Reporting",
+  drafting: "Drafting",
+  capture: "Capture",
+};
+
+function fmtMonth(period: string): string {
+  // period is a date-only "YYYY-MM-DD" string (the 1st of the month). new Date(period) parses
+  // it as UTC midnight, which toLocaleDateString then renders in local time - in any
+  // behind-UTC timezone that shifts the date back a day, which can roll the *month* label back
+  // too right at the 1st. Build the Date from the numeric parts instead, always at local
+  // midnight, so the displayed month always matches the period.
+  const [year, month] = period.split("-").map(Number);
+  return new Date(year, month - 1, 1).toLocaleDateString(undefined, { month: "short", year: "2-digit" });
+}
+
+interface FocusRadRow {
+  npi: number;
+  radiologist_name: string | null;
+  practice: string | null;
+  mode: string;
+  month1: FocusRadiologistMonth;
+  month2: FocusRadiologistMonth;
+}
+
+const FOCUS_RAD_COLUMNS: DataTableColumn<FocusRadRow>[] = [
+  { key: "radiologist_name", label: "Radiologist" },
+  { key: "practice", label: "Practice" },
+  { key: "mode", label: "Mode", render: (r) => FOCUS_MODE_LABELS[r.mode] ?? r.mode },
+  {
+    key: "month1",
+    label: "Prior Month",
+    render: (r) => (
+      <span>
+        {fmtMonth(r.month1.period)} <TrendDelta value={r.month1.pct_change_vs_baseline} />
+      </span>
+    ),
+  },
+  {
+    key: "month2",
+    label: "Latest Month",
+    render: (r) => (
+      <span>
+        {fmtMonth(r.month2.period)} <TrendDelta value={r.month2.pct_change_vs_baseline} />
+      </span>
+    ),
+  },
+];
 
 const MODES: { value: EfficiencyMode; label: string }[] = [
   { value: "full_mosaic", label: "Full Mosaic" },
@@ -181,6 +233,34 @@ export function EfficiencyDetail() {
     [examCategory, practice]
   );
   const rpAvgTrend = useFetch(() => mosaicApi.getEfficiencyTrendRpAvg(), []);
+  const focusRads = useFetch(() => mosaicApi.getFocusRadiologists(), []);
+
+  const focusRadRows: FocusRadRow[] = useMemo(() => {
+    const rows: FocusRadRow[] = [];
+    for (const item of focusRads.data ?? []) {
+      for (const flaggedMode of item.flagged_modes) {
+        const monthsForMode = item.months.filter((m) => m.mode === flaggedMode).sort((a, b) => a.period.localeCompare(b.period));
+        if (monthsForMode.length !== 2) continue;
+        rows.push({
+          npi: item.npi,
+          radiologist_name: item.radiologist_name,
+          practice: item.practice,
+          mode: flaggedMode,
+          month1: monthsForMode[0],
+          month2: monthsForMode[1],
+        });
+      }
+    }
+    return rows;
+  }, [focusRads.data]);
+
+  const filteredFocusRadRows = useMemo(
+    () =>
+      focusRadRows.filter(
+        (r) => matchesPractice(filters, r.practice) && matchesRadiologistSearch(filters, r.radiologist_name, r.npi)
+      ),
+    [focusRadRows, filters]
+  );
 
   const [population, setPopulation] = useState<PopulationEfficiency | null>(null);
   useEffect(() => {
@@ -297,6 +377,23 @@ export function EfficiencyDetail() {
       <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: -12 }}>
         Practice/Subspecialty also narrow the tables below; Modality/Procedure only narrow the Population Efficiency comparison;
         Exam Category also narrows the trend charts below.
+      </div>
+
+      <div style={{ background: "var(--surface-1)", border: "1px solid var(--border)", borderRadius: 8, padding: 16 }}>
+        <div style={{ color: "var(--text-muted)", fontSize: 13, marginBottom: 4, textTransform: "uppercase", letterSpacing: 0.5 }}>
+          Focus Rads
+        </div>
+        <div style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 12 }}>
+          Radiologists whose Mosaic efficiency has been below their own re-baselined efficiency for 2 consecutive
+          months, per mode (Full Mosaic / Reporting / Drafting / Capture).
+        </div>
+        {focusRadRows.length === 0 ? (
+          <div style={{ color: "var(--text-muted)", fontSize: 13 }}>No radiologists currently flagged.</div>
+        ) : filteredFocusRadRows.length === 0 ? (
+          <div style={{ color: "var(--text-muted)", fontSize: 13 }}>No flagged radiologists match the current filters.</div>
+        ) : (
+          <DataTable columns={FOCUS_RAD_COLUMNS} rows={filteredFocusRadRows} rowKey={(r) => `${r.npi}-${r.mode}`} />
+        )}
       </div>
 
       <div style={{ display: "flex", gap: 16, flexWrap: "wrap" }}>

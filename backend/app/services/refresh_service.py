@@ -52,6 +52,7 @@ DATASETS: list[tuple[str, object, object]] = [
     ("ct_abdpel_blockers_by_practice", lambda: edw.get_ct_abdpel_blockers_by_practice(), None),
     ("efficiency_matrix", lambda: edw.get_efficiency_matrix(), _store_efficiency_matrix),
     ("efficiency_trend_by_category", lambda: edw.get_efficiency_trend_by_category(), None),
+    ("efficiency_monthly_by_radiologist", lambda: edw.get_efficiency_monthly_by_radiologist(), None),
     ("efficiency_trend_by_practice_category", lambda: edw.get_efficiency_trend_by_practice_category(), None),
     ("efficiency_trend_rp_avg", lambda: edw.get_efficiency_trend_rp_avg(), None),
     ("capture_overview", lambda: edw.get_capture_overview(), None),

@@ -18,6 +18,7 @@ from app.models.mosaic import (
     EfficiencyFilterOptions,
     EfficiencyTrendPoint,
     EfficiencyTrendRpAvgPoint,
+    FocusRadiologistItem,
     MosaicIntelligenceSnapshot,
     PopulationEfficiency,
     RadiologistRosterItem,
@@ -138,6 +139,11 @@ async def efficiency_trend(exam_category: str | None = None, practice: str | Non
 @router.get("/efficiency/trend/rp-avg", response_model=list[EfficiencyTrendRpAvgPoint])
 async def efficiency_trend_rp_avg():
     return cache_service.get_efficiency_trend_rp_avg()
+
+
+@router.get("/efficiency/focus-radiologists", response_model=list[FocusRadiologistItem])
+async def efficiency_focus_radiologists():
+    return cache_service.get_focus_radiologists()
 
 
 @router.get("/capture/overview", response_model=CaptureOverview)

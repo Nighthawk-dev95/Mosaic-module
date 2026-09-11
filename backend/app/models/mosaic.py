@@ -145,6 +145,23 @@ class EfficiencyTrendRpAvgPoint(BaseModel):
     full_mosaic_tbwu_per_min: float | None
 
 
+class FocusRadiologistMonth(BaseModel):
+    period: str
+    mode: str
+    tbwu_per_min: float | None
+    baseline_tbwu_per_min: float | None
+    pct_change_vs_baseline: float | None
+
+
+class FocusRadiologistItem(BaseModel):
+    npi: int
+    radiologist_name: str | None
+    practice: str | None
+    subspecialty: str | None
+    flagged_modes: list[str]
+    months: list[FocusRadiologistMonth]
+
+
 class CapacityRadiologistItem(BaseModel):
     npi: int
     radiologist_name: str | None
