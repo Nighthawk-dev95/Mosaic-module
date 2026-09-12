@@ -41,3 +41,7 @@ lerna-debug.log*
 
 # Local source-watch state - machine-specific OneDrive file snapshot, not portable
 tools/source_watch/manifest.json
+
+# Claude Code local machine state - not portable, keep launch.json only
+.claude/settings.local.json
+.claude/scheduled_tasks.lock
