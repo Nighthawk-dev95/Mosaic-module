@@ -36,11 +36,24 @@ _connection = None
 def _get_shared_connection():
     global _connection
     if _connection is None:
-        _connection = sql.connect(
-            server_hostname=settings.databricks_server_hostname,
-            http_path=settings.databricks_http_path,
-            access_token=settings.databricks_token,
-        )
+        if settings.in_databricks_app:
+            # Deployed as a Databricks App: authenticate as the app's own service principal
+            # via OAuth M2M instead of a personal token - Config() auto-detects the
+            # DATABRICKS_CLIENT_ID/_SECRET Databricks injects into the app's runtime.
+            from databricks.sdk.core import Config
+
+            cfg = Config()
+            _connection = sql.connect(
+                server_hostname=cfg.host.removeprefix("https://"),
+                http_path=f"/sql/1.0/warehouses/{settings.databricks_warehouse_id}",
+                credentials_provider=lambda: cfg.authenticate,
+            )
+        else:
+            _connection = sql.connect(
+                server_hostname=settings.databricks_server_hostname,
+                http_path=settings.databricks_http_path,
+                access_token=settings.databricks_token,
+            )
     return _connection
 
 

@@ -1,5 +1,7 @@
 import type {
+  BaselineProxyDetail,
   BlockerByPractice,
+  CapacityBaselineScorecard,
   CapacityPracticeRollup,
   CapacityRadiologistItem,
   CaptureEfficiencyTrendPracticePoint,
@@ -12,6 +14,11 @@ import type {
   DeploymentFunnel,
   DeploymentPracticeRollup,
   DeploymentRadiologistItem,
+  DraftInsightCategoryGroup,
+  DraftInsightModalityStat,
+  DraftInsightOverview,
+  DraftInsightPracticeStat,
+  DraftInsightSampleItem,
   EfficiencyDetail,
   EfficiencyFilterOptions,
   EfficiencyMode,
@@ -30,7 +37,7 @@ import type {
   UtilizationPracticeRollup,
 } from "./types";
 
-const BASE_URL = "http://127.0.0.1:8000/api/mosaic";
+const BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "http://127.0.0.1:8000/api/mosaic";
 
 async function get<T>(path: string): Promise<T> {
   const res = await fetch(`${BASE_URL}${path}`);
@@ -152,6 +159,20 @@ export const mosaicApi = {
     return get<UndraftedCategoryPoint[]>(`/undrafted-analysis${qs ? `?${qs}` : ""}`);
   },
   getUndraftedAnalysisFilters: () => get<UndraftedFilterOptions>("/undrafted-analysis/filters"),
+  getDraftInsightOverview: () => get<DraftInsightOverview>("/draft-insights/overview"),
+  getDraftInsightByModality: () => get<DraftInsightModalityStat[]>("/draft-insights/by-modality"),
+  getDraftInsightByPractice: () => get<DraftInsightPracticeStat[]>("/draft-insights/by-practice"),
+  getDraftInsightCategories: () => get<DraftInsightCategoryGroup[]>("/draft-insights/categories"),
+  getDraftInsightSamples: (params: { overall_assessment?: string; limit?: number } = {}) => {
+    const search = new URLSearchParams();
+    if (params.overall_assessment) search.set("overall_assessment", params.overall_assessment);
+    if (params.limit) search.set("limit", String(params.limit));
+    const qs = search.toString();
+    return get<DraftInsightSampleItem[]>(`/draft-insights/samples${qs ? `?${qs}` : ""}`);
+  },
+  getCapacityBaselineScorecard: () => get<CapacityBaselineScorecard[]>("/capacity/baseline-scorecard"),
+  getBaselineProxyDetail: (practice?: string) =>
+    get<BaselineProxyDetail[]>(`/capacity/baseline-proxy-detail${practice ? `?practice=${encodeURIComponent(practice)}` : ""}`),
   getRefreshStatus: () => get<RefreshStatus>("/refresh/status"),
   triggerRefresh: () => post<{ status: string }>("/refresh"),
 };

@@ -19,6 +19,9 @@ dist/
 dist-ssr/
 *.local
 
+# Built frontend, bundled into the backend for Databricks Apps deployment
+backend/static/
+
 # Editor / OS
 .vscode/*
 !.vscode/extensions.json
@@ -45,3 +48,14 @@ tools/source_watch/manifest.json
 # Claude Code local machine state - not portable, keep launch.json only
 .claude/settings.local.json
 .claude/scheduled_tasks.lock
+
+# Accession-level EDW exports - real patient-exam-linked identifiers, never commit
+tools/edw_fixes/*.csv
+
+# EDW Mosaic Health - real daily EDW counts by date/practice/radiologist, never commit
+tools/edw_health/integrity_manifest.json
+tools/edw_health/reports/
+tools/edw_health/__pycache__/
+
+# Databricks CLI local sync state - machine-specific, not portable
+.databricks/

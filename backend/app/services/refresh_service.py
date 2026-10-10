@@ -5,7 +5,7 @@ from datetime import datetime, timezone
 
 from pydantic import BaseModel
 
-from app.db import cache_store, efficiency_store
+from app.db import cache_store, efficiency_store, postgres_client
 from app.services import mosaic_service as edw
 
 REFRESH_INTERVAL_SECONDS = 30 * 60  # 30 minutes
@@ -71,6 +71,9 @@ DATASETS: list[tuple[str, object, object]] = [
     ("capacity_by_practice", lambda: edw.get_capacity_by_practice(), None),
     ("radiologist_scorecard", lambda: edw.get_radiologist_scorecard(), None),
     ("undrafted_analysis", lambda: edw.get_undrafted_analysis(), None),
+    ("draft_insights_raw", lambda: edw.get_draft_insights_raw(), None),
+    ("capacity_with_baseline_raw", lambda: edw.get_capacity_with_baseline(), None),
+    ("baseline_proxy_detail_raw", lambda: edw.get_baseline_proxy_detail(), None),
 ]
 
 _refresh_lock = threading.Lock()
@@ -81,6 +84,7 @@ _in_progress = False
 def refresh_one(name: str, fetch, store=None) -> None:
     global _last_error
     t0 = time.time()
+    started_at = datetime.now(timezone.utc)
     print(f"[refresh] {name}: starting...", flush=True)
     try:
         result = fetch()
@@ -89,11 +93,16 @@ def refresh_one(name: str, fetch, store=None) -> None:
         else:
             cache_store.save(name, _dump(result))
         _last_error.pop(name, None)
-        print(f"[refresh] {name}: done in {time.time() - t0:.1f}s", flush=True)
+        duration = time.time() - t0
+        row_count = len(result) if isinstance(result, list) else (1 if result is not None else 0)
+        print(f"[refresh] {name}: done in {duration:.1f}s", flush=True)
+        postgres_client.log_refresh(name, started_at, duration, row_count, "success")
     except Exception as exc:
+        duration = time.time() - t0
         _last_error[name] = str(exc)
-        print(f"[refresh] {name}: FAILED after {time.time() - t0:.1f}s - {exc}", flush=True)
+        print(f"[refresh] {name}: FAILED after {duration:.1f}s - {exc}", flush=True)
         traceback.print_exc()
+        postgres_client.log_refresh(name, started_at, duration, None, "failed", error=str(exc))
 
 
 def refresh_all() -> None:

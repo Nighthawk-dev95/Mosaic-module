@@ -414,3 +414,82 @@ export interface UndraftedCategoryPoint {
   exam_count: number;
   tbwu: number;
 }
+
+// Draft vs Final: AI-assessed comparison of Mosaic draft findings against the radiologist's
+// final signed report, over a bounded recent sample (see
+// tools/draft_insights/001_build_draft_insights_sample.sql) - not the full drafted population.
+export interface DraftInsightOverview {
+  n: number;
+  avg_retention_pct: number | null;
+  overall_assessment_distribution: Record<string, number>;
+}
+
+export interface DraftInsightModalityStat {
+  modality: string | null;
+  n: number;
+  avg_retention_pct: number | null;
+}
+
+export interface DraftInsightPracticeStat {
+  practice: string | null;
+  n: number;
+  avg_retention_pct: number | null;
+}
+
+export interface DraftInsightCategoryStat {
+  category: string;
+  count: number;
+  pct: number;
+}
+
+export interface DraftInsightCategoryGroup {
+  dimension: string;
+  categories: DraftInsightCategoryStat[];
+}
+
+export interface DraftInsightSampleItem {
+  accession_number: string;
+  overall_assessment: string | null;
+  retention_pct: number | null;
+  added_by_radiologist: string | null;
+  removed_from_draft: string | null;
+}
+
+// Capacity = TBWU/hour scheduled, per RP's Mosaic Impact Report methodology. Baseline
+// Capacity comes from a real pre-computed baseline table (edw_dev.bipa_analytics.
+// stg_mosaic_baseline_master), not a simple proxy - pct_exact/pct_proxy/pct_manual_review/
+// pct_no_baseline show how much of a practice's shift volume actually got a real baseline,
+// since additional_capacity_pct is only meaningful when coverage is decent.
+export interface CapacityBaselineScorecard {
+  practice: string | null;
+  total_shifts: number;
+  total_hours: number | null;
+  baseline_capacity_tbwu_per_hour: number | null;
+  avg_capacity_tbwu_per_hour: number | null;
+  capacity_change_tbwu_per_hour: number | null;
+  additional_capacity_pct: number | null;
+  pct_exact: number | null;
+  pct_proxy: number | null;
+  pct_manual_review: number | null;
+  pct_no_baseline: number | null;
+}
+
+// One row per (NPI, target shift) that lacked its own baseline history and got a borrowed
+// one from the best-scoring similar shift (stg_mosaic_proxy_all_candidates_2026, rank=1).
+export interface BaselineProxyDetail {
+  npi: number;
+  radiologist_name: string | null;
+  practice: string | null;
+  target_shift: string;
+  proxy_shift: string;
+  total_match_score: number | null;
+  score_subspecialty: number | null;
+  score_interventional: number | null;
+  score_modality: number | null;
+  score_tbwu: number | null;
+  score_shift_duration: number | null;
+  score_location: number | null;
+  score_weekday_weekend: number | null;
+  score_time_of_day: number | null;
+  score_work_type: number | null;
+}

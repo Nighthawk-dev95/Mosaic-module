@@ -10,6 +10,7 @@ import { CapacityDetail } from "./pages/CapacityDetail";
 import { NonDraftedDetail } from "./pages/NonDraftedDetail";
 import { CaptureDetail } from "./pages/CaptureDetail";
 import { ScorecardDetail } from "./pages/ScorecardDetail";
+import { DraftVsFinal } from "./pages/DraftVsFinal";
 
 export default function App() {
   return (
@@ -26,6 +27,7 @@ export default function App() {
             <Route path="/non-drafted" element={<NonDraftedDetail />} />
             <Route path="/capture" element={<CaptureDetail />} />
             <Route path="/scorecard" element={<ScorecardDetail />} />
+            <Route path="/draft-vs-final" element={<DraftVsFinal />} />
           </Route>
         </Routes>
       </div>

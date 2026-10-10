@@ -8,7 +8,7 @@ export interface CaptureTrendLine {
 }
 
 interface CaptureTrendChartProps {
-  data: Record<string, unknown>[];
+  data: object[];
   granularity: "week" | "month";
   lines: CaptureTrendLine[];
   percent?: boolean;

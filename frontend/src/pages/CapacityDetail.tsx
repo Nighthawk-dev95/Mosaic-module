@@ -6,9 +6,17 @@ import { DataTable, fmtPct } from "../components/DataTable";
 import type { DataTableColumn } from "../components/DataTable";
 import { TABLE_SECTION_STYLE, TABLE_SCROLL_STYLE } from "../styles/tableLayout";
 import { FilterBar } from "../components/FilterBar";
+import { Badge } from "../components/Badge";
 import { useFilters, matchesPractice, matchesRadiologistSearch } from "../context/FilterContext";
 import { getLocalRegion } from "../utils/localRegion";
-import type { CapacityPracticeRollup, CapacityRadiologistItem } from "../api/types";
+import type {
+  BaselineProxyDetail,
+  CapacityBaselineScorecard,
+  CapacityPracticeRollup,
+  CapacityRadiologistItem,
+} from "../api/types";
+
+const CARD_STYLE = { background: "var(--surface-1)", border: "1px solid var(--border)", borderRadius: 8, padding: 16 } as const;
 
 function fmtNum(value: number | null | undefined, digits = 1): string {
   return value === null || value === undefined ? "—" : value.toFixed(digits);
@@ -55,12 +63,64 @@ const RAD_COLUMNS: DataTableColumn<CapacityRadiologistItem>[] = [
   ...SHARED_COLUMNS<CapacityRadiologistItem>(),
 ];
 
+// Coverage badge: green when most shifts got a real (Exact) baseline, yellow when Proxy-
+// heavy, red when the practice has too little baseline coverage to trust its numbers -
+// mirrors the _MIN_RELIABLE_BASELINE_TBWU_PER_HOUR floor in cache_service.py, which is why
+// additional_capacity_pct comes back null for the "red" case instead of a distorted number.
+function coverageBadge(r: CapacityBaselineScorecard): ReactNode {
+  const exact = r.pct_exact ?? 0;
+  const noBaseline = r.pct_no_baseline ?? 0;
+  if (noBaseline >= 70) {
+    return <Badge label={`${noBaseline.toFixed(0)}% no baseline`} color="var(--status-critical)" />;
+  }
+  if (exact >= 50) {
+    return <Badge label={`${exact.toFixed(0)}% exact`} color="var(--status-good)" />;
+  }
+  return <Badge label={`${(r.pct_proxy ?? 0).toFixed(0)}% proxy`} color="var(--status-warning)" />;
+}
+
+const BASELINE_SCORECARD_COLUMNS: DataTableColumn<CapacityBaselineScorecard>[] = [
+  { key: "practice", label: "Practice" },
+  { key: "total_shifts", label: "Shifts" },
+  {
+    key: "baseline_capacity_tbwu_per_hour",
+    label: "Baseline Capacity (TBWU/hr)",
+    render: (r) => fmtNum(r.baseline_capacity_tbwu_per_hour, 2),
+  },
+  {
+    key: "avg_capacity_tbwu_per_hour",
+    label: "Mosaic Capacity (TBWU/hr)",
+    render: (r) => fmtNum(r.avg_capacity_tbwu_per_hour, 2),
+  },
+  {
+    key: "additional_capacity_pct",
+    label: "Additional Capacity %",
+    render: (r) => (r.additional_capacity_pct === null ? "—" : fmtPct(r.additional_capacity_pct / 100)),
+  },
+  { key: "pct_exact", label: "Baseline Coverage", render: (r) => coverageBadge(r) },
+];
+
+const PROXY_DETAIL_COLUMNS: DataTableColumn<BaselineProxyDetail>[] = [
+  { key: "radiologist_name", label: "Radiologist" },
+  { key: "target_shift", label: "Shift Without Its Own Baseline" },
+  { key: "proxy_shift", label: "Matched Proxy Shift" },
+  { key: "total_match_score", label: "Match Score", render: (r) => fmtNum(r.total_match_score, 2) },
+  { key: "score_subspecialty", label: "Subspecialty", render: (r) => fmtNum(r.score_subspecialty, 2) },
+  { key: "score_modality", label: "Modality", render: (r) => fmtNum(r.score_modality, 2) },
+  { key: "score_tbwu", label: "TBWU", render: (r) => fmtNum(r.score_tbwu, 2) },
+  { key: "score_shift_duration", label: "Duration", render: (r) => fmtNum(r.score_shift_duration, 2) },
+  { key: "score_location", label: "Location", render: (r) => fmtNum(r.score_location, 2) },
+  { key: "score_weekday_weekend", label: "Weekday/Weekend", render: (r) => fmtNum(r.score_weekday_weekend, 2) },
+];
+
 export function CapacityDetail() {
   const byPractice = useFetch(() => mosaicApi.getCapacityByPractice(), []);
   const byRadiologist = useFetch(() => mosaicApi.getCapacityByRadiologist(), []);
-  const anyError = byPractice.error || byRadiologist.error;
-
+  const baselineScorecard = useFetch(() => mosaicApi.getCapacityBaselineScorecard(), []);
   const filters = useFilters();
+  const proxyDetail = useFetch(() => mosaicApi.getBaselineProxyDetail(filters.practice || undefined), [filters.practice]);
+  const anyError = byPractice.error || byRadiologist.error || baselineScorecard.error || proxyDetail.error;
+
   const practices = useMemo(() => {
     if (!byPractice.data) return [];
     return Array.from(new Set(byPractice.data.map((r) => r.practice).filter(Boolean) as string[])).sort();
@@ -80,6 +140,10 @@ export function CapacityDetail() {
       ),
     [byRadiologist.data, filters]
   );
+  const filteredBaselineScorecard = useMemo(
+    () => (baselineScorecard.data ?? []).filter((r) => matchesPractice(filters, r.practice)),
+    [baselineScorecard.data, filters]
+  );
 
   return (
     <div style={{ padding: 24, display: "flex", flexDirection: "column", gap: 20, flex: 1, minHeight: 0, overflowY: "auto" }}>
@@ -97,6 +161,26 @@ export function CapacityDetail() {
       )}
 
       <FilterBar practices={practices} showMonth={false} />
+
+      <div style={CARD_STYLE}>
+        <div style={{ color: "var(--text-muted)", fontSize: 13, marginBottom: 4, textTransform: "uppercase", letterSpacing: 0.5 }}>
+          Capacity Scorecard - Baseline vs. Mosaic
+        </div>
+        <div style={{ color: "var(--text-muted)", fontSize: 12, marginBottom: 12 }}>
+          Capacity = TBWU/hour scheduled. Baseline Capacity comes from each rad's own pre-Mosaic history per shift type
+          (edw_dev.bipa_analytics.stg_mosaic_baseline_master); Additional Capacity % is only shown when a practice has
+          decent baseline coverage - low-coverage practices show "—" instead of a distorted number.
+        </div>
+        <div style={TABLE_SCROLL_STYLE}>
+          {baselineScorecard.data && (
+            <DataTable
+              columns={BASELINE_SCORECARD_COLUMNS}
+              rows={filteredBaselineScorecard}
+              rowKey={(r) => r.practice ?? "unknown"}
+            />
+          )}
+        </div>
+      </div>
 
       <div style={TABLE_SECTION_STYLE}>
         <div style={{ color: "var(--text-muted)", fontSize: 13, marginBottom: 12, textTransform: "uppercase", letterSpacing: 0.5 }}>
@@ -117,6 +201,29 @@ export function CapacityDetail() {
           {byRadiologist.data && (
             <DataTable columns={RAD_COLUMNS} rows={filteredByRadiologist} rowKey={(r) => r.npi} />
           )}
+        </div>
+      </div>
+
+      <div style={TABLE_SECTION_STYLE}>
+        <div style={{ color: "var(--text-muted)", fontSize: 13, marginBottom: 4, textTransform: "uppercase", letterSpacing: 0.5 }}>
+          How Proxies Are Derived{filters.practice ? ` - ${filters.practice}` : ""}
+        </div>
+        <div style={{ color: "var(--text-muted)", fontSize: 12, marginBottom: 12 }}>
+          Shifts with no baseline history of their own borrow one from the closest-matching shift elsewhere, scored across
+          subspecialty, modality, TBWU, duration, location, and weekday/weekend. Use the practice filter above to narrow this
+          down.
+        </div>
+        <div style={TABLE_SCROLL_STYLE}>
+          {proxyDetail.data &&
+            (proxyDetail.data.length === 0 ? (
+              <div style={{ color: "var(--text-muted)", fontSize: 13 }}>No proxy matches for this filter.</div>
+            ) : (
+              <DataTable
+                columns={PROXY_DETAIL_COLUMNS}
+                rows={proxyDetail.data}
+                rowKey={(r) => `${r.npi}-${r.target_shift}`}
+              />
+            ))}
         </div>
       </div>
     </div>

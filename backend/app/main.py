@@ -1,5 +1,9 @@
+from pathlib import Path
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
 
 from app.routes import mosaic
 from app.services import refresh_service
@@ -27,3 +31,19 @@ def _start_refresh_loop():
 @app.get("/health")
 def health():
     return {"status": "ok"}
+
+
+# Serves the built React app (frontend/vite.config.ts outputs here) so the whole project
+# runs as one process under Databricks Apps, which only exposes a single port. Absent in
+# local dev (no build has been run), so the Vite dev server on :5173 is unaffected.
+STATIC_DIR = Path(__file__).resolve().parent.parent / "static"
+
+if STATIC_DIR.exists():
+    app.mount("/assets", StaticFiles(directory=STATIC_DIR / "assets"), name="assets")
+
+    @app.get("/{full_path:path}")
+    def spa(full_path: str):
+        candidate = STATIC_DIR / full_path
+        if candidate.is_file():
+            return FileResponse(candidate)
+        return FileResponse(STATIC_DIR / "index.html")

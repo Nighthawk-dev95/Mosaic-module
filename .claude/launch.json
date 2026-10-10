@@ -3,8 +3,15 @@
   "configurations": [
     {
       "name": "frontend",
-      "url": "http://localhost:5173",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["--prefix", "frontend", "run", "dev"],
       "port": 5173
+    },
+    {
+      "name": "backend",
+      "runtimeExecutable": "backend/.venv/Scripts/uvicorn.exe",
+      "runtimeArgs": ["app.main:app", "--port", "8000", "--app-dir", "backend", "--env-file", "backend/.env"],
+      "port": 8000
     }
   ]
 }

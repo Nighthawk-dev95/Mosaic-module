@@ -1,0 +1,25 @@
+command: ['uvicorn', 'app.main:app', '--host', '0.0.0.0', '--port', '$DATABRICKS_APP_PORT']
+env:
+  - name: 'DATABRICKS_WAREHOUSE_ID'
+    valueFrom: 'sql-warehouse'
+  # Lakebase Postgres ("database" resource, dev-bhargav branch) - explicit here rather than
+  # relying on the platform's automatic PG*-var injection for the bound resource, since that
+  # injection behavior wasn't confirmed against this exact app/resource-key combination and a
+  # wrong guess here fails silently as a KeyError at connection time, not at deploy time.
+  # Values are this app's own service principal (PGUSER) and the dev-bhargav branch's primary
+  # endpoint (confirmed live via `databricks postgres list-branches`/`list-endpoints`).
+  # PGHOST must NOT have the "-pooler" prefix - confirmed live that Databricks OAuth token auth
+  # is rejected on the pooled (PgBouncer) endpoint with "OAuth authentication is not supported
+  # with pooled connections"; only the direct/unpooled host accepts it.
+  - name: 'PGHOST'
+    value: 'ep-steep-silence-e8ozo7q4.database.centralus.azuredatabricks.net'
+  - name: 'PGPORT'
+    value: '5432'
+  - name: 'PGDATABASE'
+    value: 'databricks_postgres'
+  - name: 'PGSSLMODE'
+    value: 'require'
+  - name: 'PGUSER'
+    value: '4a77686c-5d36-4e88-9233-7c29f93f1b81'
+  - name: 'ENDPOINT_NAME'
+    value: 'projects/practice-command-db/branches/dev-bhargav/endpoints/primary'

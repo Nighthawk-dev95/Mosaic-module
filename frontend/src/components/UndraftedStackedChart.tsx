@@ -131,7 +131,7 @@ export function UndraftedStackedChart({ data, metric, displayMode }: Props) {
                 <LabelList
                   dataKey="totalLabel"
                   position="top"
-                  formatter={(v: number) => fmtValue(v, displayMode, metric)}
+                  formatter={(v) => fmtValue(typeof v === "number" ? v : Number(v) || 0, displayMode, metric)}
                   style={{ fill: "var(--text-primary)", fontSize: 12, fontWeight: 700 }}
                 />
               )}

@@ -414,6 +414,47 @@ class RadSurveySummary(BaseModel):
     by_practice: list[PracticeNpsStat]
 
 
+class DraftInsightOverview(BaseModel):
+    """Aggregate stats over the AI-assessed draft-vs-final sample (see
+    tools/draft_insights/001_build_draft_insights_sample.sql - a bounded, stratified recent
+    sample, not the full drafted population)."""
+
+    n: int
+    avg_retention_pct: float | None
+    overall_assessment_distribution: dict[str, int]  # "Highly Useful" -> count, etc.
+
+
+class DraftInsightModalityStat(BaseModel):
+    modality: str | None
+    n: int
+    avg_retention_pct: float | None
+
+
+class DraftInsightPracticeStat(BaseModel):
+    practice: str | None
+    n: int
+    avg_retention_pct: float | None
+
+
+class DraftInsightCategoryStat(BaseModel):
+    category: str
+    count: int
+    pct: float
+
+
+class DraftInsightCategoryGroup(BaseModel):
+    dimension: str  # "added_by_radiologist" | "removed_from_draft" | "formatting" | "clinical_interpretation" | "additional_findings"
+    categories: list[DraftInsightCategoryStat]
+
+
+class DraftInsightSampleItem(BaseModel):
+    accession_number: str
+    overall_assessment: str | None
+    retention_pct: int | None
+    added_by_radiologist: str | None
+    removed_from_draft: str | None
+
+
 class CapacityPracticeRollup(BaseModel):
     practice: str | None
     total_shifts: int
@@ -441,3 +482,52 @@ class CapacityPracticeRollup(BaseModel):
     ir_cases: float | None
     adjustment_rvu: float | None
     adjustment_tbwu: float | None
+
+
+class CapacityBaselineScorecard(BaseModel):
+    """Practice-level Capacity = TBWU/hour scheduled, per RP's Mosaic Impact Report
+    methodology. Baseline Capacity comes from edw_dev.bipa_analytics.stg_mosaic_baseline_master
+    (the pre-computed per-shift-type baseline table), attached via a two-tier join (exact
+    NPI+Task_ID, falling back to NPI+normalized Shift_Name) that recovers the majority of
+    shifts the live view's exact-only join misses. pct_exact/pct_proxy/pct_manual_review/
+    pct_no_baseline show what fraction of a practice's shifts actually got a real baseline
+    vs. a proxy/manual-review/nothing at all - low coverage means additional_capacity_pct
+    is not trustworthy for that practice (it's nulled out below a materiality floor rather
+    than shown as a distorted number)."""
+
+    practice: str | None
+    total_shifts: int
+    total_hours: float | None
+    baseline_capacity_tbwu_per_hour: float | None
+    avg_capacity_tbwu_per_hour: float | None
+    capacity_change_tbwu_per_hour: float | None
+    additional_capacity_pct: float | None
+    pct_exact: float | None
+    pct_proxy: float | None
+    pct_manual_review: float | None
+    pct_no_baseline: float | None
+
+
+class BaselineProxyDetail(BaseModel):
+    """One row per (NPI, target shift) that lacked its own baseline history and got a
+    borrowed one - the chosen match (rank=1) from
+    edw_dev.bipa_analytics.stg_mosaic_proxy_all_candidates_2026, a similarity-matching
+    pipeline (not reimplemented here) that scores candidate donor shifts across
+    subspecialty/interventional/modality/TBWU/duration/location/weekday-weekend/time-of-day/
+    work-type and picks the best total_match_score."""
+
+    npi: int
+    radiologist_name: str | None
+    practice: str | None
+    target_shift: str
+    proxy_shift: str
+    total_match_score: float | None
+    score_subspecialty: float | None
+    score_interventional: float | None
+    score_modality: float | None
+    score_tbwu: float | None
+    score_shift_duration: float | None
+    score_location: float | None
+    score_weekday_weekend: float | None
+    score_time_of_day: float | None
+    score_work_type: float | None

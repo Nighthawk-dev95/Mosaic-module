@@ -1,7 +1,9 @@
 from fastapi import APIRouter, BackgroundTasks, Query
 
 from app.models.mosaic import (
+    BaselineProxyDetail,
     BlockerByPractice,
+    CapacityBaselineScorecard,
     CapacityPracticeRollup,
     CapacityRadiologistItem,
     CaptureEfficiencyTrendPracticePoint,
@@ -14,6 +16,11 @@ from app.models.mosaic import (
     DeploymentFunnel,
     DeploymentPracticeRollup,
     DeploymentRadiologistItem,
+    DraftInsightCategoryGroup,
+    DraftInsightModalityStat,
+    DraftInsightOverview,
+    DraftInsightPracticeStat,
+    DraftInsightSampleItem,
     EfficiencyDetail,
     EfficiencyFilterOptions,
     EfficiencyTrendPoint,
@@ -30,6 +37,7 @@ from app.models.mosaic import (
     UndraftedFilterOptions,
     UtilizationPracticeRollup,
 )
+from app.db import postgres_client
 from app.services import cache_service, refresh_service
 
 router = APIRouter(prefix="/api/mosaic", tags=["mosaic"])
@@ -226,6 +234,41 @@ async def undrafted_analysis_filters():
     return cache_service.get_undrafted_filter_options()
 
 
+@router.get("/draft-insights/overview", response_model=DraftInsightOverview)
+async def draft_insights_overview():
+    return cache_service.get_draft_insight_overview()
+
+
+@router.get("/draft-insights/by-modality", response_model=list[DraftInsightModalityStat])
+async def draft_insights_by_modality():
+    return cache_service.get_draft_insight_by_modality()
+
+
+@router.get("/draft-insights/by-practice", response_model=list[DraftInsightPracticeStat])
+async def draft_insights_by_practice():
+    return cache_service.get_draft_insight_by_practice()
+
+
+@router.get("/draft-insights/categories", response_model=list[DraftInsightCategoryGroup])
+async def draft_insights_categories():
+    return cache_service.get_draft_insight_categories()
+
+
+@router.get("/draft-insights/samples", response_model=list[DraftInsightSampleItem])
+async def draft_insights_samples(overall_assessment: str | None = None, limit: int = Query(50, ge=1, le=500)):
+    return cache_service.get_draft_insight_samples(overall_assessment, limit)
+
+
+@router.get("/capacity/baseline-scorecard", response_model=list[CapacityBaselineScorecard])
+async def capacity_baseline_scorecard():
+    return cache_service.get_capacity_baseline_scorecard()
+
+
+@router.get("/capacity/baseline-proxy-detail", response_model=list[BaselineProxyDetail])
+async def capacity_baseline_proxy_detail(practice: str | None = None):
+    return cache_service.get_baseline_proxy_detail(practice)
+
+
 @router.post("/refresh")
 async def trigger_refresh(background_tasks: BackgroundTasks):
     """Kick off an EDW refresh in the background and return immediately - this can take
@@ -237,3 +280,10 @@ async def trigger_refresh(background_tasks: BackgroundTasks):
 @router.get("/refresh/status")
 async def get_refresh_status():
     return refresh_service.refresh_status()
+
+
+@router.get("/refresh/history")
+async def get_refresh_history(limit: int = Query(100, ge=1, le=500)):
+    # Durable log on the dev-bhargav Lakebase Postgres branch (app/db/postgres_client.py) -
+    # separate from /refresh/status above, which stays in-memory/SQLite and is lost on restart.
+    return postgres_client.recent_refresh_log(limit)

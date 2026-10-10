@@ -1,6 +1,9 @@
 import { NavLink } from "react-router-dom";
 
-const NAV_ITEMS = [{ to: "/", label: "Mosaic Intelligence" }];
+const NAV_ITEMS = [
+  { to: "/", label: "Mosaic Intelligence" },
+  { to: "/draft-vs-final", label: "Draft vs Final" },
+];
 
 export function Sidebar() {
   return (

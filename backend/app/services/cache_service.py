@@ -9,7 +9,9 @@ per-request - only by the background/manual refresh job.
 from app.data import capture_enablement, rad_survey
 from app.db import cache_store, efficiency_store
 from app.models.mosaic import (
+    BaselineProxyDetail,
     BlockerByPractice,
+    CapacityBaselineScorecard,
     CapacityPracticeRollup,
     CapacityRadiologistItem,
     CaptureEfficiencyTrendPracticePoint,
@@ -22,6 +24,12 @@ from app.models.mosaic import (
     DeploymentFunnel,
     DeploymentPracticeRollup,
     DeploymentRadiologistItem,
+    DraftInsightCategoryGroup,
+    DraftInsightCategoryStat,
+    DraftInsightModalityStat,
+    DraftInsightOverview,
+    DraftInsightPracticeStat,
+    DraftInsightSampleItem,
     EfficiencyDetail,
     EfficiencyFilterOptions,
     EfficiencyPracticeRollup,
@@ -853,4 +861,189 @@ def get_undrafted_analysis(
             tbwu=acc["tbwu"],
         )
         for key, acc in collapsed.items()
+    ]
+
+
+def _load_draft_insights_raw() -> list[dict]:
+    payload, _ = cache_store.load("draft_insights_raw")
+    return payload or []
+
+
+def _split_categories(value: str | None) -> list[str]:
+    if not value:
+        return []
+    return [c.strip() for c in value.split(",") if c.strip() and c.strip().lower() != "none"]
+
+
+def _avg_retention(rows: list[dict]) -> float | None:
+    values = [r["retention_pct"] for r in rows if r.get("retention_pct") is not None]
+    return sum(values) / len(values) if values else None
+
+
+def get_draft_insight_overview() -> DraftInsightOverview:
+    rows = _load_draft_insights_raw()
+    distribution: dict[str, int] = {}
+    for row in rows:
+        label = row.get("overall_assessment") or "Unknown"
+        distribution[label] = distribution.get(label, 0) + 1
+    return DraftInsightOverview(
+        n=len(rows),
+        avg_retention_pct=_avg_retention(rows),
+        overall_assessment_distribution=distribution,
+    )
+
+
+def get_draft_insight_by_modality() -> list[DraftInsightModalityStat]:
+    rows = _load_draft_insights_raw()
+    grouped: dict[str | None, list[dict]] = {}
+    for row in rows:
+        grouped.setdefault(row.get("modality"), []).append(row)
+    return [
+        DraftInsightModalityStat(modality=modality, n=len(group), avg_retention_pct=_avg_retention(group))
+        for modality, group in sorted(grouped.items(), key=lambda kv: len(kv[1]), reverse=True)
+    ]
+
+
+def get_draft_insight_by_practice() -> list[DraftInsightPracticeStat]:
+    rows = _load_draft_insights_raw()
+    grouped: dict[str | None, list[dict]] = {}
+    for row in rows:
+        grouped.setdefault(row.get("practice"), []).append(row)
+    return [
+        DraftInsightPracticeStat(practice=practice, n=len(group), avg_retention_pct=_avg_retention(group))
+        for practice, group in sorted(grouped.items(), key=lambda kv: len(kv[1]), reverse=True)
+    ]
+
+
+_CATEGORY_DIMENSIONS = [
+    ("added_by_radiologist", "added_by_radiologist_categories"),
+    ("removed_from_draft", "removed_from_draft_categories"),
+    ("formatting", "formatting_categories"),
+    ("clinical_interpretation", "clinical_interpretation_categories"),
+    ("additional_findings", "additional_findings_categories"),
+]
+
+
+def get_draft_insight_categories() -> list[DraftInsightCategoryGroup]:
+    rows = _load_draft_insights_raw()
+    groups = []
+    for dimension, column in _CATEGORY_DIMENSIONS:
+        tally: dict[str, int] = {}
+        for row in rows:
+            for category in _split_categories(row.get(column)):
+                tally[category] = tally.get(category, 0) + 1
+        total = sum(tally.values())
+        categories = [
+            DraftInsightCategoryStat(category=category, count=count, pct=(count / total * 100) if total else 0.0)
+            for category, count in sorted(tally.items(), key=lambda kv: kv[1], reverse=True)
+        ]
+        groups.append(DraftInsightCategoryGroup(dimension=dimension, categories=categories))
+    return groups
+
+
+def get_draft_insight_samples(overall_assessment: str | None = None, limit: int = 50) -> list[DraftInsightSampleItem]:
+    rows = _load_draft_insights_raw()
+    if overall_assessment:
+        rows = [r for r in rows if r.get("overall_assessment") == overall_assessment]
+    safe_limit = max(1, min(int(limit), 500))
+    return [
+        DraftInsightSampleItem(
+            accession_number=row["accession_number"],
+            overall_assessment=row.get("overall_assessment"),
+            retention_pct=row.get("retention_pct"),
+            added_by_radiologist=row.get("added_by_radiologist"),
+            removed_from_draft=row.get("removed_from_draft"),
+        )
+        for row in rows[:safe_limit]
+    ]
+
+
+# Below this floor, additional_capacity_pct is a division by a near-zero/unreliable baseline
+# (e.g. a practice with almost no shifts matched to a real baseline still averages to some
+# tiny non-zero value from a handful of stragglers) and blows up to absurd magnitudes (verified
+# live: Matrix showed +59,020,209% at a baseline of 0.0000173 TBWU/hr) rather than a real
+# signal - null it out instead of shipping a distorted number the UI would have to explain.
+_MIN_RELIABLE_BASELINE_TBWU_PER_HOUR = 0.5
+
+
+def get_capacity_baseline_scorecard() -> list[CapacityBaselineScorecard]:
+    payload, _ = cache_store.load("capacity_with_baseline_raw")
+    rows = payload or []
+    grouped: dict[str, dict] = {}
+    for row in rows:
+        practice = row.get("practice")
+        if not practice:
+            continue
+        acc = grouped.setdefault(
+            practice,
+            {"total_shifts": 0, "total_hours": 0.0, "sum_baseline": 0.0, "sum_capacity": 0.0,
+             "exact": 0, "proxy": 0, "manual_review": 0, "no_baseline": 0},
+        )
+        hours = row.get("no_hours") or 0.0
+        acc["total_shifts"] += 1
+        acc["total_hours"] += hours
+        acc["sum_capacity"] += row.get("on_shift_capacity_rpwu") or 0.0
+        baseline_type = row.get("baseline_type")
+        if baseline_type == "Exact":
+            acc["exact"] += 1
+        elif baseline_type == "Proxy":
+            acc["proxy"] += 1
+        elif baseline_type == "Manual Review":
+            acc["manual_review"] += 1
+        else:
+            acc["no_baseline"] += 1
+        if row.get("shift_baseline_rpwu_fixed") is not None:
+            acc["sum_baseline"] += row["shift_baseline_rpwu_fixed"]
+
+    results = []
+    for practice, acc in grouped.items():
+        total_shifts = acc["total_shifts"]
+        total_hours = acc["total_hours"]
+        baseline_capacity = acc["sum_baseline"] / total_hours if total_hours else None
+        avg_capacity = acc["sum_capacity"] / total_hours if total_hours else None
+        reliable = baseline_capacity is not None and baseline_capacity >= _MIN_RELIABLE_BASELINE_TBWU_PER_HOUR
+        capacity_change = (avg_capacity - baseline_capacity) if reliable and avg_capacity is not None else None
+        additional_pct = (capacity_change / baseline_capacity * 100) if reliable and capacity_change is not None else None
+        results.append(
+            CapacityBaselineScorecard(
+                practice=practice,
+                total_shifts=total_shifts,
+                total_hours=total_hours,
+                baseline_capacity_tbwu_per_hour=baseline_capacity,
+                avg_capacity_tbwu_per_hour=avg_capacity,
+                capacity_change_tbwu_per_hour=capacity_change,
+                additional_capacity_pct=additional_pct,
+                pct_exact=(acc["exact"] / total_shifts * 100) if total_shifts else None,
+                pct_proxy=(acc["proxy"] / total_shifts * 100) if total_shifts else None,
+                pct_manual_review=(acc["manual_review"] / total_shifts * 100) if total_shifts else None,
+                pct_no_baseline=(acc["no_baseline"] / total_shifts * 100) if total_shifts else None,
+            )
+        )
+    return sorted(results, key=lambda r: r.total_shifts, reverse=True)
+
+
+def get_baseline_proxy_detail(practice: str | None = None) -> list[BaselineProxyDetail]:
+    payload, _ = cache_store.load("baseline_proxy_detail_raw")
+    rows = payload or []
+    if practice:
+        rows = [r for r in rows if r.get("practice") == practice]
+    return [
+        BaselineProxyDetail(
+            npi=row["npi"],
+            radiologist_name=row.get("radiologist_name"),
+            practice=row.get("practice"),
+            target_shift=row["target_shift"],
+            proxy_shift=row["proxy_shift"],
+            total_match_score=row.get("total_match_score"),
+            score_subspecialty=row.get("score_subspecialty"),
+            score_interventional=row.get("score_interventional"),
+            score_modality=row.get("score_modality"),
+            score_tbwu=row.get("score_tbwu"),
+            score_shift_duration=row.get("score_shift_duration"),
+            score_location=row.get("score_location"),
+            score_weekday_weekend=row.get("score_weekday_weekend"),
+            score_time_of_day=row.get("score_time_of_day"),
+            score_work_type=row.get("score_work_type"),
+        )
+        for row in rows
     ]
