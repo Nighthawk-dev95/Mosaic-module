@@ -106,6 +106,24 @@ def _build_pool():
                     )
                     """
                 )
+                # Durable human review trail for the Baseline Review Queue - a reviewer's
+                # accept/override/reject decision on a (npi, target_shift) pair that the
+                # proxy-matching algorithm flagged as a weak ("Manual Review") match.
+                cur.execute(
+                    """
+                    CREATE TABLE IF NOT EXISTS mosaic.baseline_review_decisions (
+                        id BIGSERIAL PRIMARY KEY,
+                        npi BIGINT NOT NULL,
+                        target_shift TEXT NOT NULL,
+                        status TEXT NOT NULL CHECK (status IN ('accepted', 'overridden', 'rejected_no_match')),
+                        chosen_proxy_shift TEXT,
+                        chosen_rank INTEGER,
+                        note TEXT,
+                        reviewed_at TIMESTAMPTZ NOT NULL,
+                        UNIQUE (npi, target_shift)
+                    )
+                    """
+                )
         return pool
     except Exception as exc:  # noqa: BLE001 - genuinely any connection/driver error is non-fatal here
         _unavailable_reason = f"pool construction failed: {exc}"
@@ -171,4 +189,67 @@ def recent_refresh_log(limit: int = 100) -> list[dict[str, Any]]:
                 return [dict(zip(columns, row)) for row in cur.fetchall()]
     except Exception as exc:  # noqa: BLE001
         print(f"[postgres] recent_refresh_log failed: {exc}", flush=True)
+        return []
+
+
+def save_review_decision(
+    npi: int,
+    target_shift: str,
+    status: str,
+    chosen_proxy_shift: str | None,
+    chosen_rank: int | None,
+    note: str | None,
+    reviewed_at: datetime,
+) -> bool:
+    """Upsert a reviewer's decision for one (npi, target_shift) - re-reviewing an item updates
+    its existing row instead of creating a duplicate. Returns whether the write succeeded;
+    the route uses this to report success/failure back to the UI (unlike log_refresh, this is
+    a direct user action, not best-effort background telemetry, so the caller needs to know)."""
+    pool = _get_pool()
+    if pool is None:
+        print(f"[postgres] skipping save_review_decision for npi={npi}: {_unavailable_reason}", flush=True)
+        return False
+    try:
+        with pool.connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    INSERT INTO mosaic.baseline_review_decisions
+                        (npi, target_shift, status, chosen_proxy_shift, chosen_rank, note, reviewed_at)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s)
+                    ON CONFLICT (npi, target_shift) DO UPDATE SET
+                        status = EXCLUDED.status,
+                        chosen_proxy_shift = EXCLUDED.chosen_proxy_shift,
+                        chosen_rank = EXCLUDED.chosen_rank,
+                        note = EXCLUDED.note,
+                        reviewed_at = EXCLUDED.reviewed_at
+                    """,
+                    (npi, target_shift, status, chosen_proxy_shift, chosen_rank, note, reviewed_at),
+                )
+        return True
+    except Exception as exc:  # noqa: BLE001
+        print(f"[postgres] save_review_decision failed for npi={npi}, target_shift={target_shift!r}: {exc}", flush=True)
+        return False
+
+
+def list_review_decisions() -> list[dict[str, Any]]:
+    """All saved review decisions - used by the Baseline Review Queue to filter already-
+    reviewed items out of the active queue."""
+    pool = _get_pool()
+    if pool is None:
+        return []
+    try:
+        with pool.connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    SELECT npi, target_shift, status, chosen_proxy_shift, chosen_rank, note, reviewed_at
+                    FROM mosaic.baseline_review_decisions
+                    ORDER BY reviewed_at DESC
+                    """
+                )
+                columns = [c.name for c in cur.description]
+                return [dict(zip(columns, row)) for row in cur.fetchall()]
+    except Exception as exc:  # noqa: BLE001
+        print(f"[postgres] list_review_decisions failed: {exc}", flush=True)
         return []

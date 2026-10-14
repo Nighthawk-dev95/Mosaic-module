@@ -6,6 +6,7 @@ from datetime import datetime, timezone
 from pydantic import BaseModel
 
 from app.db import cache_store, efficiency_store, postgres_client
+from app.services import baseline_overrides
 from app.services import mosaic_service as edw
 
 REFRESH_INTERVAL_SECONDS = 30 * 60  # 30 minutes
@@ -74,6 +75,7 @@ DATASETS: list[tuple[str, object, object]] = [
     ("draft_insights_raw", lambda: edw.get_draft_insights_raw(), None),
     ("capacity_with_baseline_raw", lambda: edw.get_capacity_with_baseline(), None),
     ("baseline_proxy_detail_raw", lambda: edw.get_baseline_proxy_detail(), None),
+    ("baseline_proxy_candidates_raw", lambda: edw.get_baseline_proxy_candidates(), None),
 ]
 
 _refresh_lock = threading.Lock()
@@ -115,6 +117,10 @@ def refresh_all() -> None:
         print(f"[refresh] starting full refresh of {len(DATASETS)} datasets", flush=True)
         for name, fetch, store in DATASETS:
             refresh_one(name, fetch, store)
+        try:
+            baseline_overrides.recompute_capacity_with_overrides()
+        except Exception as exc:  # noqa: BLE001 - never let the override merge break the refresh cycle
+            print(f"[refresh] recompute_capacity_with_overrides failed: {exc}", flush=True)
         print("[refresh] full refresh complete", flush=True)
     finally:
         _in_progress = False
@@ -126,6 +132,11 @@ def refresh_status() -> dict:
         "refreshed_at": cache_store.all_refresh_times(),
         "errors": dict(_last_error),
         "in_progress": _in_progress,
+        # Lets the frontend tell "first refresh since a restart hasn't finished yet - some
+        # modules may still be genuinely empty" apart from "a routine background refresh is
+        # running, but every dataset already has data from last cycle" - same count, very
+        # different user-facing meaning.
+        "total_datasets": len(DATASETS),
     }
 
 

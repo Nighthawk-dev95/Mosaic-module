@@ -9,6 +9,7 @@ per-request - only by the background/manual refresh job.
 from app.data import capture_enablement, rad_survey
 from app.db import cache_store, efficiency_store
 from app.models.mosaic import (
+    BaselineProxyCandidate,
     BaselineProxyDetail,
     BlockerByPractice,
     CapacityBaselineScorecard,
@@ -36,6 +37,7 @@ from app.models.mosaic import (
     EfficiencyRadiologistItem,
     EfficiencyTrendPoint,
     EfficiencyTrendRpAvgPoint,
+    ExternalFeedbackItem,
     FocusRadiologistItem,
     MosaicIntelligenceSnapshot,
     PopulationEfficiency,
@@ -967,7 +969,13 @@ _MIN_RELIABLE_BASELINE_TBWU_PER_HOUR = 0.5
 
 
 def get_capacity_baseline_scorecard() -> list[CapacityBaselineScorecard]:
-    payload, _ = cache_store.load("capacity_with_baseline_raw")
+    # Prefer the review-overridden merge (baseline_overrides.recompute_capacity_with_overrides)
+    # so an accepted/overridden Baseline Review Queue decision actually changes this number -
+    # falls back to the pristine EDW rows only in the brief window right after a fresh deploy,
+    # before the first merge has run.
+    payload, _ = cache_store.load("capacity_with_baseline_merged")
+    if payload is None:
+        payload, _ = cache_store.load("capacity_with_baseline_raw")
     rows = payload or []
     grouped: dict[str, dict] = {}
     for row in rows:
@@ -1044,6 +1052,44 @@ def get_baseline_proxy_detail(practice: str | None = None) -> list[BaselineProxy
             score_weekday_weekend=row.get("score_weekday_weekend"),
             score_time_of_day=row.get("score_time_of_day"),
             score_work_type=row.get("score_work_type"),
+            baseline_type=row.get("baseline_type"),
         )
         for row in rows
     ]
+
+
+def get_baseline_proxy_candidates(npi: int | None = None, target_shift: str | None = None) -> list[BaselineProxyCandidate]:
+    payload, _ = cache_store.load("baseline_proxy_candidates_raw")
+    rows = payload or []
+    if npi is not None:
+        rows = [r for r in rows if r.get("npi") == npi]
+    if target_shift:
+        rows = [r for r in rows if r.get("target_shift") == target_shift]
+    return [
+        BaselineProxyCandidate(
+            npi=row["npi"],
+            radiologist_name=row.get("radiologist_name"),
+            practice=row.get("practice"),
+            target_shift=row["target_shift"],
+            rank=row["rank"],
+            proxy_shift=row["proxy_shift"],
+            total_match_score=row.get("total_match_score"),
+            score_subspecialty=row.get("score_subspecialty"),
+            score_interventional=row.get("score_interventional"),
+            score_modality=row.get("score_modality"),
+            score_tbwu=row.get("score_tbwu"),
+            score_shift_duration=row.get("score_shift_duration"),
+            score_location=row.get("score_location"),
+            score_weekday_weekend=row.get("score_weekday_weekend"),
+            score_time_of_day=row.get("score_time_of_day"),
+            score_work_type=row.get("score_work_type"),
+            baseline_tbwu_per_hour=row.get("baseline_tbwu_per_hour"),
+        )
+        for row in rows
+    ]
+
+
+def get_external_feedback() -> list[ExternalFeedbackItem]:
+    payload, _ = cache_store.load("external_feedback_demo")
+    rows = payload or []
+    return [ExternalFeedbackItem(**row) for row in rows]

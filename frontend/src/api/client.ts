@@ -1,5 +1,8 @@
 import type {
+  BaselineProxyCandidate,
   BaselineProxyDetail,
+  BaselineReviewDecision,
+  ReviewActivityItem,
   BlockerByPractice,
   CapacityBaselineScorecard,
   CapacityPracticeRollup,
@@ -20,6 +23,7 @@ import type {
   DraftInsightPracticeStat,
   DraftInsightSampleItem,
   EfficiencyDetail,
+  ExternalFeedbackItem,
   EfficiencyFilterOptions,
   EfficiencyMode,
   EfficiencyTrendPoint,
@@ -55,10 +59,23 @@ async function post<T>(path: string): Promise<T> {
   return res.json() as Promise<T>;
 }
 
+async function postJson<T>(path: string, body: unknown): Promise<T> {
+  const res = await fetch(`${BASE_URL}${path}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) {
+    throw new Error(`Request to ${path} failed: ${res.status} ${res.statusText}`);
+  }
+  return res.json() as Promise<T>;
+}
+
 export interface RefreshStatus {
   refreshed_at: Record<string, string>;
   errors: Record<string, string>;
   in_progress: boolean;
+  total_datasets: number;
 }
 
 export const mosaicApi = {
@@ -121,6 +138,7 @@ export const mosaicApi = {
   getEfficiencyTrendRpAvg: () => get<EfficiencyTrendRpAvgPoint[]>("/efficiency/trend/rp-avg"),
   getFocusRadiologists: () => get<FocusRadiologistItem[]>("/efficiency/focus-radiologists"),
   getRadSentiment: () => get<RadSurveySummary>("/survey/rad-sentiment"),
+  getExternalFeedback: () => get<ExternalFeedbackItem[]>("/external-feedback"),
   getCaptureOverview: () => get<CaptureOverview>("/capture/overview"),
   getCaptureByPractice: (practice?: string) =>
     get<CapturePracticeRollup[]>(`/capture/by-practice${practice ? `?practice=${encodeURIComponent(practice)}` : ""}`),
@@ -173,6 +191,20 @@ export const mosaicApi = {
   getCapacityBaselineScorecard: () => get<CapacityBaselineScorecard[]>("/capacity/baseline-scorecard"),
   getBaselineProxyDetail: (practice?: string) =>
     get<BaselineProxyDetail[]>(`/capacity/baseline-proxy-detail${practice ? `?practice=${encodeURIComponent(practice)}` : ""}`),
+  getBaselineProxyCandidates: (npi: number, targetShift: string) =>
+    get<BaselineProxyCandidate[]>(
+      `/capacity/baseline-proxy-candidates?npi=${npi}&target_shift=${encodeURIComponent(targetShift)}`
+    ),
+  getBaselineReviewDecisions: () => get<BaselineReviewDecision[]>("/capacity/baseline-review-decisions"),
+  postBaselineReviewDecision: (decision: {
+    npi: number;
+    target_shift: string;
+    status: string;
+    chosen_proxy_shift?: string | null;
+    chosen_rank?: number | null;
+    note?: string | null;
+  }) => postJson<{ saved: boolean }>("/capacity/baseline-review-decisions", decision),
+  getReviewActivity: (limit = 20) => get<ReviewActivityItem[]>(`/capacity/review-activity?limit=${limit}`),
   getRefreshStatus: () => get<RefreshStatus>("/refresh/status"),
   triggerRefresh: () => post<{ status: string }>("/refresh"),
 };

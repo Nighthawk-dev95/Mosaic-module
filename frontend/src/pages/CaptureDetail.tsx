@@ -9,6 +9,7 @@ import { TrendDelta } from "../components/TrendDelta";
 import { Badge } from "../components/Badge";
 import { CaptureTrendChart } from "../components/CaptureTrendChart";
 import { TABLE_SECTION_STYLE, TABLE_SCROLL_STYLE } from "../styles/tableLayout";
+import { CARD_STYLE } from "../styles/glassCard";
 import { useFilters, matchesPractice, matchesRadiologistSearch } from "../context/FilterContext";
 import type {
   CapturePracticeRollup,
@@ -18,8 +19,6 @@ import type {
 } from "../api/types";
 
 type Granularity = "week" | "month";
-
-const CARD_STYLE = { background: "var(--surface-1)", border: "1px solid var(--border)", borderRadius: 8, padding: 16 } as const;
 
 function ToggleGroup<T extends string>({
   options,

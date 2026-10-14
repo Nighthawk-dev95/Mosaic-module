@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { mosaicApi } from "../api/client";
 import { useFetch } from "../hooks/useFetch";
 import { StatTile } from "../components/StatTile";
+import { CARD_STYLE } from "../styles/glassCard";
 import type { RadiologistScorecard, ScorecardMetrics } from "../api/types";
 
 const SELECT_STYLE = {
@@ -12,8 +13,6 @@ const SELECT_STYLE = {
   background: "var(--surface-raised)",
   color: "var(--text-primary)",
 } as const;
-
-const CARD_STYLE = { background: "var(--surface-1)", border: "1px solid var(--border)", borderRadius: 8, padding: 16 } as const;
 
 const TOP_N_OPTIONS = [
   { value: "5", label: "Last 5 shifts" },

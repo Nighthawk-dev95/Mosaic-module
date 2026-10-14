@@ -1,11 +1,16 @@
 import { NavLink, Outlet } from "react-router-dom";
 import { RefreshStatus } from "./RefreshStatus";
+import { CacheWarmupBanner } from "./CacheWarmupBanner";
+import { TimeOfDayGreeting } from "./TimeOfDayGreeting";
 
 const TABS = [
   { to: "/", label: "Today", end: true },
   { to: "/deployment", label: "Deployment" },
   { to: "/efficiency", label: "Efficiency" },
   { to: "/capacity", label: "Capacity" },
+  { to: "/baseline-review", label: "Baseline Review" },
+  { to: "/adoption-map", label: "Adoption Map" },
+  { to: "/external-feedback", label: "External Feedback" },
   { to: "/capture", label: "Capture" },
   { to: "/scorecard", label: "Scorecard" },
   { to: "/roster", label: "Roster" },
@@ -20,10 +25,13 @@ export function MosaicShell() {
     <div style={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0 }}>
       <div style={{ padding: "20px 24px 0", display: "flex", flexDirection: "column", gap: 16 }}>
         <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 16 }}>
-          <div>
-            <h1 style={{ margin: 0, fontSize: 22 }}>Mosaic Intelligence</h1>
-            <div style={{ color: "var(--text-muted)", fontSize: 13, marginTop: 2 }}>
-              Enterprise-wide Mosaic AI adoption, deployment, efficiency, capacity, and capture intelligence.
+          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+            <TimeOfDayGreeting />
+            <div>
+              <h1 style={{ margin: 0, fontSize: 22 }}>Mosaic Intelligence</h1>
+              <div style={{ color: "var(--text-muted)", fontSize: 13, marginTop: 2 }}>
+                Enterprise-wide Mosaic AI adoption, deployment, efficiency, capacity, and capture intelligence.
+              </div>
             </div>
           </div>
           <RefreshStatus />
@@ -35,14 +43,16 @@ export function MosaicShell() {
               key={tab.to}
               to={tab.to}
               end={tab.end}
+              className="mosaic-nav-tab"
               style={({ isActive }) => ({
                 padding: "10px 16px",
                 fontSize: 13,
                 fontWeight: 600,
                 textDecoration: "none",
                 color: isActive ? "var(--text-primary)" : "var(--text-secondary)",
-                borderBottom: isActive ? "2px solid var(--domain-deployment)" : "2px solid transparent",
+                borderBottom: isActive ? "2px solid var(--color-primary)" : "2px solid transparent",
                 marginBottom: -1,
+                transition: `color var(--dur-card) var(--ease-standard), border-color var(--dur-card) var(--ease-standard)`,
               })}
             >
               {tab.label}
@@ -50,6 +60,8 @@ export function MosaicShell() {
           ))}
         </nav>
       </div>
+
+      <CacheWarmupBanner />
 
       <div style={{ flex: 1, minHeight: 0, display: "flex" }}>
         <Outlet />

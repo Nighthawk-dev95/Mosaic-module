@@ -5,7 +5,7 @@ interface Props {
   stages: DeploymentFunnelStage[];
 }
 
-const BAR_COLOR = "var(--domain-deployment)";
+const BAR_COLOR = "var(--color-primary)";
 
 function CustomTooltip({ active, payload }: any) {
   if (!active || !payload?.length) return null;

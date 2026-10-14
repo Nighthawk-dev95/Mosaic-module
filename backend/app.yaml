@@ -23,3 +23,10 @@ env:
     value: '4a77686c-5d36-4e88-9233-7c29f93f1b81'
   - name: 'ENDPOINT_NAME'
     value: 'projects/practice-command-db/branches/dev-bhargav/endpoints/primary'
+  # Speculative push-ingestion endpoint (routes/mosaic.py, /api/mosaic/ingest/*) - a best-guess
+  # mirror of practice-command-dev's apparent resource shape (DATABRICKS_TOKEN/
+  # FEEDBACK_QUEUE_WEBHOOK_URL/INGEST_SHARED_SECRET), not a confirmed replica of their actual
+  # design since their source isn't visible to us. Secret lives in the mosaic-bhargav scope,
+  # owned by this app - not reusing practice-command-dev's or mdm-console-dev's real scopes.
+  - name: 'INGEST_SHARED_SECRET'
+    valueFrom: 'ingest-secret'

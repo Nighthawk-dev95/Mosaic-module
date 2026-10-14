@@ -414,6 +414,21 @@ class RadSurveySummary(BaseModel):
     by_practice: list[PracticeNpsStat]
 
 
+class ExternalFeedbackItem(BaseModel):
+    """One record pushed through the speculative /api/mosaic/ingest/external_feedback_demo
+    endpoint (routes/mosaic.py) - the real shape for that placeholder, now that it has one.
+    Deliberately a sibling of RadSurveySummary above (same positive/neutral/negative framing
+    the Rad Sentiment page already uses) rather than a new taxonomy - this is meant to read as
+    a *live* counterpart to that static survey snapshot, not an unrelated concept."""
+
+    practice: str | None = None
+    radiologist_name: str | None = None
+    sentiment: str  # "positive" | "neutral" | "negative"
+    category: str | None = None
+    comment: str | None = None
+    submitted_at: str
+
+
 class DraftInsightOverview(BaseModel):
     """Aggregate stats over the AI-assessed draft-vs-final sample (see
     tools/draft_insights/001_build_draft_insights_sample.sql - a bounded, stratified recent
@@ -510,11 +525,11 @@ class CapacityBaselineScorecard(BaseModel):
 
 class BaselineProxyDetail(BaseModel):
     """One row per (NPI, target shift) that lacked its own baseline history and got a
-    borrowed one - the chosen match (rank=1) from
-    edw_dev.bipa_analytics.stg_mosaic_proxy_all_candidates_2026, a similarity-matching
-    pipeline (not reimplemented here) that scores candidate donor shifts across
-    subspecialty/interventional/modality/TBWU/duration/location/weekday-weekend/time-of-day/
-    work-type and picks the best total_match_score."""
+    borrowed one - the chosen match (rank=1), from the live 8-component similarity scoring in
+    mosaic_service._CAPACITY_PROXY_CTE_SQL. Matching is same-radiologist-only: a shift-type a
+    rad didn't do enough of pre-Mosaic is matched against that same NPI's own other
+    baseline-period shift-types (subspecialty/interventional/modality/TBWU/duration/location/
+    weekday-weekend/time-of-day/work-type), picking the best total_match_score."""
 
     npi: int
     radiologist_name: str | None
@@ -531,3 +546,32 @@ class BaselineProxyDetail(BaseModel):
     score_weekday_weekend: float | None
     score_time_of_day: float | None
     score_work_type: float | None
+    baseline_type: str | None
+
+
+class BaselineProxyCandidate(BaseModel):
+    """Every candidate shift-type considered for a (NPI, target shift) pair, not just the
+    rank=1 winner BaselineProxyDetail shows - same scoring, top 5 by total_match_score. Powers
+    the Baseline Review Queue, where a reviewer can see and pick among the alternatives the
+    algorithm didn't choose."""
+
+    npi: int
+    radiologist_name: str | None
+    practice: str | None
+    target_shift: str
+    rank: int
+    proxy_shift: str
+    total_match_score: float | None
+    score_subspecialty: float | None
+    score_interventional: float | None
+    score_modality: float | None
+    score_tbwu: float | None
+    score_shift_duration: float | None
+    score_location: float | None
+    score_weekday_weekend: float | None
+    score_time_of_day: float | None
+    score_work_type: float | None
+    # The implied TBWU/hour rate this candidate's shift-type carries - exposed specifically so
+    # baseline_overrides.py can recompute a shift's capacity rate when a reviewer picks a
+    # non-rank-1 candidate, without a second EDW round-trip.
+    baseline_tbwu_per_hour: float | None

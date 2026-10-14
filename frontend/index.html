@@ -5,6 +5,18 @@
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>frontend</title>
+    <script>
+      // No-FOUC theme guard - set data-theme before first paint so a saved light
+      // preference doesn't flash dark on load. Mirrors PCC's own guard script.
+      (function () {
+        try {
+          var theme = localStorage.getItem("mosaic_theme_v1") || "dark";
+          document.documentElement.setAttribute("data-theme", theme);
+        } catch (e) {
+          document.documentElement.setAttribute("data-theme", "dark");
+        }
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>

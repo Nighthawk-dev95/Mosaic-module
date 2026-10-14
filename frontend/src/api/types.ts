@@ -144,6 +144,17 @@ export interface RadSurveySummary {
   by_practice: PracticeNpsStat[];
 }
 
+export type FeedbackSentiment = "positive" | "neutral" | "negative";
+
+export interface ExternalFeedbackItem {
+  practice: string | null;
+  radiologist_name: string | null;
+  sentiment: FeedbackSentiment;
+  category: string | null;
+  comment: string | null;
+  submitted_at: string;
+}
+
 export interface RadSummaryStat {
   npi: number;
   radiologist_name: string | null;
@@ -492,4 +503,28 @@ export interface BaselineProxyDetail {
   score_weekday_weekend: number | null;
   score_time_of_day: number | null;
   score_work_type: number | null;
+  baseline_type: string | null;
+}
+
+export interface BaselineProxyCandidate extends BaselineProxyDetail {
+  rank: number;
+  baseline_tbwu_per_hour: number | null;
+}
+
+export type ReviewDecisionStatus = "accepted" | "overridden" | "rejected_no_match";
+
+export interface BaselineReviewDecision {
+  npi: number;
+  target_shift: string;
+  status: ReviewDecisionStatus;
+  chosen_proxy_shift: string | null;
+  chosen_rank: number | null;
+  note: string | null;
+  reviewed_at: string;
+}
+
+export interface ReviewActivityItem extends BaselineReviewDecision {
+  radiologist_name: string | null;
+  practice: string | null;
+  capacity_impact_tbwu_per_hour: number | null;
 }

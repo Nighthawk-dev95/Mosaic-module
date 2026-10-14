@@ -1,20 +1,51 @@
 :root {
   color-scheme: dark;
 
-  /* Chart chrome & ink - dark mode. Navy-tinted (not neutral near-black), to match the
-     Practice Command Centre mockups: a clear page->card->raised depth ladder instead of
-     everything collapsing into flat black. */
-  --page-plane: #141a26;
-  --surface-1: #1c2333;
-  --surface-raised: #2a3348;
-  --text-primary: #ffffff;
-  --text-secondary: #c3c7d1;
-  --text-muted: #7d8494;
-  --gridline: #262d3d;
-  --border: rgba(255, 255, 255, 0.10);
-  --success-text: #0ca30c;
+  /* Real Radiology Partners brand palette, pulled from the production Practice Command
+     Centre app's own compiled CSS (practice-command, not just -dev/-bhargav - it serves
+     static assets over the same Bearer-token access used for its API all session). Used for
+     single-swatch brand/accent purposes (surfaces, status, the hero accent) - never as an
+     8-way categorical chart palette, see note below. */
+  --rp-blue: #00A7E1;
+  --rp-navy: #0B385A;
+  --rp-teal: #00918A;
+  --rp-orange: #E96F23;
+  --rp-purple: #5A2849;
+  --rp-moss: #7B8E39;
+  --rp-yellow: #E7C663;
+  --rp-grey: #B5B5B5;
+  --rp-blue-hover: color-mix(in srgb, var(--rp-blue) 85%, black);
 
-  /* Categorical domain colors - fixed assignment, never cycled */
+  /* Hero accent - PCC's own system reserves rp-moss specifically for "Mosaic" branding
+     (--color-mosaic-accent: var(--rp-moss) in their CSS). This is the generic single-accent
+     color (nav active state, primary buttons, gauge fills) - distinct from --domain-deployment
+     below, which must keep its own already-validated value for the categorical charts. */
+  --color-primary: var(--rp-moss);
+  --color-primary-hover: color-mix(in srgb, var(--color-primary) 85%, black);
+
+  /* Surfaces, text, status - PCC's real dark-theme values, kept under Mosaic's existing
+     variable names so no component needs to change to pick these up. */
+  --page-plane: #101020;
+  --surface-1: #201d33;
+  --surface-raised: #282440;
+  --text-primary: #eef0f4;
+  --text-secondary: #b0b3be;
+  --text-muted: #808492;
+  --gridline: rgba(255, 255, 255, 0.06);
+  --border: #2f2b45;
+  --success-text: #22c55e;
+
+  --status-good: #22c55e;
+  --status-warning: #f59e0b;
+  --status-serious: #ec835a; /* no PCC equivalent (3-tier good/warning/danger only) - kept as-is */
+  --status-critical: #ef4444;
+
+  /* Categorical domain colors - fixed assignment, never cycled. Deliberately NOT remapped to
+     the RP brand palette: validated live this session (dataviz skill's validate_palette.js)
+     that RP's 8 brand hues fail as a categorical set - rp-navy and rp-blue share a hue family
+     close enough that no lightness/chroma snap separates them past the CVD floor. Forcing
+     brand hex through a check it structurally can't pass would be checking a box, not a real
+     fix - these keep Mosaic's own already-validated values. */
   --domain-deployment: #3987e5; /* slot 1 blue */
   --domain-utilization: #199e70; /* slot 3 aqua */
   --domain-efficiency: #9085e9; /* slot 7 violet */
@@ -55,13 +86,179 @@
   --undrafted-opened-over-5min: var(--domain-efficiency);
   --undrafted-never-opened: var(--series-6-green);
 
-  /* Status palette - fixed, reserved for state (never series identity) */
-  --status-good: #0ca30c;
-  --status-warning: #fab219;
-  --status-serious: #ec835a;
-  --status-critical: #d03b3b;
+  /* Glass elevation system - verbatim recipe from PCC's own CSS (fill/border/shadow per
+     surface + a shared blur scale), used via the .glass-card/.glass-drawer/.glass-modal
+     utility classes below. */
+  --glass-blur-scale: 1;
+  --glass-blur-sm: calc(8px * var(--glass-blur-scale));
+  --glass-blur-md: calc(16px * var(--glass-blur-scale));
+  --glass-blur-lg: calc(28px * var(--glass-blur-scale));
+  --glass-blur-xl: calc(40px * var(--glass-blur-scale));
+  --glass-fill-chip: rgba(32, 29, 51, .56);
+  --glass-fill-card: var(--surface-1);
+  --glass-fill-drawer: var(--surface-raised);
+  --glass-fill-modal: var(--page-plane);
+  --glass-border: 1px solid rgba(255, 255, 255, .09);
+  --glass-border-strong: 1px solid rgba(255, 255, 255, .12);
+  --glass-highlight: inset 0 1px 0 rgba(255, 255, 255, .07);
+  --glass-shadow-card: 0 4px 24px rgba(0, 0, 0, .4), 0 1px 4px rgba(0, 0, 0, .25), inset 0 1px 0 rgba(255, 255, 255, .07);
+  --glass-shadow-elevated: 0 8px 40px rgba(0, 0, 0, .55), 0 2px 8px rgba(0, 0, 0, .3), inset 0 1px 0 rgba(255, 255, 255, .12);
+  --glass-shadow-modal: 0 24px 80px rgba(0, 0, 0, .75), inset 0 1px 0 rgba(255, 255, 255, .12);
 
-  --font-sans: system-ui, -apple-system, "Segoe UI", sans-serif;
+  /* Spacing / radius / type scale - PCC's real values */
+  --space-0: 0;
+  --space-2: 2px;
+  --space-4: 4px;
+  --space-6: 6px;
+  --space-8: 8px;
+  --space-10: 10px;
+  --space-12: 12px;
+  --space-14: 14px;
+  --space-16: 16px;
+  --space-20: 20px;
+  --space-24: 24px;
+  --space-32: 32px;
+  --space-40: 40px;
+
+  --radius: 8px;
+  --radius-lg: 12px;
+  --radius-xl: 16px;
+  --radius-pill: 999px;
+
+  --font-size-9: 9px;
+  --font-size-10: 10px;
+  --font-size-11: 11px;
+  --font-size-12: 12px;
+  --font-size-13: 13px;
+  --font-size-14: 14px;
+  --font-size-15: 15px;
+  --font-size-16: 16px;
+  --font-size-18: 18px;
+  --font-size-20: 20px;
+  --font-size-22: 22px;
+
+  --font-weight-normal: 400;
+  --font-weight-medium: 500;
+  --font-weight-semibold: 600;
+  --font-weight-bold: 700;
+  --font-weight-heavy: 800;
+
+  /* Motion - named per-component duration/easing tokens, same as PCC uses instead of
+     one-off hardcoded transition strings per animated element. */
+  --dur-card: .22s;
+  --dur-kpi: .4s;
+  --dur-chart: .32s;
+  --dur-modal: .3s;
+  --dur-drawer: .24s;
+  --dur-alert: .3s;
+  --ease-standard: cubic-bezier(.4, 0, .2, 1);
+  --ease-spring: cubic-bezier(.34, 1.56, .64, 1);
+  --ease-snap: cubic-bezier(.25, .46, .45, .94);
+  --ease-exit: cubic-bezier(.4, 0, 1, 1);
+
+  --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+}
+
+:root[data-theme="light"] {
+  color-scheme: light;
+
+  --page-plane: #f4f6fa;
+  --surface-1: #ffffff;
+  --surface-raised: #eef1f7;
+  --text-primary: #111827;
+  --text-secondary: #374151;
+  --text-muted: #5d6573;
+  --gridline: rgba(15, 23, 42, 0.1);
+  --border: #d1d5e0;
+  --success-text: #15803d;
+
+  --status-good: #15803d;
+  --status-warning: #b45309;
+  --status-critical: #dc2626;
+
+  --color-primary-hover: color-mix(in srgb, var(--color-primary) 85%, black);
+
+  --glass-fill-chip: rgba(255, 255, 255, .65);
+  --glass-fill-card: var(--surface-1);
+  --glass-fill-drawer: var(--surface-raised);
+  --glass-fill-modal: var(--page-plane);
+  --glass-border: 1px solid rgba(15, 23, 42, .1);
+  --glass-border-strong: 1px solid rgba(15, 23, 42, .16);
+  --glass-highlight: inset 0 -1px 0 rgba(255, 255, 255, .9);
+  --glass-shadow-card: 0 4px 24px rgba(15, 23, 42, .1), 0 1px 4px rgba(15, 23, 42, .07), inset 0 -1px 0 rgba(255, 255, 255, .9);
+  --glass-shadow-elevated: 0 8px 40px rgba(15, 23, 42, .14), 0 2px 8px rgba(15, 23, 42, .08), inset 0 -1px 0 rgba(255, 255, 255, .9);
+  --glass-shadow-modal: 0 24px 80px rgba(15, 23, 42, .2), inset 0 -1px 0 rgba(255, 255, 255, .9);
+}
+
+/* Ambient background wash - same radial-gradient recipe PCC uses so the page itself has
+   depth, not just the cards on top of it. */
+:root[data-theme="light"] body {
+  background:
+    radial-gradient(900px 600px at 10% 6%, rgba(0, 105, 180, .06), transparent 60%),
+    radial-gradient(800px 700px at 90% 94%, rgba(11, 56, 90, .05), transparent 55%),
+    radial-gradient(700px 560px at 78% 18%, rgba(0, 145, 138, .05), transparent 62%),
+    radial-gradient(620px 520px at 22% 82%, rgba(123, 142, 57, .04), transparent 62%),
+    var(--page-plane);
+}
+
+body {
+  background:
+    radial-gradient(900px 600px at 10% 6%, rgba(0, 167, 225, .05), transparent 60%),
+    radial-gradient(800px 700px at 90% 94%, rgba(123, 142, 57, .06), transparent 55%),
+    radial-gradient(700px 560px at 78% 18%, rgba(0, 145, 138, .04), transparent 62%),
+    var(--page-plane);
+  background-attachment: fixed;
+}
+
+.glass-card {
+  background: var(--glass-fill-card);
+  backdrop-filter: blur(var(--glass-blur-md));
+  -webkit-backdrop-filter: blur(var(--glass-blur-md));
+  border: var(--glass-border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--glass-shadow-card), var(--glass-highlight);
+}
+
+.glass-drawer {
+  background: var(--glass-fill-drawer);
+  backdrop-filter: blur(var(--glass-blur-md));
+  -webkit-backdrop-filter: blur(var(--glass-blur-md));
+  border: var(--glass-border);
+  box-shadow: var(--glass-shadow-modal), var(--glass-highlight);
+}
+
+.glass-modal {
+  background: var(--glass-fill-modal);
+  backdrop-filter: blur(var(--glass-blur-xl));
+  -webkit-backdrop-filter: blur(var(--glass-blur-xl));
+  border: var(--glass-border-strong);
+  box-shadow: var(--glass-shadow-modal), var(--glass-highlight);
+}
+
+/* Interaction polish - PCC's own .tile-card:hover recipe (translateY lift + border tint).
+   Applied via className alongside an inline CARD_STYLE/TABLE_SECTION_STYLE (inline styles
+   can't express :hover - same reasoning as DataTable.tsx's .dt-row exception). Judgment call
+   per card: single clickable/hoverable units get this, not large multi-row table containers,
+   where a page-wide lift reads oddly rather than inviting a click. */
+.mosaic-card-hover {
+  transition: transform var(--dur-card) var(--ease-standard), border-color var(--dur-card) var(--ease-standard);
+}
+.mosaic-card-hover:hover {
+  transform: translateY(-2px);
+  border-color: color-mix(in srgb, var(--color-primary) 55%, var(--border));
+}
+
+/* Nav links (Sidebar rail, MosaicShell tab bar) only had a styled *active* state - inactive
+   items were static until hovered by eye only. Real CSS rule needed since NavLink's style
+   callback only knows isActive/isPending, not hover. */
+.mosaic-nav-link:hover {
+  /* !important needed - the element's own inline style always sets color/background
+     (active vs inactive), which otherwise beats a plain class rule regardless of specificity. */
+  color: var(--text-primary) !important;
+  background: var(--surface-raised) !important;
+}
+.mosaic-nav-tab:hover {
+  color: var(--text-primary) !important;
 }
 
 * {
@@ -76,7 +273,8 @@ body,
 }
 
 body {
-  background: var(--page-plane);
   color: var(--text-primary);
   font-family: var(--font-sans);
+  font-size: var(--font-size-15);
+  line-height: 1.5;
 }

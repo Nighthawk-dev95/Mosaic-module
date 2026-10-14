@@ -9,9 +9,8 @@ import { DataTable, fmtPct } from "../components/DataTable";
 import type { DataTableColumn } from "../components/DataTable";
 import { FilterBar } from "../components/FilterBar";
 import { useFilters, matchesPractice, matchesRadiologistSearch } from "../context/FilterContext";
+import { CARD_STYLE } from "../styles/glassCard";
 import type { RadSummaryStat, ThemeStat, LikertDistribution, PracticeNpsStat } from "../api/types";
-
-const CARD_STYLE = { background: "var(--surface-1)", border: "1px solid var(--border)", borderRadius: 8, padding: 16 } as const;
 
 // Ranked horizontal bars for magnitude comparison (same pattern/reasoning as ScorecardDetail's
 // Modality/Priority Mix bars: one sequential hue, rank+label already carry identity).
@@ -148,12 +147,12 @@ export function MosaicIntelligence() {
         <StatTile
           label="Rads Live on Mosaic"
           value={snapshot.data ? fmt(snapshot.data.rads_live_on_mosaic) : "…"}
-          accent="var(--domain-deployment)"
+          accent="var(--color-primary)"
         />
         <StatTile
           label="Rads Live on AI Drafting"
           value={snapshot.data ? fmt(snapshot.data.rads_live_on_ai_drafting) : "…"}
-          accent="var(--domain-deployment)"
+          accent="var(--color-primary)"
         />
         <StatTile
           label="% RPCE Reporting"

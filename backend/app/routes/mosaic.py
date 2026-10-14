@@ -1,6 +1,11 @@
-from fastapi import APIRouter, BackgroundTasks, Query
+import os
+from datetime import datetime, timezone
+
+from fastapi import APIRouter, BackgroundTasks, Header, HTTPException, Query
+from pydantic import BaseModel
 
 from app.models.mosaic import (
+    BaselineProxyCandidate,
     BaselineProxyDetail,
     BlockerByPractice,
     CapacityBaselineScorecard,
@@ -25,6 +30,7 @@ from app.models.mosaic import (
     EfficiencyFilterOptions,
     EfficiencyTrendPoint,
     EfficiencyTrendRpAvgPoint,
+    ExternalFeedbackItem,
     FocusRadiologistItem,
     MosaicIntelligenceSnapshot,
     PopulationEfficiency,
@@ -37,8 +43,8 @@ from app.models.mosaic import (
     UndraftedFilterOptions,
     UtilizationPracticeRollup,
 )
-from app.db import postgres_client
-from app.services import cache_service, refresh_service
+from app.db import cache_store, postgres_client
+from app.services import baseline_overrides, cache_service, refresh_service
 
 router = APIRouter(prefix="/api/mosaic", tags=["mosaic"])
 
@@ -267,6 +273,127 @@ async def capacity_baseline_scorecard():
 @router.get("/capacity/baseline-proxy-detail", response_model=list[BaselineProxyDetail])
 async def capacity_baseline_proxy_detail(practice: str | None = None):
     return cache_service.get_baseline_proxy_detail(practice)
+
+
+@router.get("/capacity/baseline-proxy-candidates", response_model=list[BaselineProxyCandidate])
+async def capacity_baseline_proxy_candidates(npi: int | None = None, target_shift: str | None = None):
+    return cache_service.get_baseline_proxy_candidates(npi, target_shift)
+
+
+class BaselineReviewDecisionIn(BaseModel):
+    npi: int
+    target_shift: str
+    status: str
+    chosen_proxy_shift: str | None = None
+    chosen_rank: int | None = None
+    note: str | None = None
+
+
+@router.get("/capacity/baseline-review-decisions")
+async def get_baseline_review_decisions():
+    # Durable on the dev-bhargav Lakebase Postgres branch (app/db/postgres_client.py), same
+    # resource as /refresh/history - empty list if Postgres is unavailable, never an error.
+    return postgres_client.list_review_decisions()
+
+
+@router.post("/capacity/baseline-review-decisions")
+async def post_baseline_review_decision(decision: BaselineReviewDecisionIn):
+    saved = postgres_client.save_review_decision(
+        npi=decision.npi,
+        target_shift=decision.target_shift,
+        status=decision.status,
+        chosen_proxy_shift=decision.chosen_proxy_shift,
+        chosen_rank=decision.chosen_rank,
+        note=decision.note,
+        reviewed_at=datetime.now(timezone.utc),
+    )
+    if saved:
+        # Closes the loop live, not just on the next 30-min refresh - this is what makes
+        # accepting/overriding a review actually change the Capacity tab within seconds.
+        try:
+            baseline_overrides.recompute_capacity_with_overrides()
+        except Exception as exc:  # noqa: BLE001 - the decision is already saved either way
+            print(f"[baseline-review] recompute_capacity_with_overrides failed: {exc}", flush=True)
+    return {"saved": saved}
+
+
+@router.get("/capacity/review-activity")
+async def get_review_activity(limit: int = Query(20, ge=1, le=100)):
+    """Enriches the raw decision log with each decision's real capacity-rate impact (chosen
+    candidate's rate minus the algorithm's own rank-1 rate) - powers the Baseline Review
+    Queue's live activity ticker. Computed on read, not stored, so it's always consistent with
+    whatever's currently cached in baseline_proxy_candidates_raw."""
+    decisions = postgres_client.list_review_decisions()[:limit]
+    enriched = []
+    for d in decisions:
+        candidates = cache_service.get_baseline_proxy_candidates(d["npi"], d["target_shift"])
+        by_rank = {c.rank: c for c in candidates}
+        default_candidate = by_rank.get(1)
+        chosen_candidate = by_rank.get(d.get("chosen_rank")) if d.get("chosen_rank") else None
+        impact = None
+        if d["status"] != "rejected_no_match" and default_candidate and chosen_candidate:
+            default_rate = default_candidate.baseline_tbwu_per_hour
+            chosen_rate = chosen_candidate.baseline_tbwu_per_hour
+            if default_rate is not None and chosen_rate is not None:
+                impact = chosen_rate - default_rate
+        anchor = chosen_candidate or default_candidate
+        enriched.append(
+            {
+                **d,
+                "radiologist_name": anchor.radiologist_name if anchor else None,
+                "practice": anchor.practice if anchor else None,
+                "capacity_impact_tbwu_per_hour": impact,
+            }
+        )
+    return enriched
+
+
+# Speculative push-ingestion endpoint - a best-guess mirror of practice-command-dev's apparent
+# resource shape (DATABRICKS_TOKEN / FEEDBACK_QUEUE_WEBHOOK_URL / INGEST_SHARED_SECRET), inferred
+# from `databricks apps list` metadata only - their actual source isn't visible to us, so this is
+# NOT a confirmed replica of their design. Deliberately sandboxed: the allowlist below is the only
+# thing stopping an external caller from overwriting one of the real EDW-sourced cache keys the
+# rest of this app depends on - do not widen it without equally deliberate thought.
+_INGEST_ALLOWED_DATASETS = {"external_feedback_demo"}
+
+
+def _check_ingest_secret(x_ingest_secret: str | None) -> None:
+    expected = os.environ.get("INGEST_SHARED_SECRET")
+    if not expected:
+        # Fail closed: an unset secret must never be treated as "accept anything" - this is
+        # the normal/expected state in local dev, where the resource isn't bound.
+        raise HTTPException(status_code=503, detail="ingest endpoint not configured")
+    if x_ingest_secret != expected:
+        raise HTTPException(status_code=401, detail="invalid or missing X-Ingest-Secret")
+
+
+@router.post("/ingest/{dataset_name}")
+async def post_ingest(
+    dataset_name: str, rows: list[ExternalFeedbackItem], x_ingest_secret: str | None = Header(default=None)
+):
+    _check_ingest_secret(x_ingest_secret)
+    if dataset_name not in _INGEST_ALLOWED_DATASETS:
+        raise HTTPException(status_code=404, detail=f"{dataset_name!r} is not an ingestable dataset")
+    cache_store.save(dataset_name, [row.model_dump() for row in rows])
+    return {"status": "ingested", "row_count": len(rows)}
+
+
+@router.get("/ingest/{dataset_name}")
+async def get_ingest(dataset_name: str, x_ingest_secret: str | None = Header(default=None)):
+    _check_ingest_secret(x_ingest_secret)
+    if dataset_name not in _INGEST_ALLOWED_DATASETS:
+        raise HTTPException(status_code=404, detail=f"{dataset_name!r} is not an ingestable dataset")
+    rows, refreshed_at = cache_store.load(dataset_name)
+    if rows is None:
+        raise HTTPException(status_code=404, detail="no data ingested yet")
+    return {"rows": rows, "refreshed_at": refreshed_at}
+
+
+@router.get("/external-feedback", response_model=list[ExternalFeedbackItem])
+async def get_external_feedback():
+    # Internal read path for the dashboard - no X-Ingest-Secret needed here, same as every
+    # other GET route; the secret only gates the external-facing ingest path above.
+    return cache_service.get_external_feedback()
 
 
 @router.post("/refresh")

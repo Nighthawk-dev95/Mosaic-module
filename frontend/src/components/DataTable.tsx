@@ -60,7 +60,7 @@ export function DataTable<T>({ columns, rows, rowKey }: DataTableProps<T>) {
                   borderBottom: "1px solid var(--gridline)",
                   color: "var(--text-primary)",
                   whiteSpace: "nowrap",
-                  transition: "background 0.1s ease",
+                  transition: "background var(--dur-card) var(--ease-standard)",
                 }}
               >
                 {c.render ? c.render(row) : defaultRender((row as unknown as Record<string, unknown>)[c.key])}

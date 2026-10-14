@@ -5,6 +5,7 @@ import { useFetch } from "../hooks/useFetch";
 import { DataTable, fmtPct } from "../components/DataTable";
 import type { DataTableColumn } from "../components/DataTable";
 import { TABLE_SECTION_STYLE, TABLE_SCROLL_STYLE } from "../styles/tableLayout";
+import { CARD_STYLE } from "../styles/glassCard";
 import { FilterBar } from "../components/FilterBar";
 import { Badge } from "../components/Badge";
 import { useFilters, matchesPractice, matchesRadiologistSearch } from "../context/FilterContext";
@@ -15,8 +16,6 @@ import type {
   CapacityPracticeRollup,
   CapacityRadiologistItem,
 } from "../api/types";
-
-const CARD_STYLE = { background: "var(--surface-1)", border: "1px solid var(--border)", borderRadius: 8, padding: 16 } as const;
 
 function fmtNum(value: number | null | undefined, digits = 1): string {
   return value === null || value === undefined ? "—" : value.toFixed(digits);

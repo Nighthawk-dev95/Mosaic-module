@@ -11,11 +11,15 @@ interface StatTileProps {
 export function StatTile({ label, value, sublabel, accent, trend }: StatTileProps) {
   return (
     <div
+      className="mosaic-card-hover"
       style={{
-        background: "var(--surface-1)",
-        border: "1px solid var(--border)",
-        borderLeft: accent ? `3px solid ${accent}` : "1px solid var(--border)",
-        borderRadius: 8,
+        background: "var(--glass-fill-card)",
+        backdropFilter: "blur(var(--glass-blur-md))",
+        WebkitBackdropFilter: "blur(var(--glass-blur-md))",
+        border: "var(--glass-border)",
+        borderLeft: accent ? `3px solid ${accent}` : "var(--glass-border)",
+        boxShadow: "var(--glass-shadow-card), var(--glass-highlight)",
+        borderRadius: "var(--radius-lg)",
         padding: "16px 20px",
         flex: "1 1 200px",
         minWidth: 180,

@@ -1649,7 +1649,7 @@ exact_baseline AS (
 # flag (top-10%-of-capacity-at-stake) is dropped - it only affected an Excel export label this
 # app never surfaced - so Manual Review here is decided by the "No Good Proxy" (score < 40) and
 # "Outlier vs. Peers" (< 70% of peer median) flags only.
-_CAPACITY_PROXY_CTE_SQL = """
+_CAPACITY_PROXY_RANKED_CTE_SQL = """
 , donor_npis AS (
   SELECT DISTINCT NPI FROM exact_baseline
 ),
@@ -1750,8 +1750,14 @@ ranked_proxy AS (
       ORDER BY exact_name_match DESC, total_match_score DESC, score_work_type DESC
     ) AS rank
   FROM final_scored
-),
-peer_stats AS (
+)
+"""
+
+# Reused as-is by get_capacity_with_baseline/get_baseline_proxy_detail (rank=1 winner only) -
+# get_baseline_proxy_candidates below shares _CAPACITY_PROXY_RANKED_CTE_SQL but keeps rank<=5
+# instead, so don't fold this suffix back into the ranked CTE above.
+_CAPACITY_PROXY_CTE_SQL = _CAPACITY_PROXY_RANKED_CTE_SQL + """
+, peer_stats AS (
   SELECT ShiftName, PERCENTILE(baseline_tbwu_per_hour * baseline_shift_length, 0.5) AS peer_median
   FROM source_shifts
   GROUP BY ShiftName
@@ -1809,7 +1815,7 @@ def get_capacity_with_baseline() -> list[dict]:
           FROM baseline_merged
         )
         SELECT
-          v.NPI AS npi, v.localpractice AS practice, v.no_hours,
+          v.NPI AS npi, v.localpractice AS practice, v.ShiftName AS target_shift, v.no_hours,
           v.shift_TBWU AS on_shift_capacity_rpwu,
           COALESCE(m_exact.baseline_tbwu_per_hour, m_fallback.baseline_tbwu_per_hour) * v.no_hours AS shift_baseline_rpwu_fixed,
           COALESCE(m_exact.Baseline_Type, m_fallback.Baseline_Type) AS baseline_type
@@ -1836,7 +1842,31 @@ def get_baseline_proxy_detail() -> list[dict]:
           ShiftName AS target_shift, proxy_shift, total_match_score,
           score_subspecialty, score_interventional, score_modality, score_tbwu,
           score_shift_duration, score_location, score_weekday_weekend,
-          score_time_of_day, score_work_type
+          score_time_of_day, score_work_type, Baseline_Type AS baseline_type
         FROM proxy_baseline
+        """
+    )
+
+
+def get_baseline_proxy_candidates() -> list[dict]:
+    """Every candidate shift-type (not just the rank=1 winner) considered for each (NPI,
+    target shift) that lacks its own baseline - top 5 by total_match_score, same scoring as
+    get_baseline_proxy_detail. Powers the Baseline Review Queue's ranked-candidate view, so a
+    reviewer can see (and override) the alternatives the algorithm didn't pick, not just its
+    final answer."""
+    return run_query(
+        _CAPACITY_SHIFT_CTE_SQL
+        + _CAPACITY_CLASSIFIED_CTE_SQL
+        + _CAPACITY_EXACT_CTE_SQL
+        + _CAPACITY_PROXY_RANKED_CTE_SQL
+        + """
+        SELECT
+          NPI AS npi, Rad_name AS radiologist_name, localpractice AS practice,
+          target_shift, rank, proxy_shift, total_match_score,
+          score_subspecialty, score_interventional, score_modality, score_tbwu,
+          score_shift_duration, score_location, score_weekday_weekend, score_time_of_day,
+          score_work_type, baseline_tbwu_per_hour
+        FROM ranked_proxy
+        WHERE rank <= 5
         """
     )
