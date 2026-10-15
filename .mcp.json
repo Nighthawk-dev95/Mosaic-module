@@ -1,0 +1,13 @@
+{
+  "mcpServers": {
+    "powerbi-authoring-local": {
+      "type": "stdio",
+      "command": "npx",
+      "args": [
+        "-y",
+        "@microsoft/powerbi-modeling-mcp@latest",
+        "--start"
+      ]
+    }
+  }
+}

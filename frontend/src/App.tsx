@@ -11,6 +11,7 @@ import { CapacityDetail } from "./pages/CapacityDetail";
 import { BaselineReviewQueue } from "./pages/BaselineReviewQueue";
 import { ExternalFeedback } from "./pages/ExternalFeedback";
 import { AdoptionMap } from "./pages/AdoptionMap";
+import { Reconciliation } from "./pages/Reconciliation";
 import { NonDraftedDetail } from "./pages/NonDraftedDetail";
 import { CaptureDetail } from "./pages/CaptureDetail";
 import { ScorecardDetail } from "./pages/ScorecardDetail";
@@ -32,6 +33,7 @@ export default function App() {
               <Route path="/baseline-review" element={<BaselineReviewQueue />} />
               <Route path="/external-feedback" element={<ExternalFeedback />} />
               <Route path="/adoption-map" element={<AdoptionMap />} />
+              <Route path="/reconciliation" element={<Reconciliation />} />
               <Route path="/non-drafted" element={<NonDraftedDetail />} />
               <Route path="/capture" element={<CaptureDetail />} />
               <Route path="/scorecard" element={<ScorecardDetail />} />

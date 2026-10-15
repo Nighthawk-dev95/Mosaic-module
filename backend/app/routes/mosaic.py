@@ -38,6 +38,7 @@ from app.models.mosaic import (
     RadiologistScorecard,
     RadSummaryStat,
     RadSurveySummary,
+    ReconciliationFinding,
     RpceTrendPoint,
     UndraftedCategoryPoint,
     UndraftedFilterOptions,
@@ -394,6 +395,11 @@ async def get_external_feedback():
     # Internal read path for the dashboard - no X-Ingest-Secret needed here, same as every
     # other GET route; the secret only gates the external-facing ingest path above.
     return cache_service.get_external_feedback()
+
+
+@router.get("/reconciliation", response_model=list[ReconciliationFinding])
+async def get_reconciliation_findings():
+    return cache_service.get_reconciliation_findings()
 
 
 @router.post("/refresh")

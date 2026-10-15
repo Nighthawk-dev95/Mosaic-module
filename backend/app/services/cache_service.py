@@ -46,6 +46,7 @@ from app.models.mosaic import (
     PracticeNpsStat,
     RadiologistScorecard,
     RadSurveySummary,
+    ReconciliationFinding,
     ScorecardMetrics,
     RadSummaryStat,
     RpceTrendPoint,
@@ -1093,3 +1094,9 @@ def get_external_feedback() -> list[ExternalFeedbackItem]:
     payload, _ = cache_store.load("external_feedback_demo")
     rows = payload or []
     return [ExternalFeedbackItem(**row) for row in rows]
+
+
+def get_reconciliation_findings() -> list[ReconciliationFinding]:
+    payload, _ = cache_store.load("reconciliation_findings")
+    rows = payload or []
+    return [ReconciliationFinding(**row) for row in rows]

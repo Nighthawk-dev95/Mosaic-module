@@ -8,6 +8,7 @@ from pydantic import BaseModel
 from app.db import cache_store, efficiency_store, postgres_client
 from app.services import baseline_overrides
 from app.services import mosaic_service as edw
+from app.services import reconciliation_service as recon
 
 REFRESH_INTERVAL_SECONDS = 30 * 60  # 30 minutes
 
@@ -76,6 +77,7 @@ DATASETS: list[tuple[str, object, object]] = [
     ("capacity_with_baseline_raw", lambda: edw.get_capacity_with_baseline(), None),
     ("baseline_proxy_detail_raw", lambda: edw.get_baseline_proxy_detail(), None),
     ("baseline_proxy_candidates_raw", lambda: edw.get_baseline_proxy_candidates(), None),
+    ("reconciliation_findings", lambda: recon.get_all_findings(), None),
 ]
 
 _refresh_lock = threading.Lock()

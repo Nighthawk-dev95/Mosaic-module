@@ -24,6 +24,7 @@ import type {
   DraftInsightSampleItem,
   EfficiencyDetail,
   ExternalFeedbackItem,
+  ReconciliationFinding,
   EfficiencyFilterOptions,
   EfficiencyMode,
   EfficiencyTrendPoint,
@@ -139,6 +140,7 @@ export const mosaicApi = {
   getFocusRadiologists: () => get<FocusRadiologistItem[]>("/efficiency/focus-radiologists"),
   getRadSentiment: () => get<RadSurveySummary>("/survey/rad-sentiment"),
   getExternalFeedback: () => get<ExternalFeedbackItem[]>("/external-feedback"),
+  getReconciliationFindings: () => get<ReconciliationFinding[]>("/reconciliation"),
   getCaptureOverview: () => get<CaptureOverview>("/capture/overview"),
   getCaptureByPractice: (practice?: string) =>
     get<CapturePracticeRollup[]>(`/capture/by-practice${practice ? `?practice=${encodeURIComponent(practice)}` : ""}`),

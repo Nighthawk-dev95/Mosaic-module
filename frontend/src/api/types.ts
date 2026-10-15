@@ -155,6 +155,16 @@ export interface ExternalFeedbackItem {
   submitted_at: string;
 }
 
+export interface ReconciliationFinding {
+  check: string;
+  scope: string;
+  entity: string;
+  expected: string;
+  actual: string;
+  magnitude: number;
+  detail: string | null;
+}
+
 export interface RadSummaryStat {
   npi: number;
   radiologist_name: string | null;

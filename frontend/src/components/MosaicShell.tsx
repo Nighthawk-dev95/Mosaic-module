@@ -10,6 +10,7 @@ const TABS = [
   { to: "/capacity", label: "Capacity" },
   { to: "/baseline-review", label: "Baseline Review" },
   { to: "/adoption-map", label: "Adoption Map" },
+  { to: "/reconciliation", label: "Reconciliation" },
   { to: "/external-feedback", label: "External Feedback" },
   { to: "/capture", label: "Capture" },
   { to: "/scorecard", label: "Scorecard" },

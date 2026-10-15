@@ -1,0 +1,29 @@
+# App resource definition, hand-written (not `bundle generate app`, which needs the `apps`
+# OAuth scope mosaic-oauth currently lacks - see databricks.yml's profile comment) from the
+# exact resource JSON this session's own `databricks apps update --json` call last applied
+# successfully (confirmed "App started successfully" at the time, and nothing since has run
+# another `apps update` that would have changed it - verify with `databricks bundle generate
+# app --existing-app-name practice-command-bhargav --key practice_command_bhargav` once
+# mosaic-oauth is re-authenticated, to confirm this still matches live state before trusting
+# it long-term).
+resources:
+  apps:
+    practice_command_bhargav:
+      name: practice-command-bhargav
+      description: 'practice command dev branch for Bhargav'
+      source_code_path: ../backend
+      resources:
+        - name: database
+          postgres:
+            branch: projects/practice-command-db/branches/dev-bhargav
+            database: projects/practice-command-db/branches/dev-bhargav/databases/databricks-postgres
+            permission: CAN_CONNECT_AND_CREATE
+        - name: sql-warehouse
+          sql_warehouse:
+            id: ${var.warehouse_id}
+            permission: CAN_USE
+        - name: ingest-secret
+          secret:
+            scope: mosaic-bhargav
+            key: ingest-shared-secret
+            permission: READ

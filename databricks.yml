@@ -1,0 +1,45 @@
+bundle:
+  name: mosaic-module
+
+# Replaces the manual `databricks sync --exclude-from .databricksignore --include
+# "backend/static/**"` + `databricks apps deploy --source-code-path ...` dance used all prior
+# session - this bundle encodes both the force-include (backend/static/ is gitignored, since
+# it's a local build artifact, but the deployed app needs to serve it) and the force-exclude
+# (large local scratch data pulls that were never meant to leave this machine) in one place,
+# so `databricks bundle deploy` + `databricks bundle run practice_command_bhargav` is the whole
+# deploy going forward - no more MSYS_NO_PATHCONV/path-quoting workarounds either, since the
+# CLI's own bundle commands don't share raw `sync`'s Windows/MSYS path-mangling issue.
+sync:
+  include:
+    - backend/static/**
+  exclude:
+    - '*.sqlite3'
+    - '*.sqlite3-wal'
+    - '*.sqlite3-shm'
+    - Radiologist_Timestamp_Pull_Apr2025_Oct2026.csv
+    - Radiologist_Timestamp_Pull_Jan2024_Oct2026_AllMosaic.csv
+    - diagnostic_mammo_readtimes_jun_sep2026.csv
+    - mammo_accession_detail_full.csv
+    - mammo_discrepancies_jun_sep2026.csv
+    - _tmp_pull/**
+
+include:
+  - resources/*.yml
+
+variables:
+  warehouse_id:
+    description: 'EDW-PRODServerless-DBX, the SQL warehouse this app queries enterprise_analytics through'
+    default: fe0ad987563c672a
+
+targets:
+  bhargav:
+    default: true
+    mode: development
+    workspace:
+      host: https://adb-7306149455716415.15.azuredatabricks.net
+      # Apps management (unlike plain SQL/warehouse access) requires an OAuth-capable profile,
+      # not a PAT - confirmed live this session (`mosaic-app`'s PAT fails with "Provided access
+      # token does not have required scopes: apps" on every apps/* command). Re-authenticate
+      # with `databricks auth login --host <host> --profile mosaic-oauth` if this errors with
+      # an expired-refresh-token message.
+      profile: mosaic-oauth

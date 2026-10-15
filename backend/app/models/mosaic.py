@@ -575,3 +575,19 @@ class BaselineProxyCandidate(BaseModel):
     # baseline_overrides.py can recompute a shift's capacity rate when a reviewer picks a
     # non-rank-1 candidate, without a second EDW round-trip.
     baseline_tbwu_per_hour: float | None
+
+
+class ReconciliationFinding(BaseModel):
+    """One row of the Reconciliation tab's unified divergence feed - "where the counts
+    disagree", mirroring the pattern (not the data source) of PCC's native Mosaic Intelligence
+    Reconciliation tab. Each of reconciliation_service.py's 3 checks emits a list of these;
+    get_all_findings() concatenates and sorts by magnitude descending across all of them, so
+    the feed reads biggest-divergence-first regardless of which check it came from."""
+
+    check: str  # "mosaic_flag_mismatch" | "seal_team_mislabeling" | "seal_baseline_drift"
+    scope: str  # human label for what's being compared, e.g. "Practice", "Radiologist (NPI)"
+    entity: str  # the practice name / NPI+name / etc this finding is about
+    expected: str
+    actual: str
+    magnitude: float  # whatever that check's own natural count is - sorts findings descending
+    detail: str | None = None
