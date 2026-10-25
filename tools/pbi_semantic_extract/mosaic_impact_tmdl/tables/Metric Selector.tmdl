@@ -1,0 +1,58 @@
+table 'Metric Selector'
+	lineageTag: 19bc33c0-0367-40d0-8031-1f3a756ecdee
+
+	measure 'Selected Metric Value (Top N)' =
+			
+			VAR SelectedMetric = SELECTEDVALUE('Metric Selector'[Metric])
+			VAR CapacityVal = [New Capacity RPWU 9h(Top N)]
+			VAR EfficiencyVal = [New Efficiency(Top N)]
+			VAR UtilizationVal = [New Utilization(Top N)] * 100
+			RETURN
+			SWITCH(
+			    SelectedMetric,
+			    "Capacity (TBWU/9h)", FORMAT(CapacityVal, "#,##0"),
+			    "On-Shift Efficiency (TBWU/min)", FORMAT(EfficiencyVal, "0.000"),
+			    "Shift Util. (% reading)", IF(ISBLANK(UtilizationVal), BLANK(), FORMAT(UtilizationVal, "0") & "%"),
+			    IF(ISBLANK(UtilizationVal), BLANK(), FORMAT(UtilizationVal, "0") & "%")
+			)
+		lineageTag: ca008ce8-37ea-4936-8714-793f2a788c9c
+
+	measure 'Selected Metric Title' =
+			
+			VAR SelectedMetric = SELECTEDVALUE('Metric Selector'[Metric], "Select a Metric")
+			RETURN SelectedMetric
+		lineageTag: 97b4b924-9499-4d9f-a5de-da1165803855
+
+	column Metric
+		lineageTag: d3e47247-cb50-46b6-8892-73d3a17fd4a8
+		summarizeBy: none
+		isNameInferred
+		sourceColumn: [Metric]
+		sortByColumn: SortOrder
+
+		annotation SummarizationSetBy = Automatic
+
+	column SortOrder
+		formatString: 0
+		lineageTag: 48fa00a9-b700-4e56-b02c-4dd447da4dbf
+		summarizeBy: sum
+		isNameInferred
+		sourceColumn: [SortOrder]
+
+		annotation SummarizationSetBy = Automatic
+
+	partition 'Metric Selector' = calculated
+		mode: import
+		source =
+				DATATABLE(
+				    "Metric", STRING,
+				    "SortOrder", INTEGER,
+				    {
+				        {"Capacity (TBWU/9h)", 1},
+				        {"On-Shift Efficiency (TBWU/min)", 2},
+				        {"Shift Util. (% reading)", 3}
+				    }
+				)
+
+	annotation PBI_Id = 601d815117c94fb9ad00171a7fb196df
+

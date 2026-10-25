@@ -1,0 +1,45 @@
+table 'Shift Length Lookup'
+	lineageTag: 41e16d31-63a2-4ea2-b4cf-347b4488bcc3
+
+	column no_hours
+		lineageTag: 7f4f1fc1-6bbd-4267-ba65-95ccedf3cea2
+		summarizeBy: none
+		isNameInferred
+		sourceColumn: 0. Cur[no_hours]
+		columnOrigin: '0. Cur'.no_hours
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column 'Shift Length Display'
+		lineageTag: 77415871-459a-48c9-95b0-2a7920df43fc
+		summarizeBy: none
+		isNameInferred
+		sourceColumn: [Shift Length Display]
+		sortByColumn: 'Sort Order'
+
+		annotation SummarizationSetBy = Automatic
+
+	column 'Sort Order'
+		lineageTag: fdb811f3-bdca-4f82-a6ae-e0c0fb1b48a1
+		summarizeBy: none
+		isNameInferred
+		sourceColumn: [Sort Order]
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	partition 'Shift Length Lookup' = calculated
+		mode: import
+		source =
+				
+				ADDCOLUMNS(
+				    DISTINCT('0. Cur'[no_hours]),
+				    "Shift Length Display", FORMAT(ROUND([no_hours], 0), "0"),
+				    "Sort Order", ROUND([no_hours], 0)
+				)
+
+	annotation PBI_Id = 2686b5d062c54ef79cbe378546d8ad99
+

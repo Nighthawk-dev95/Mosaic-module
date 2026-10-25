@@ -1,0 +1,20 @@
+table IsFullData
+	lineageTag: 0c512c05-cbc0-47ee-aea8-cdf18fba0de2
+
+	column IsFullData
+		dataType: boolean
+		formatString: """TRUE"";""TRUE"";""FALSE"""
+		lineageTag: 19fac21a-33f3-4c08-8771-544a4a49fb76
+		summarizeBy: none
+		sourceColumn: IsFullData
+
+		annotation SummarizationSetBy = Automatic
+
+	partition IsFullData = m
+		mode: import
+		source = false meta [IsParameterQuery=true, Type="Logical", IsParameterQueryRequired=true]
+
+	annotation PBI_NavigationStepName = Navigation
+
+	annotation PBI_ResultType = Logical
+

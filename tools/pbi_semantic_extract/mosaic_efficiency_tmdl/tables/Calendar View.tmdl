@@ -1,0 +1,45 @@
+table 'Calendar View'
+	lineageTag: 829a588f-0f61-4df7-a635-3ca7b4ea1fb0
+
+	column Parameter
+		lineageTag: 4d6c07b8-99dc-4566-8dc9-27fd7866f4ba
+		summarizeBy: none
+		sourceColumn: [Value1]
+		sortByColumn: 'Parameter Order'
+
+		relatedColumnDetails
+			groupByColumn: 'Parameter Fields'
+
+		annotation SummarizationSetBy = Automatic
+
+	column 'Parameter Fields'
+		isHidden
+		lineageTag: cec4f28a-1070-483d-a216-6d96568ef1c7
+		summarizeBy: none
+		sourceColumn: [Value2]
+		sortByColumn: 'Parameter Order'
+
+		extendedProperty ParameterMetadata = {"version":3,"kind":2}
+
+		annotation SummarizationSetBy = Automatic
+
+	column 'Parameter Order'
+		isHidden
+		formatString: 0
+		lineageTag: a0a38d0c-14ce-423e-97e3-aff9b4f22bb6
+		summarizeBy: sum
+		sourceColumn: [Value3]
+
+		annotation SummarizationSetBy = Automatic
+
+	partition 'Calendar View' = calculated
+		mode: import
+		source =
+				{
+				    ("By Week", NAMEOF('radiologist_metrics'[Week_Date]),1 ),
+				    ("By Month", NAMEOF('radiologist_metrics'[Beginning_of_Month]),2 ),
+				    ("By Day", NAMEOF('radiologist_metrics'[Exam_Date]), 0)
+				}
+
+	annotation PBI_Id = 7cbf9d86cb304f7ca206e56daf7c5829
+

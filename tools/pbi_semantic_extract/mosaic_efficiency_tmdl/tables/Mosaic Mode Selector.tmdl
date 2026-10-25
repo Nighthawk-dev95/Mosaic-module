@@ -1,0 +1,41 @@
+table 'Mosaic Mode Selector'
+	lineageTag: b7cd9606-fd28-41c4-b45c-b1de4a10e20d
+
+	column Mode
+		lineageTag: 022040a3-44cb-4cfe-857a-4a4c29ee5a33
+		summarizeBy: none
+		isNameInferred
+		sourceColumn: [Mode]
+		sortByColumn: SortOrder
+
+		annotation SummarizationSetBy = Automatic
+
+	column SortOrder
+		formatString: 0
+		lineageTag: e442fc0d-459f-4fb8-82ee-3db819cbaca7
+		summarizeBy: sum
+		isNameInferred
+		sourceColumn: [SortOrder]
+
+		annotation SummarizationSetBy = Automatic
+
+	partition 'Mosaic Mode Selector' = calculated
+		mode: import
+		source = ```
+				
+				DATATABLE(
+				    "Mode", STRING,
+				    "SortOrder", INTEGER,
+				    {
+				        {"Drafting Only", 0},
+				        {"Capture Only", 1},
+				        {"Drafting + Capture", 2},
+				        {"Full Mosaic", 3},
+				        {"Reporting Only", 4}, 
+				        {"Both", 5}
+				    }
+				)
+				```
+
+	annotation PBI_Id = c0f81a8aef194b348cb6d9588f6992c8
+

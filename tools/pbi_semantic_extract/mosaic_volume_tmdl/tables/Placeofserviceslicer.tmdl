@@ -1,0 +1,51 @@
+table Placeofserviceslicer
+	lineageTag: 3f690f64-d8a1-4fd7-a46d-e7e41dd18cde
+
+	measure Placeofservicecategory = ```
+			
+			var POS = SELECTEDVALUE('Daily_Extract'[Place Of Service])
+			
+			RETURN
+			SWITCH(
+			    TRUE(), 
+			    POS = "Emergency Room – Hospital" , "Emergency Room", 
+			    POS = "Inpatient Hospital" || POS = "N/A", "Inpatient", 
+			    POS = "On Campus-Outpatient Hospital" ||POS = "Urgent Care Facility" || POS = "UNK",  "Outpatient", 
+			    blank()
+			)
+			```
+		lineageTag: 219f0925-d2fe-4fcd-b72e-6b9e0aae4234
+
+	measure PlaceofServiceFilter = ```
+			
+			var selectedcat = VALUES(Placeofserviceslicer[Category])
+			var applysingle = COUNTROWS(selectedcat) = 1
+			var thiscat = [Placeofservicecategory]
+			RETURN
+			IF( not applysingle, 1, 
+			IF(thiscat in selectedcat, 1, BLANK())
+			)
+			```
+		formatString: 0
+		lineageTag: 7fe2f98f-45fd-4dc4-8c82-d29be41cf65e
+
+	column Category
+		lineageTag: a536498a-3ee3-4454-9147-81b1c441c3ee
+		summarizeBy: none
+		isNameInferred
+		sourceColumn: [Category]
+
+		annotation SummarizationSetBy = Automatic
+
+	partition Placeofserviceslicer = calculated
+		mode: import
+		source = ```
+				DATATABLE("Category", STRING, {
+				    {"Inpatient"}, 
+				    {"Outpatient"}, {"Emergency Room"}
+				}
+				)
+				```
+
+	annotation PBI_Id = c8b0733f997b43b3a9e2becfde8c79c9
+

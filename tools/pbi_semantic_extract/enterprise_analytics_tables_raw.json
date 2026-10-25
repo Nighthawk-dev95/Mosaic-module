@@ -1,0 +1,457 @@
+[
+  {
+    "database": "enterprise_analytics",
+    "isTemporary": "false",
+    "tableName": "app_mdmc_contract_joc_ed_summary_vw"
+  },
+  {
+    "database": "enterprise_analytics",
+    "isTemporary": "false",
+    "tableName": "app_mdmc_contract_sla_compliance_day"
+  },
+  {
+    "database": "enterprise_analytics",
+    "isTemporary": "false",
+    "tableName": "app_mdmc_contract_sla_compliance_snap"
+  },
+  {
+    "database": "enterprise_analytics",
+    "isTemporary": "false",
+    "tableName": "app_mdmc_contract_sla_exam_stg"
+  },
+  {
+    "database": "enterprise_analytics",
+    "isTemporary": "false",
+    "tableName": "app_mdmc_contract_sla_site_status_vw"
+  },
+  {
+    "database": "enterprise_analytics",
+    "isTemporary": "false",
+    "tableName": "app_wd_fin_corp_ga_by_cost_center_vw"
+  },
+  {
+    "database": "enterprise_analytics",
+    "isTemporary": "false",
+    "tableName": "app_wd_fin_corp_statement_by_cost_center_vw"
+  },
+  {
+    "database": "enterprise_analytics",
+    "isTemporary": "false",
+    "tableName": "app_wd_fin_pl_base"
+  },
+  {
+    "database": "enterprise_analytics",
+    "isTemporary": "false",
+    "tableName": "app_wd_fin_pl_base_vw"
+  },
+  {
+    "database": "enterprise_analytics",
+    "isTemporary": "false",
+    "tableName": "app_wd_fin_pl_comp_detail"
+  },
+  {
+    "database": "enterprise_analytics",
+    "isTemporary": "false",
+    "tableName": "app_wd_fin_pl_comp_detail_vw"
+  },
+  {
+    "database": "enterprise_analytics",
+    "isTemporary": "false",
+    "tableName": "app_wd_fin_pl_filter_options"
+  },
+  {
+    "database": "enterprise_analytics",
+    "isTemporary": "false",
+    "tableName": "app_wd_fin_pl_plan_base"
+  },
+  {
+    "database": "enterprise_analytics",
+    "isTemporary": "false",
+    "tableName": "app_wd_fin_pl_plan_base_vw"
+  },
+  {
+    "database": "enterprise_analytics",
+    "isTemporary": "false",
+    "tableName": "app_wd_fin_pl_statement_by_practice_vw"
+  },
+  {
+    "database": "enterprise_analytics",
+    "isTemporary": "false",
+    "tableName": "app_wd_fin_pl_statement_by_segment_vw"
+  },
+  {
+    "database": "enterprise_analytics",
+    "isTemporary": "false",
+    "tableName": "app_wd_fin_pl_statement_consolidated_vw"
+  },
+  {
+    "database": "enterprise_analytics",
+    "isTemporary": "false",
+    "tableName": "app_wd_fin_pl_statement_vw"
+  },
+  {
+    "database": "enterprise_analytics",
+    "isTemporary": "false",
+    "tableName": "dynamics_rad_drafting_consent_vw"
+  },
+  {
+    "database": "enterprise_analytics",
+    "isTemporary": "false",
+    "tableName": "dynamics_rad_drafting_enablement_vw"
+  },
+  {
+    "database": "enterprise_analytics",
+    "isTemporary": "false",
+    "tableName": "edw_qa_badge_vw"
+  },
+  {
+    "database": "enterprise_analytics",
+    "isTemporary": "false",
+    "tableName": "edw_qa_current_vw"
+  },
+  {
+    "database": "enterprise_analytics",
+    "isTemporary": "false",
+    "tableName": "edw_qa_object_status_vw"
+  },
+  {
+    "database": "enterprise_analytics",
+    "isTemporary": "false",
+    "tableName": "edw_qa_results"
+  },
+  {
+    "database": "enterprise_analytics",
+    "isTemporary": "false",
+    "tableName": "genie_audit_messages"
+  },
+  {
+    "database": "enterprise_analytics",
+    "isTemporary": "false",
+    "tableName": "mosaic_drafting_metric_vw"
+  },
+  {
+    "database": "enterprise_analytics",
+    "isTemporary": "false",
+    "tableName": "mosaic_version_exam_lookup"
+  },
+  {
+    "database": "enterprise_analytics",
+    "isTemporary": "false",
+    "tableName": "payor_bill_charge_inventory_vw"
+  },
+  {
+    "database": "enterprise_analytics",
+    "isTemporary": "false",
+    "tableName": "provider_license_dsa_vw"
+  },
+  {
+    "database": "enterprise_analytics",
+    "isTemporary": "false",
+    "tableName": "provider_privileging_mdstaff_dsa_vw"
+  },
+  {
+    "database": "enterprise_analytics",
+    "isTemporary": "false",
+    "tableName": "qgenda_shift_dsa_vw"
+  },
+  {
+    "database": "enterprise_analytics",
+    "isTemporary": "false",
+    "tableName": "qgenda_staff_profile_dsa_vw"
+  },
+  {
+    "database": "enterprise_analytics",
+    "isTemporary": "false",
+    "tableName": "rad_targets_influx_attribution_baseline_20260820"
+  },
+  {
+    "database": "enterprise_analytics",
+    "isTemporary": "false",
+    "tableName": "rad_targets_qgenda_target_curr_vw"
+  },
+  {
+    "database": "enterprise_analytics",
+    "isTemporary": "false",
+    "tableName": "rad_targets_qgenda_target_hist"
+  },
+  {
+    "database": "enterprise_analytics",
+    "isTemporary": "false",
+    "tableName": "rad_targets_resolved_shift_target_vw"
+  },
+  {
+    "database": "enterprise_analytics",
+    "isTemporary": "false",
+    "tableName": "rad_targets_shift_target_change_vw"
+  },
+  {
+    "database": "enterprise_analytics",
+    "isTemporary": "false",
+    "tableName": "rad_targets_staff_stamp_snapshot"
+  },
+  {
+    "database": "enterprise_analytics",
+    "isTemporary": "false",
+    "tableName": "rad_targets_staff_target_change_vw"
+  },
+  {
+    "database": "enterprise_analytics",
+    "isTemporary": "false",
+    "tableName": "ref_dsa_mosaic_rad_go_live_curr"
+  },
+  {
+    "database": "enterprise_analytics",
+    "isTemporary": "false",
+    "tableName": "site_crosswalk_mdstaff_dsa_vw"
+  },
+  {
+    "database": "enterprise_analytics",
+    "isTemporary": "false",
+    "tableName": "site_master_curr_vw"
+  },
+  {
+    "database": "enterprise_analytics",
+    "isTemporary": "false",
+    "tableName": "tbl_exam_category_lookup_xwalk"
+  },
+  {
+    "database": "enterprise_analytics",
+    "isTemporary": "false",
+    "tableName": "tbl_exam_inventory"
+  },
+  {
+    "database": "enterprise_analytics",
+    "isTemporary": "false",
+    "tableName": "tbl_exam_inventory_dq_badge_vw"
+  },
+  {
+    "database": "enterprise_analytics",
+    "isTemporary": "false",
+    "tableName": "tbl_exam_inventory_dq_current_vw"
+  },
+  {
+    "database": "enterprise_analytics",
+    "isTemporary": "false",
+    "tableName": "tbl_exam_inventory_dq_latest_vw"
+  },
+  {
+    "database": "enterprise_analytics",
+    "isTemporary": "false",
+    "tableName": "tbl_exam_inventory_dq_results"
+  },
+  {
+    "database": "enterprise_analytics",
+    "isTemporary": "false",
+    "tableName": "tbl_exam_inventory_drift_metrics"
+  },
+  {
+    "database": "enterprise_analytics",
+    "isTemporary": "false",
+    "tableName": "tbl_exam_inventory_excluded"
+  },
+  {
+    "database": "enterprise_analytics",
+    "isTemporary": "false",
+    "tableName": "tbl_exam_inventory_metric_view"
+  },
+  {
+    "database": "enterprise_analytics",
+    "isTemporary": "false",
+    "tableName": "tbl_exam_inventory_profile_metrics"
+  },
+  {
+    "database": "enterprise_analytics",
+    "isTemporary": "false",
+    "tableName": "tbl_human_drafted_exams"
+  },
+  {
+    "database": "enterprise_analytics",
+    "isTemporary": "false",
+    "tableName": "tbl_mosaic_shift_utilization"
+  },
+  {
+    "database": "enterprise_analytics",
+    "isTemporary": "false",
+    "tableName": "tbl_mvp_rad_onboarding"
+  },
+  {
+    "database": "enterprise_analytics",
+    "isTemporary": "false",
+    "tableName": "tbl_seal_baseline_master"
+  },
+  {
+    "database": "enterprise_analytics",
+    "isTemporary": "false",
+    "tableName": "tbl_seal_roster"
+  },
+  {
+    "database": "enterprise_analytics",
+    "isTemporary": "false",
+    "tableName": "tbwu_exceptions_metric_view"
+  },
+  {
+    "database": "enterprise_analytics",
+    "isTemporary": "false",
+    "tableName": "tbwu_payroll_base"
+  },
+  {
+    "database": "enterprise_analytics",
+    "isTemporary": "false",
+    "tableName": "tbwu_payroll_filters"
+  },
+  {
+    "database": "enterprise_analytics",
+    "isTemporary": "false",
+    "tableName": "tbwu_payroll_ir_scope_stats"
+  },
+  {
+    "database": "enterprise_analytics",
+    "isTemporary": "false",
+    "tableName": "tbwu_payroll_resolved_shift_targets_v1"
+  },
+  {
+    "database": "enterprise_analytics",
+    "isTemporary": "false",
+    "tableName": "wd_fin_corp_ga_by_cost_center_vw"
+  },
+  {
+    "database": "enterprise_analytics",
+    "isTemporary": "false",
+    "tableName": "wd_fin_corp_statement_by_cost_center_vw"
+  },
+  {
+    "database": "enterprise_analytics",
+    "isTemporary": "false",
+    "tableName": "wd_fin_pl_base"
+  },
+  {
+    "database": "enterprise_analytics",
+    "isTemporary": "false",
+    "tableName": "wd_fin_pl_base_by_site_curr"
+  },
+  {
+    "database": "enterprise_analytics",
+    "isTemporary": "false",
+    "tableName": "wd_fin_pl_base_by_site_vw"
+  },
+  {
+    "database": "enterprise_analytics",
+    "isTemporary": "false",
+    "tableName": "wd_fin_pl_base_curr"
+  },
+  {
+    "database": "enterprise_analytics",
+    "isTemporary": "false",
+    "tableName": "wd_fin_pl_base_vw"
+  },
+  {
+    "database": "enterprise_analytics",
+    "isTemporary": "false",
+    "tableName": "wd_fin_pl_comp_detail"
+  },
+  {
+    "database": "enterprise_analytics",
+    "isTemporary": "false",
+    "tableName": "wd_fin_pl_comp_detail_curr"
+  },
+  {
+    "database": "enterprise_analytics",
+    "isTemporary": "false",
+    "tableName": "wd_fin_pl_comp_detail_vw"
+  },
+  {
+    "database": "enterprise_analytics",
+    "isTemporary": "false",
+    "tableName": "wd_fin_pl_detail"
+  },
+  {
+    "database": "enterprise_analytics",
+    "isTemporary": "false",
+    "tableName": "wd_fin_pl_detail_curr"
+  },
+  {
+    "database": "enterprise_analytics",
+    "isTemporary": "false",
+    "tableName": "wd_fin_pl_detail_vw"
+  },
+  {
+    "database": "enterprise_analytics",
+    "isTemporary": "false",
+    "tableName": "wd_fin_pl_filter_options"
+  },
+  {
+    "database": "enterprise_analytics",
+    "isTemporary": "false",
+    "tableName": "wd_fin_pl_filter_options_curr"
+  },
+  {
+    "database": "enterprise_analytics",
+    "isTemporary": "false",
+    "tableName": "wd_fin_pl_plan_base"
+  },
+  {
+    "database": "enterprise_analytics",
+    "isTemporary": "false",
+    "tableName": "wd_fin_pl_plan_base_curr"
+  },
+  {
+    "database": "enterprise_analytics",
+    "isTemporary": "false",
+    "tableName": "wd_fin_pl_plan_base_vw"
+  },
+  {
+    "database": "enterprise_analytics",
+    "isTemporary": "false",
+    "tableName": "wd_fin_pl_revenue_by_site_metric_view"
+  },
+  {
+    "database": "enterprise_analytics",
+    "isTemporary": "false",
+    "tableName": "wd_fin_pl_statement_by_practice_vw"
+  },
+  {
+    "database": "enterprise_analytics",
+    "isTemporary": "false",
+    "tableName": "wd_fin_pl_statement_by_segment_site_vw"
+  },
+  {
+    "database": "enterprise_analytics",
+    "isTemporary": "false",
+    "tableName": "wd_fin_pl_statement_by_segment_vw"
+  },
+  {
+    "database": "enterprise_analytics",
+    "isTemporary": "false",
+    "tableName": "wd_fin_pl_statement_consolidated_vw"
+  },
+  {
+    "database": "enterprise_analytics",
+    "isTemporary": "false",
+    "tableName": "wd_fin_pl_statement_vw"
+  },
+  {
+    "database": "enterprise_analytics",
+    "isTemporary": "false",
+    "tableName": "workday_recruiting_dsa_vw"
+  },
+  {
+    "database": "enterprise_analytics",
+    "isTemporary": "false",
+    "tableName": "workday_workers_dsa_vw"
+  },
+  {
+    "database": "enterprise_analytics",
+    "isTemporary": "false",
+    "tableName": "workday_workers_metric_view"
+  },
+  {
+    "database": "enterprise_analytics",
+    "isTemporary": "false",
+    "tableName": "workday_workers_mismatch_with_provider_master_vw"
+  },
+  {
+    "database": "enterprise_analytics",
+    "isTemporary": "false",
+    "tableName": "workday_workers_with_provider_master_vw"
+  }
+]

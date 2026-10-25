@@ -1,0 +1,25 @@
+---- Sat 10/24/2026 17:33:33.28 ---- 
+Last loaded day: 2026-10-23. Pulling 2 day(s) (including 2 day(s) of refresh lookback): 2026-10-22 .. 2026-10-23.
+  2026-10-22: 87208 rows
+  2026-10-23: 84489 rows
+Combined 171697 rows across 2 day(s). Staging and merging...
+Merge result: {'num_affected_rows': '171342', 'num_deleted_rows': '0', 'num_inserted_rows': '0', 'num_updated_rows': '171342'}
+---- Sat 10/24/2026 20:15:01.84 ---- 
+Last loaded day: 2026-10-23. Pulling 2 day(s) (including 2 day(s) of refresh lookback): 2026-10-22 .. 2026-10-23.
+  2026-10-22: 87208 rows
+  2026-10-23: 84489 rows
+Combined 171697 rows across 2 day(s). Staging and merging...
+Merge result: {'num_affected_rows': '171342', 'num_deleted_rows': '0', 'num_inserted_rows': '0', 'num_updated_rows': '171342'}
+---- Sun 10/25/2026  7:31:14.28 ---- 
+Last loaded day: 2026-10-23. Pulling 3 day(s) (including 2 day(s) of refresh lookback): 2026-10-22 .. 2026-10-24.
+  2026-10-22: 87226 rows
+  2026-10-23: 84565 rows
+  2026-10-24: 54802 rows
+Combined 226593 rows across 3 day(s). Staging and merging...
+Merge result: {'num_affected_rows': '225999', 'num_deleted_rows': '0', 'num_inserted_rows': '54592', 'num_updated_rows': '171407'}
+---- Sun 10/25/2026  8:15:01.50 ---- 
+Last loaded day: 2026-10-24. Pulling 2 day(s) (including 2 day(s) of refresh lookback): 2026-10-23 .. 2026-10-24.
+  2026-10-23: 84565 rows
+  2026-10-24: 54802 rows
+Combined 139367 rows across 2 day(s). Staging and merging...
+Merge result: {'num_affected_rows': '139150', 'num_deleted_rows': '0', 'num_inserted_rows': '0', 'num_updated_rows': '139150'}

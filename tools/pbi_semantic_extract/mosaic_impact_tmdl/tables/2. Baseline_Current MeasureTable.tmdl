@@ -1,0 +1,202 @@
+table '2. Baseline_Current MeasureTable'
+	lineageTag: 73501c55-c9fe-4bfa-b67b-5e6e41201a39
+
+	measure 'Unit/Shift (State)' = ```
+			
+			SWITCH(SELECTEDVALUE('2. Baseline_Current MeasureTable'[State]),
+			"Baseline", [Average Baseline (Top N)],
+			[New Capacity (Top N)])
+			
+			```
+		lineageTag: 714ed4c7-6af9-490a-81bb-6e33589b7c8f
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	measure 'Case/Shift (State)' = ```
+			
+			SWITCH(SELECTEDVALUE('2. Baseline_Current MeasureTable'[State]),
+			"Baseline", [Average Baseline case (Top N)],
+			[Average On Shift Cases (Top N)])
+			
+			```
+		lineageTag: 0994b354-c1c7-48a2-9ee6-60282c537888
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	measure '% CT (State)' = ```
+			
+			SWITCH(SELECTEDVALUE('2. Baseline_Current MeasureTable'[State]),
+			"Baseline", [% CT (Baseline)],
+			[% CT(Top N)])
+			
+			```
+		formatString: 0%;-0%;0%
+		lineageTag: 0be11e2e-01f7-4dcd-a8e4-7da339191aa3
+
+	measure '% IR (State)' = ```
+			
+			SWITCH(SELECTEDVALUE('2. Baseline_Current MeasureTable'[State]),
+			"Baseline", [% IR (Baseline)],
+			[% IR(Top N)])
+			
+			```
+		formatString: 0%;-0%;0%
+		lineageTag: e802c924-d8d7-4010-bd21-e18b9b52c0a0
+
+	measure '% MR (State)' = ```
+			
+			SWITCH(SELECTEDVALUE('2. Baseline_Current MeasureTable'[State]),
+			"Baseline", [% MR (Baseline)],
+			[% MR(Top N)])
+			
+			```
+		formatString: 0%;-0%;0%
+		lineageTag: fe78959e-e0f3-498d-8e2b-aea6bb816cb3
+
+	measure '% NM (State)' = ```
+			
+			SWITCH(SELECTEDVALUE('2. Baseline_Current MeasureTable'[State]),
+			"Baseline", [% NM (Baseline)],
+			[% NM(Top N)])
+			
+			```
+		formatString: 0%;-0%;0%
+		lineageTag: 77c9201b-9332-4f50-bc7b-93af7f6e4272
+
+	measure '% Other (State)' = ```
+			
+			SWITCH(SELECTEDVALUE('2. Baseline_Current MeasureTable'[State]),
+			"Baseline", [% Other (Baseline)],
+			[% Other(Top N)])
+			
+			```
+		formatString: 0%;-0%;0%
+		lineageTag: 0ab36a8f-70a2-4a3c-b3b6-c7e5562b474b
+
+	measure '% PT (State)' = ```
+			
+			SWITCH(SELECTEDVALUE('2. Baseline_Current MeasureTable'[State]),
+			"Baseline", [% PT (Baseline)],
+			[% PT(Top N)])
+			
+			```
+		formatString: 0%;-0%;0%
+		lineageTag: ffdd0193-6ef2-4638-886f-780306625107
+
+	measure '% Routine (State)' = ```
+			
+			SWITCH(SELECTEDVALUE('2. Baseline_Current MeasureTable'[State]),
+			"Baseline", [% Routine (Baseline)],
+			[% Routine(Top N)])
+			
+			```
+		formatString: 0%;-0%;0%
+		lineageTag: a196a057-2723-4fe1-be47-effa4a93db6d
+
+	measure '% Stat (State)' = ```
+			
+			SWITCH(SELECTEDVALUE('2. Baseline_Current MeasureTable'[State]),
+			"Baseline", [% Stat (Baseline)],
+			[% Stat(Top N)])
+			
+			```
+		formatString: 0%;-0%;0%
+		lineageTag: 69f50b9e-e8f1-4096-87ed-a66f2dc7fb45
+
+	measure '% Stroke (State)' = ```
+			
+			SWITCH(SELECTEDVALUE('2. Baseline_Current MeasureTable'[State]),
+			"Baseline", [% Stroke (Baseline)],
+			[% Stroke(Top N)])
+			
+			```
+		formatString: 0%;-0%;0%
+		lineageTag: 474e0b56-cc6b-4bed-8425-db0928aaa9c1
+
+	measure '% Trauma (State)' = ```
+			
+			SWITCH(SELECTEDVALUE('2. Baseline_Current MeasureTable'[State]),
+			"Baseline", [% Trauma (Baseline)],
+			[% Trauma(Top N)])
+			
+			```
+		formatString: 0%;-0%;0%
+		lineageTag: ed5862ac-dc71-4fc7-b146-8e7ed1e32790
+
+	measure '% US (State)' = ```
+			
+			SWITCH(SELECTEDVALUE('2. Baseline_Current MeasureTable'[State]),
+			"Baseline", [% US (Baseline)],
+			[% US(Top N)])
+			
+			```
+		formatString: 0%;-0%;0%
+		lineageTag: afc096f3-81b0-4b12-a438-a16366dcdbcf
+
+	measure '% XR (State)' = ```
+			
+			SWITCH(SELECTEDVALUE('2. Baseline_Current MeasureTable'[State]),
+			"Baseline", [% XR (Baseline)],
+			[% XR(Top N)])
+			
+			```
+		formatString: 0%;-0%;0%
+		lineageTag: 01ac5115-c8d4-47d5-870e-0725c8ca9c4d
+
+	measure '% OtherP (State)' = ```
+			
+			SWITCH(SELECTEDVALUE('2. Baseline_Current MeasureTable'[State]),
+			"Baseline", [% Other P (Baseline)],
+			[% Other P(Top N)])
+			
+			```
+		formatString: 0%;-0%;0%
+		lineageTag: 7333c3e0-91a9-4494-9722-38f8d53d6bd5
+
+	measure 'Average Baseline case (Top N)' = ```
+			
+			AVERAGEX(
+			    FILTER(
+			        ('0. Cur'),
+			        [Rank_TopN] =1),
+			   // '0. Cur'[shift_baseline]
+			   [Shift Case Baseline]
+			)
+			
+			```
+		lineageTag: d0dd6cc9-e87c-4e9c-9042-860578a5d4e7
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	measure '% MG (State)' = ```
+			
+			SWITCH(SELECTEDVALUE('2. Baseline_Current MeasureTable'[State]),
+			"Baseline", [% MG (Baseline)],
+			[% MG(Top N)])
+			
+			```
+		lineageTag: 4b01e141-97db-4edd-9b5b-db62c5ab374f
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column State
+		dataType: string
+		lineageTag: 9a363127-59f7-49ba-a9a5-ae274bd25151
+		summarizeBy: none
+		sourceColumn: State
+
+		annotation SummarizationSetBy = Automatic
+
+	partition '2. Baseline_Current MeasureTable' = m
+		mode: import
+		source =
+				let
+				    Source = Table.FromRows(Json.Document(Binary.Decompress(Binary.FromText("i45WckosTs3JzEtVitWJVnIuLSpKzStRio0FAA==", BinaryEncoding.Base64), Compression.Deflate)), let _t = ((type nullable text) meta [Serialized.Text = true]) in type table [State = _t]),
+				    #"Changed Type" = Table.TransformColumnTypes(Source,{{"State", type text}})
+				in
+				    #"Changed Type"
+
+	annotation PBI_ResultType = Table
+
+	annotation PBI_NavigationStepName = Navigation
+

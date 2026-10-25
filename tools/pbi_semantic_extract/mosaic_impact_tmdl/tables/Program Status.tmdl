@@ -1,0 +1,45 @@
+table 'Program Status'
+	lineageTag: 60eb1c03-1a00-4f7c-ab1e-1874c56f7e18
+
+	column npi
+		dataType: string
+		lineageTag: d2d6e17f-6ae9-4335-9199-015f34bd21f7
+		summarizeBy: none
+		sourceColumn: npi
+
+		annotation SummarizationSetBy = Automatic
+
+	column rad_name
+		dataType: string
+		lineageTag: 7a543c0f-b95b-42a9-967e-6f16dd8b61fe
+		summarizeBy: none
+		sourceColumn: rad_name
+
+		annotation SummarizationSetBy = Automatic
+
+	column 1_1_launch_status
+		dataType: string
+		lineageTag: ae2a6199-4fb6-46ce-812f-9697f483f4ca
+		summarizeBy: none
+		sourceColumn: 1_1_launch_status
+
+		annotation SummarizationSetBy = Automatic
+
+	partition 'Program Status' = m
+		mode: import
+		source =
+				let
+				    Source = Databricks.Catalogs("adb-7306149455716415.15.azuredatabricks.net", "/sql/protocolv1/o/7306149455716415/1001-005109-y614eyxc", [Catalog=null, Database=null, EnableAutomaticProxyDiscovery=null, Implementation=null]),
+				    edw_prod_Database = Source{[Name="edw_prod",Kind="Database"]}[Data],
+				    edw_gold_Schema = edw_prod_Database{[Name="edw_gold",Kind="Schema"]}[Data],
+				    #"dataverse_m365-vra-dynamics-prod_rad_onboarding_contacts_vw_View" = edw_gold_Schema{[Name="dataverse_m365-vra-dynamics-prod_rad_onboarding_contacts_vw",Kind="View"]}[Data],
+				    #"Removed Columns" = Table.RemoveColumns(#"dataverse_m365-vra-dynamics-prod_rad_onboarding_contacts_vw_View",{"current_vra_models"}),
+				    #"Removed Duplicates" = Table.Distinct(#"Removed Columns", {"npi"}),
+				    #"Filtered Rows" = Table.SelectRows(#"Removed Duplicates", each [npi] <> null and [npi] <> "")
+				in
+				    #"Filtered Rows"
+
+	annotation PBI_NavigationStepName = Navigation
+
+	annotation PBI_ResultType = Table
+

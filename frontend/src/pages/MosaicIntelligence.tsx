@@ -8,8 +8,10 @@ import { RpceTrendChart } from "../components/RpceTrendChart";
 import { DataTable, fmtPct } from "../components/DataTable";
 import type { DataTableColumn } from "../components/DataTable";
 import { FilterBar } from "../components/FilterBar";
+import { BlockerStackedChart } from "../components/BlockerStackedChart";
 import { useFilters, matchesPractice, matchesRadiologistSearch } from "../context/FilterContext";
 import { CARD_STYLE } from "../styles/glassCard";
+import { AIHoverCard } from "../components/AIHoverCard";
 import type { RadSummaryStat, ThemeStat, LikertDistribution, PracticeNpsStat } from "../api/types";
 
 // Ranked horizontal bars for magnitude comparison (same pattern/reasoning as ScorecardDetail's
@@ -102,8 +104,13 @@ export function MosaicIntelligence() {
   const trend = useFetch(() => mosaicApi.getRpceTrend(filters.practice || undefined), [filters.practice]);
   const radStats = useFetch(() => mosaicApi.getRadSummaryStats(), []);
   const survey = useFetch(() => mosaicApi.getRadSentiment(), []);
+  // Folded in from the retired Deployment tab (see memory/tab audit) - the enablement-blocker
+  // breakdown was the one piece of that tab not duplicated elsewhere; its waterfalls/tables
+  // were cut since Today's own stat tiles + RPCE-split block already covered that ground.
+  const blockersDrafting = useFetch(() => mosaicApi.getDeploymentBlockersDrafting(), []);
+  const blockersCtAbdpel = useFetch(() => mosaicApi.getDeploymentBlockersCtAbdpel(), []);
 
-  const anyError = snapshot.error || trend.error || radStats.error;
+  const anyError = snapshot.error || trend.error || radStats.error || blockersDrafting.error || blockersCtAbdpel.error;
 
   const practices = useMemo(() => {
     if (!radStats.data) return [];
@@ -119,6 +126,15 @@ export function MosaicIntelligence() {
         (!groupFilter || r.drafting_groups.includes(groupFilter))
     );
   }, [radStats.data, filters, groupFilter]);
+
+  const filteredBlockersDrafting = useMemo(
+    () => (blockersDrafting.data ?? []).filter((r) => matchesPractice(filters, r.practice)),
+    [blockersDrafting.data, filters]
+  );
+  const filteredBlockersCtAbdpel = useMemo(
+    () => (blockersCtAbdpel.data ?? []).filter((r) => matchesPractice(filters, r.practice)),
+    [blockersCtAbdpel.data, filters]
+  );
 
   const filteredTrend = useMemo(() => {
     if (!trend.data) return [];
@@ -144,38 +160,76 @@ export function MosaicIntelligence() {
       <FilterBar practices={practices} showLocal={false} />
 
       <div style={{ display: "flex", gap: 16, flexWrap: "wrap" }}>
-        <StatTile
-          label="Rads Live on Mosaic"
+        <AIHoverCard
+          feature="adoption_rollout"
+          entityLabel="Enterprise-wide"
+          metricLabel="Rads Live on Mosaic"
           value={snapshot.data ? fmt(snapshot.data.rads_live_on_mosaic) : "…"}
-          accent="var(--color-primary)"
-        />
-        <StatTile
-          label="Rads Live on AI Drafting"
+          underline={false}
+          style={{ flex: "1 1 200px", minWidth: 180 }}
+        >
+          <StatTile label="Rads Live on Mosaic" value={snapshot.data ? fmt(snapshot.data.rads_live_on_mosaic) : "…"} accent="var(--color-primary)" />
+        </AIHoverCard>
+        <AIHoverCard
+          feature="adoption_rollout"
+          entityLabel="Enterprise-wide"
+          metricLabel="Rads Live on AI Drafting"
           value={snapshot.data ? fmt(snapshot.data.rads_live_on_ai_drafting) : "…"}
-          accent="var(--color-primary)"
-        />
-        <StatTile
-          label="% RPCE Reporting"
+          underline={false}
+          style={{ flex: "1 1 200px", minWidth: 180 }}
+        >
+          <StatTile label="Rads Live on AI Drafting" value={snapshot.data ? fmt(snapshot.data.rads_live_on_ai_drafting) : "…"} accent="var(--color-primary)" />
+        </AIHoverCard>
+        <AIHoverCard
+          feature="adoption_rollout"
+          entityLabel="Enterprise-wide"
+          metricLabel="% RPCE Reporting"
           value={snapshot.data ? fmtPct(snapshot.data.pct_rpce_reporting) : "…"}
-          accent="var(--domain-efficiency)"
-          trend={trend.data?.map((t) => t.pct_rpce_reporting ?? 0)}
-        />
-        <StatTile
-          label="% RPCE Drafting"
+          underline={false}
+          style={{ flex: "1 1 200px", minWidth: 180 }}
+        >
+          <StatTile
+            label="% RPCE Reporting"
+            value={snapshot.data ? fmtPct(snapshot.data.pct_rpce_reporting) : "…"}
+            accent="var(--domain-efficiency)"
+            trend={trend.data?.map((t) => t.pct_rpce_reporting ?? 0)}
+          />
+        </AIHoverCard>
+        <AIHoverCard
+          feature="adoption_rollout"
+          entityLabel="Enterprise-wide"
+          metricLabel="% RPCE Drafting"
           value={snapshot.data ? fmtPct(snapshot.data.pct_rpce_drafting) : "…"}
-          accent="var(--domain-efficiency)"
-          trend={trend.data?.map((t) => t.pct_rpce_drafting ?? 0)}
-        />
-        <StatTile
-          label="Rads Live on Capture"
+          underline={false}
+          style={{ flex: "1 1 200px", minWidth: 180 }}
+        >
+          <StatTile
+            label="% RPCE Drafting"
+            value={snapshot.data ? fmtPct(snapshot.data.pct_rpce_drafting) : "…"}
+            accent="var(--domain-efficiency)"
+            trend={trend.data?.map((t) => t.pct_rpce_drafting ?? 0)}
+          />
+        </AIHoverCard>
+        <AIHoverCard
+          feature="adoption_rollout"
+          entityLabel="Enterprise-wide"
+          metricLabel="Rads Live on Capture"
           value={snapshot.data ? fmt(snapshot.data.rads_live_on_capture) : "…"}
-          accent="var(--domain-capture)"
-        />
-        <StatTile
-          label="Rads Capture Enabled"
+          underline={false}
+          style={{ flex: "1 1 200px", minWidth: 180 }}
+        >
+          <StatTile label="Rads Live on Capture" value={snapshot.data ? fmt(snapshot.data.rads_live_on_capture) : "…"} accent="var(--domain-capture)" />
+        </AIHoverCard>
+        <AIHoverCard
+          feature="adoption_rollout"
+          entityLabel="Enterprise-wide"
+          metricLabel="Rads Capture Enabled"
           value={snapshot.data ? fmt(snapshot.data.rads_capture_enabled) : "…"}
-          accent="var(--domain-capture)"
-        />
+          underline={false}
+          style={{ flex: "1 1 200px", minWidth: 180 }}
+        >
+          <StatTile label="Rads Capture Enabled" value={snapshot.data ? fmt(snapshot.data.rads_capture_enabled) : "…"} accent="var(--domain-capture)" />
+        </AIHoverCard>
       </div>
 
       <div
@@ -190,24 +244,52 @@ export function MosaicIntelligence() {
           Practices on RPCE
         </div>
         <div style={{ display: "flex", gap: 32 }}>
-          <div>
-            <div style={{ fontSize: 28, fontWeight: 600, color: "var(--text-primary)" }}>
-              {snapshot.data ? snapshot.data.practices_fully_on_rpce : "…"}
+          <AIHoverCard
+            feature="adoption_rollout"
+            entityLabel="Enterprise-wide"
+            metricLabel="Practices fully on RPCE"
+            value={snapshot.data ? String(snapshot.data.practices_fully_on_rpce) : "…"}
+            extra={{
+              split_integration: snapshot.data ? String(snapshot.data.practices_split_integration) : "…",
+              not_on_rpce: snapshot.data ? String(snapshot.data.practices_not_on_rpce) : "…",
+            }}
+            underline={false}
+          >
+            <div>
+              <div style={{ fontSize: 28, fontWeight: 600, color: "var(--text-primary)" }}>
+                {snapshot.data ? snapshot.data.practices_fully_on_rpce : "…"}
+              </div>
+              <div style={{ fontSize: 12, color: "var(--text-muted)" }}>Fully on RPCE</div>
             </div>
-            <div style={{ fontSize: 12, color: "var(--text-muted)" }}>Fully on RPCE</div>
-          </div>
-          <div>
-            <div style={{ fontSize: 28, fontWeight: 600, color: "var(--text-secondary)" }}>
-              {snapshot.data ? snapshot.data.practices_split_integration : "…"}
+          </AIHoverCard>
+          <AIHoverCard
+            feature="adoption_rollout"
+            entityLabel="Enterprise-wide"
+            metricLabel="Practices with split RPCE integration"
+            value={snapshot.data ? String(snapshot.data.practices_split_integration) : "…"}
+            underline={false}
+          >
+            <div>
+              <div style={{ fontSize: 28, fontWeight: 600, color: "var(--text-secondary)" }}>
+                {snapshot.data ? snapshot.data.practices_split_integration : "…"}
+              </div>
+              <div style={{ fontSize: 12, color: "var(--text-muted)" }}>Split Integration</div>
             </div>
-            <div style={{ fontSize: 12, color: "var(--text-muted)" }}>Split Integration</div>
-          </div>
-          <div>
-            <div style={{ fontSize: 28, fontWeight: 600, color: "var(--text-muted)" }}>
-              {snapshot.data ? snapshot.data.practices_not_on_rpce : "…"}
+          </AIHoverCard>
+          <AIHoverCard
+            feature="adoption_rollout"
+            entityLabel="Enterprise-wide"
+            metricLabel="Practices not on RPCE"
+            value={snapshot.data ? String(snapshot.data.practices_not_on_rpce) : "…"}
+            underline={false}
+          >
+            <div>
+              <div style={{ fontSize: 28, fontWeight: 600, color: "var(--text-muted)" }}>
+                {snapshot.data ? snapshot.data.practices_not_on_rpce : "…"}
+              </div>
+              <div style={{ fontSize: 12, color: "var(--text-muted)" }}>Not on RPCE</div>
             </div>
-            <div style={{ fontSize: 12, color: "var(--text-muted)" }}>Not on RPCE</div>
-          </div>
+          </AIHoverCard>
         </div>
       </div>
 
@@ -225,6 +307,42 @@ export function MosaicIntelligence() {
         {trend.data && <RpceTrendChart data={filteredTrend} />}
       </div>
 
+      <div style={{ display: "flex", gap: 20, flexWrap: "wrap" }}>
+        <div style={{ background: "var(--surface-1)", border: "1px solid var(--border)", borderRadius: 8, padding: 16, flex: "1 1 480px" }}>
+          <div style={{ color: "var(--text-muted)", fontSize: 13, marginBottom: 4, textTransform: "uppercase", letterSpacing: 0.5 }}>
+            <AIHoverCard
+              feature="adoption_rollout"
+              entityLabel={filters.practice || "Enterprise-wide"}
+              metricLabel="Drafting enablement blockers - total blocked rads"
+              value={String(filteredBlockersDrafting.reduce((acc, r) => acc + r.count, 0))}
+            >
+              Drafting: Rads Blocked by Practice
+            </AIHoverCard>
+          </div>
+          <div style={{ color: "var(--text-muted)", fontSize: 12, marginBottom: 12 }}>
+            Eligible-but-not-yet-live rads only, stacked by blocker reason.
+          </div>
+          {blockersDrafting.data && <BlockerStackedChart data={filteredBlockersDrafting} />}
+        </div>
+
+        <div style={{ background: "var(--surface-1)", border: "1px solid var(--border)", borderRadius: 8, padding: 16, flex: "1 1 480px" }}>
+          <div style={{ color: "var(--text-muted)", fontSize: 13, marginBottom: 4, textTransform: "uppercase", letterSpacing: 0.5 }}>
+            <AIHoverCard
+              feature="adoption_rollout"
+              entityLabel={filters.practice || "Enterprise-wide"}
+              metricLabel="CT Abd/Pel enablement blockers - total blocked rads"
+              value={String(filteredBlockersCtAbdpel.reduce((acc, r) => acc + r.count, 0))}
+            >
+              CT Abd/Pel: Rads Blocked by Practice
+            </AIHoverCard>
+          </div>
+          <div style={{ color: "var(--text-muted)", fontSize: 12, marginBottom: 12 }}>
+            Eligible-but-not-yet-enabled rads only, stacked by blocker reason.
+          </div>
+          {blockersCtAbdpel.data && <BlockerStackedChart data={filteredBlockersCtAbdpel} />}
+        </div>
+      </div>
+
       {survey.data && (
         <>
           <div>
@@ -236,12 +354,26 @@ export function MosaicIntelligence() {
           </div>
 
           <div style={{ display: "flex", gap: 16, flexWrap: "wrap" }}>
-            <StatTile
-              label="Net Promoter Score"
+            <AIHoverCard
+              feature="sentiment"
+              entityLabel="Enterprise-wide"
+              metricLabel="Net Promoter Score"
               value={survey.data.nps.toFixed(1)}
-              accent="var(--status-critical)"
-              sublabel={`${survey.data.promoters} promoters · ${survey.data.passives} passives · ${survey.data.detractors} detractors`}
-            />
+              extra={{
+                promoters: String(survey.data.promoters),
+                passives: String(survey.data.passives),
+                detractors: String(survey.data.detractors),
+              }}
+              underline={false}
+              style={{ flex: "1 1 200px", minWidth: 180 }}
+            >
+              <StatTile
+                label="Net Promoter Score"
+                value={survey.data.nps.toFixed(1)}
+                accent="var(--status-critical)"
+                sublabel={`${survey.data.promoters} promoters · ${survey.data.passives} passives · ${survey.data.detractors} detractors`}
+              />
+            </AIHoverCard>
           </div>
 
           <div style={{ display: "flex", gap: 16, flexWrap: "wrap" }}>

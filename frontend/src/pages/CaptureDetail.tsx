@@ -5,6 +5,7 @@ import { DataTable, fmtPct } from "../components/DataTable";
 import type { DataTableColumn } from "../components/DataTable";
 import { FilterBar } from "../components/FilterBar";
 import { StatTile } from "../components/StatTile";
+import { AIHoverCard } from "../components/AIHoverCard";
 import { TrendDelta } from "../components/TrendDelta";
 import { Badge } from "../components/Badge";
 import { CaptureTrendChart } from "../components/CaptureTrendChart";
@@ -192,25 +193,52 @@ export function CaptureDetail() {
       <FilterBar practices={practices} showCaptureEnabled showLocal={false} showMonth={false} />
 
       <div style={{ display: "flex", gap: 16, flexWrap: "wrap" }}>
-        <StatTile
-          label="Overall Capture Utilization Rate"
+        <AIHoverCard
+          feature="adoption_rollout"
+          entityLabel="Enterprise-wide"
+          metricLabel="Overall Capture utilization rate"
           value={
             overview.data
               ? fmtPct(filters.captureEnabledOnly ? overview.data.pct_captured_enabled : overview.data.pct_captured_all)
               : "…"
           }
-          accent="var(--domain-capture)"
-        />
-        <StatTile
-          label="Overall Capture Efficiency Rate"
+          underline={false}
+          style={{ flex: "1 1 200px", minWidth: 180 }}
+        >
+          <StatTile
+            label="Overall Capture Utilization Rate"
+            value={
+              overview.data
+                ? fmtPct(filters.captureEnabledOnly ? overview.data.pct_captured_enabled : overview.data.pct_captured_all)
+                : "…"
+            }
+            accent="var(--domain-capture)"
+          />
+        </AIHoverCard>
+        <AIHoverCard
+          feature="efficiency_metric"
+          entityLabel="Enterprise-wide"
+          metricLabel="Overall Capture efficiency rate"
           value={overview.data?.capture_mosaic_tbwu_per_min != null ? `${overview.data.capture_mosaic_tbwu_per_min.toFixed(3)} TBWU/min` : "…"}
-          accent="var(--domain-capture)"
-          sublabel={
+          extra={
             overview.data?.capture_pct_change_vs_baseline != null
-              ? `${(overview.data.capture_pct_change_vs_baseline * 100).toFixed(1)}% vs baseline`
+              ? { pct_change_vs_baseline: `${(overview.data.capture_pct_change_vs_baseline * 100).toFixed(1)}%` }
               : undefined
           }
-        />
+          underline={false}
+          style={{ flex: "1 1 200px", minWidth: 180 }}
+        >
+          <StatTile
+            label="Overall Capture Efficiency Rate"
+            value={overview.data?.capture_mosaic_tbwu_per_min != null ? `${overview.data.capture_mosaic_tbwu_per_min.toFixed(3)} TBWU/min` : "…"}
+            accent="var(--domain-capture)"
+            sublabel={
+              overview.data?.capture_pct_change_vs_baseline != null
+                ? `${(overview.data.capture_pct_change_vs_baseline * 100).toFixed(1)}% vs baseline`
+                : undefined
+            }
+          />
+        </AIHoverCard>
       </div>
 
       <div style={CARD_STYLE}>

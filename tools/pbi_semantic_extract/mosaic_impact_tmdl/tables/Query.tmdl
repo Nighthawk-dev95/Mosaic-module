@@ -1,0 +1,38 @@
+table Query
+	lineageTag: cf51e763-98f9-4e4d-82c5-9f1ed9c7a900
+
+	column NPI
+		dataType: string
+		lineageTag: e36c0c8c-4ae1-4e0f-a371-ca9c6726fe2f
+		summarizeBy: none
+		sourceColumn: NPI
+
+		annotation SummarizationSetBy = Automatic
+
+	column 'Fully Utilizing'
+		dataType: string
+		lineageTag: 5723c646-e4aa-4b4a-abe7-dda65c16d872
+		summarizeBy: none
+		sourceColumn: Fully Utilizing
+
+		annotation SummarizationSetBy = Automatic
+
+	partition Query = m
+		mode: import
+		source =
+				let
+				    Source = PowerPlatform.Dataflows(null),
+				    Workspaces = Source{[Id="Workspaces"]}[Data],
+				    #"3ae7b6af-85d7-4084-9e1c-18d3bdd6a6bc" = Workspaces{[workspaceId="3ae7b6af-85d7-4084-9e1c-18d3bdd6a6bc"]}[Data],
+				    #"bacde10b-de5f-4081-ac5f-0a35fc9c0378" = #"3ae7b6af-85d7-4084-9e1c-18d3bdd6a6bc"{[dataflowId="bacde10b-de5f-4081-ac5f-0a35fc9c0378"]}[Data],
+				    contact_ = #"bacde10b-de5f-4081-ac5f-0a35fc9c0378"{[entity="contact",version=""]}[Data],
+				    #"Removed Duplicates" = Table.Distinct(contact_, {"vrarp_npi"}),
+				    #"Filtered Rows" = Table.SelectRows(#"Removed Duplicates", each [vrarp_npi] <> null and [vrarp_npi] <> ""),
+				    #"Renamed Columns" = Table.RenameColumns(#"Filtered Rows",{{"vrarp_fullyutilizingname", "Fully Utilizing"}, {"vrarp_npi", "NPI"}})
+				in
+				    #"Renamed Columns"
+
+	annotation PBI_NavigationStepName = Navigation
+
+	annotation PBI_ResultType = Table
+

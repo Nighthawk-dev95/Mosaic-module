@@ -30,3 +30,8 @@ env:
   # owned by this app - not reusing practice-command-dev's or mdm-console-dev's real scopes.
   - name: 'INGEST_SHARED_SECRET'
     valueFrom: 'ingest-secret'
+  # AI hover-context (app/services/ai_context_service.py) - the endpoint NAME itself is a fixed
+  # workspace-wide moniker usable even without this var (see config.py's default), but the app
+  # resource binding above is what actually grants CAN_QUERY to this app's service principal.
+  - name: 'AI_CONTEXT_SERVING_ENDPOINT'
+    valueFrom: 'ai-context-endpoint'

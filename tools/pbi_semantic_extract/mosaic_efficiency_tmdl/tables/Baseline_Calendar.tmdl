@@ -1,0 +1,28 @@
+table Baseline_Calendar
+	lineageTag: d8aa515d-edfa-4d6c-87c2-9691af0b8a6d
+
+	column Date
+		formatString: General Date
+		lineageTag: 4ef7551b-9e6e-4da4-ba57-bc5bbcd6dead
+		summarizeBy: none
+		isNameInferred
+		sourceColumn: [Date]
+
+		variation Variation
+			isDefault
+			relationship: 81365981-f4fc-4337-8941-1938c44faff1
+			defaultHierarchy: LocalDateTable_2c0e0ba7-9921-4344-82bc-df48e01f570f.'Date Hierarchy'
+
+		annotation SummarizationSetBy = Automatic
+
+	partition Baseline_Calendar = calculated
+		mode: import
+		source =
+				
+				CALENDAR(
+				    DATE(2025, 4, 1),  // Adjust start date as needed
+				    DATE(2050, 12, 31)  // Adjust end date as needed
+				)
+
+	annotation PBI_Id = 18ae34a1fccf4f3ea40d38e48989d9fc
+

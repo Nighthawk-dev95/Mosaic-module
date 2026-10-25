@@ -1,0 +1,214 @@
+table LineChartMetricSelector
+	lineageTag: 7f7cb9d6-dce6-4386-b4ef-a244b6292374
+
+	measure reporting_selected = ```
+			
+			
+			var k = SELECTEDVALUE('LineChartMetricSelector'[MetricKey],2)
+			RETURN
+			SWITCH(
+			    k, 
+			    1 ,[Mosaic Exam Ct],
+			    2,[% of RPCE],
+			    BLANK()
+			)
+			```
+		lineageTag: 49cb8b61-3940-4f42-beb7-3fa3efa668d9
+
+		formatStringDefinition = [reporting_selected_format]
+
+	measure Drafting_selected =
+			
+			var k = SELECTEDVALUE('LineChartMetricSelector'[MetricKey],2)
+			RETURN
+			SWITCH(
+			    k,
+			    1 , [Mosaic Drafting Ct],
+			    2 , [% of RPCE_drafting],
+			    BLANK()
+			)
+		lineageTag: 977f6e10-e410-4081-82d8-214baead82c6
+
+		formatStringDefinition = [drafting_format]
+
+	measure reporting_selected_format = ```
+			
+			
+			var k = SELECTEDVALUE('LineChartMetricSelector'[MetricKey])
+			RETURN
+			IF(
+			    k= 2, 
+			    "0.0%", 
+			    "0"
+			)
+			```
+		lineageTag: cf7436f9-d0ec-4e01-b17a-c146c4f0fc4e
+
+	measure drafting_format = ```
+			
+			var k = SELECTEDVALUE('LineChartMetricSelector'[MetricKey])
+			RETURN
+			IF(
+			    k = 2,
+			    "0.0%", 
+			    "0"
+			)
+			```
+		lineageTag: 7c8e64ae-da04-4324-ba85-47aa97a53acd
+
+	measure showlast14 =
+			
+			VAR LatestDate =
+			    CALCULATE(MAX('Daily_Extract'[Date]), ALL('Daily_Extract'))
+			
+			VAR SelectedDateUnit =
+			    SELECTEDVALUE('Date Selector'[Date Selector Fields])
+			
+			VAR RawDate =
+			    SWITCH(
+			        SelectedDateUnit,
+			        "Day", MIN('Daily_Extract'[Date]),
+			        "Week Of", MIN('Daily_Extract'[Week_Of]),     -- Changed from WeekStart
+			        "Month", MIN('Daily_Extract'[Month]),
+			        MIN('Daily_Extract'[Date])
+			    )
+			
+			-- Convert Month to actual date if needed (assuming YYYYMM numeric)
+			VAR ThisDate =
+			    IF(
+			        SelectedDateUnit = "Month",
+			        DATE(INT(RawDate/100), MOD(RawDate,100), 1),
+			        RawDate
+			    )
+			
+			VAR UserHasDateSelection = [userselectedanydate]
+			
+			VAR SelectedMetric =
+			    SELECTEDVALUE('LineChartMetricSelector'[Metric], "% RPCE")
+			
+			VAR OctoberStart = DATE(2025,10,1)
+			VAR Yesterday = LatestDate - 1
+			
+			RETURN
+			IF(
+			    UserHasDateSelection,
+			    1,
+			    IF(ThisDate >= OctoberStart && ThisDate <= Yesterday, 1, 0)
+			)
+		formatString: 0
+		lineageTag: 38c9bc82-45ba-43b2-91e0-922205de7b8b
+
+	measure userselecteddates =
+			
+			not ISEMPTY(VALUES('Daily_Extract'[Date]))
+		formatString: """TRUE"";""TRUE"";""FALSE"""
+		lineageTag: cc5b3ec5-9ddf-49ea-9216-3400f4ae63ee
+
+	measure 'yaxis titel dynamic' =
+			
+			
+			var k = SELECTEDVALUE('LineChartMetricSelector'[MetricKey])
+			RETURN
+			SWITCH(
+			    k,
+			    1,"Number of Exams",
+			    2,"% RPCE",
+			    " "
+			)
+		lineageTag: 1f1261cb-98be-4291-94e1-41c65b4813d0
+
+	measure userselectedmonths =
+			
+			NOT ISEMPTY(VALUES('Daily_Extract'[Month]))
+		formatString: """TRUE"";""TRUE"";""FALSE"""
+		lineageTag: 97c7e840-1b37-4aae-a20b-0b672fe789d4
+
+	measure userselectedanydate = ```
+			
+			
+			var mindate_all = 
+			CALCULATE(MIN('Daily_Extract'[Date]), ALL('Daily_Extract'))
+			
+			var maxdate_all = CALCULATE(MAX('Daily_Extract'[Date]), ALL('Daily_Extract'))
+			
+			var mindate_selected = CALCULATE(MIN('Daily_Extract'[Date]), ALLSELECTED('Daily_Extract'))
+			
+			var maxdate_selected = CALCULATE(MAX('Daily_Extract'[Date]), ALLSELECTED('Daily_Extract'))
+			
+			RETURN
+			IF(
+			    mindate_selected <> mindate_all ||
+			    maxdate_selected <> maxdate_all, 
+			
+			    TRUE(), 
+			    FALSE()
+			)
+			```
+		formatString: """TRUE"";""TRUE"";""FALSE"""
+		lineageTag: 72b2bf6c-b60a-48fe-a3fd-a4f53921bd9c
+
+	measure showfromoct = ```
+			
+			var thisdate = SELECTEDVALUE('Daily_Extract'[Date])
+			
+			RETURN
+			IF(
+			    ISBLANK(thisdate), 
+			    1, 
+			    IF(thisdate >=DATE(2025,10,1), 
+			    1,
+			    0
+			    )
+			)
+			```
+		formatString: 0
+		lineageTag: a81d5a6f-c5f1-40d1-96f6-f393ba7d6ac0
+
+	measure 'Reference Line 70%' =
+			
+			VAR k = SELECTEDVALUE('LineChartMetricSelector'[MetricKey], 2)
+			RETURN
+			IF(k = 2, 0.70, BLANK())  -- Only shows when % RPCE is selected
+		lineageTag: 62d3ab8a-90d2-424c-b0cb-8c9c1888bd38
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	measure 'Reference Line 90%' =
+			
+			VAR k = SELECTEDVALUE('LineChartMetricSelector'[MetricKey], 2)
+			RETURN
+			IF(k = 2, 0.90, BLANK())  -- Only shows when % RPCE is selected
+		lineageTag: aa07a1ab-3f81-4624-9bf4-865f84ace77c
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column Metric
+		dataType: string
+		lineageTag: 90b06851-f8e0-4b26-bf7e-c456d04de202
+		summarizeBy: none
+		sourceColumn: Metric
+
+		annotation SummarizationSetBy = Automatic
+
+	column MetricKey
+		dataType: int64
+		formatString: 0
+		lineageTag: 836d1ea3-9408-4327-b88b-95c27a102f52
+		summarizeBy: count
+		sourceColumn: MetricKey
+
+		annotation SummarizationSetBy = Automatic
+
+	partition LineChartMetricSelector = m
+		mode: import
+		source =
+				let
+				    Source = Table.FromRows(Json.Document(Binary.Decompress(Binary.FromText("i45W8svXU8hPU3CtSMwtVtJRMlSK1YlWUlUICnB2BXKNlGJjAQ==", BinaryEncoding.Base64), Compression.Deflate)), let _t = ((type nullable text) meta [Serialized.Text = true]) in type table [Metric = _t, MetricKey = _t]),
+				    #"Changed Type" = Table.TransformColumnTypes(Source,{{"Metric", type text}, {"MetricKey", Int64.Type}})
+				in
+				    #"Changed Type"
+
+	annotation PBI_ResultType = Table
+
+	annotation PBI_NavigationStepName = Navigation
+

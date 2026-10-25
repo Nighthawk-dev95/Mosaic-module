@@ -132,6 +132,42 @@ def aggregate(
     }
 
 
+def rows_for_npi(npi: int) -> list[dict[str, Any]]:
+    """Per-exam-category breakdown for one radiologist - powers the Radiologist Lookup page's
+    detail view. Aggregates across the finer practice/subspecialty/modality/parent-procedure
+    grain down to one row per exam_category, since a per-NPI drilldown doesn't need the full
+    780K-row table's finest grain."""
+    conn = _connect()
+    try:
+        rows = conn.execute(
+            """
+            SELECT
+              exam_category,
+              SUM(reporting_tbwu) AS reporting_tbwu, SUM(reporting_time) AS reporting_time,
+              SUM(drafting_tbwu) AS drafting_tbwu, SUM(drafting_time) AS drafting_time,
+              SUM(capture_tbwu) AS capture_tbwu, SUM(capture_time) AS capture_time
+            FROM efficiency_matrix
+            WHERE npi = ?
+            GROUP BY exam_category
+            """,
+            (npi,),
+        ).fetchall()
+    finally:
+        conn.close()
+    result = []
+    for row in rows:
+        data = dict(zip(
+            ["exam_category", "reporting_tbwu", "reporting_time", "drafting_tbwu", "drafting_time", "capture_tbwu", "capture_time"],
+            row,
+        ))
+        data["full_mosaic_tbwu_per_min"] = _rate(
+            (data["reporting_tbwu"] or 0) + (data["drafting_tbwu"] or 0),
+            (data["reporting_time"] or 0) + (data["drafting_time"] or 0),
+        )
+        result.append(data)
+    return result
+
+
 def rollup_by(group_col: str, mode: str = "full_mosaic") -> list[dict[str, Any]]:
     """GROUP BY npi (+radiologist_name/practice/subspecialty) or practice, for the table view."""
     tbwu_expr, time_expr, baseline_expr = _MODE_EXPRS.get(mode, _MODE_EXPRS["full_mosaic"])

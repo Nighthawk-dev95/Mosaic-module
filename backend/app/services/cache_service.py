@@ -6,7 +6,7 @@ since the underlying EDW queries in app.services.mosaic_service are no longer ca
 per-request - only by the background/manual refresh job.
 """
 
-from app.data import capture_enablement, rad_survey
+from app.data import capture_enablement, local_region, mvp_context, mvp_dashboard_stats, mvp_mentor_matching, mvp_methodology_checks, rad_survey
 from app.db import cache_store, efficiency_store
 from app.models.mosaic import (
     BaselineProxyCandidate,
@@ -22,9 +22,6 @@ from app.models.mosaic import (
     CaptureRadiologistItem,
     CaptureUtilizationTrendPracticePoint,
     CaptureUtilizationTrendRadiologistPoint,
-    DeploymentFunnel,
-    DeploymentPracticeRollup,
-    DeploymentRadiologistItem,
     DraftInsightCategoryGroup,
     DraftInsightCategoryStat,
     DraftInsightModalityStat,
@@ -37,23 +34,29 @@ from app.models.mosaic import (
     EfficiencyRadiologistItem,
     EfficiencyTrendPoint,
     EfficiencyTrendRpAvgPoint,
-    ExternalFeedbackItem,
-    FocusRadiologistItem,
+    EngagementCapacityPlan,
+    MammoScreeningTrendPoint,
+    MentorMatchStatus,
     MosaicIntelligenceSnapshot,
+    MvpProgramContext,
+    MvpRadiologistItem,
     PopulationEfficiency,
     RadiologistRosterItem,
     LikertDistribution,
     PracticeNpsStat,
-    RadiologistScorecard,
+    RadiologistLookupMatch,
     RadSurveySummary,
-    ReconciliationFinding,
-    ScorecardMetrics,
     RadSummaryStat,
     RpceTrendPoint,
+    ShiftUtilizationItem,
     ThemeStat,
     UndraftedCategoryPoint,
     UndraftedFilterOptions,
     UtilizationPracticeRollup,
+    VolumeFilterOptions,
+    VolumeGroupRollup,
+    VolumeSummary,
+    VolumeTrendPoint,
 )
 
 
@@ -153,37 +156,9 @@ def get_utilization_by_practice(days_back: int = 30) -> list[UtilizationPractice
     return [UtilizationPracticeRollup(**row) for row in (payload or [])]
 
 
-def get_deployment_by_radiologist(limit: int = 500, offset: int = 0) -> list[DeploymentRadiologistItem]:
-    payload, _ = cache_store.load("deployment_by_radiologist")
-    items = [DeploymentRadiologistItem(**row) for row in (payload or [])]
-    safe_offset = max(0, int(offset))
-    safe_limit = max(1, min(int(limit), 1000))
-    return items[safe_offset : safe_offset + safe_limit]
-
-
-def get_deployment_by_practice() -> list[DeploymentPracticeRollup]:
-    payload, _ = cache_store.load("deployment_by_practice")
-    return [DeploymentPracticeRollup(**row) for row in (payload or [])]
-
-
-def get_deployment_funnel_reporting() -> DeploymentFunnel:
-    payload, _ = cache_store.load("deployment_funnel_reporting")
-    return DeploymentFunnel(**payload) if payload else DeploymentFunnel(domain="Reporting", stages=[])
-
-
-def get_deployment_funnel_drafting() -> DeploymentFunnel:
-    payload, _ = cache_store.load("deployment_funnel_drafting")
-    return DeploymentFunnel(**payload) if payload else DeploymentFunnel(domain="Drafting", stages=[])
-
-
 def get_drafting_blockers_by_practice() -> list[BlockerByPractice]:
     payload, _ = cache_store.load("drafting_blockers_by_practice")
     return [BlockerByPractice(**row) for row in (payload or [])]
-
-
-def get_deployment_funnel_ct_abdpel() -> DeploymentFunnel:
-    payload, _ = cache_store.load("deployment_funnel_ct_abdpel")
-    return DeploymentFunnel(**payload) if payload else DeploymentFunnel(domain="CT Abd/Pel", stages=[])
 
 
 def get_ct_abdpel_blockers_by_practice() -> list[BlockerByPractice]:
@@ -282,17 +257,11 @@ def _rate(tbwu: float | None, time_sec: float | None) -> float | None:
     return (tbwu or 0) / (time_sec / 60.0)
 
 
-def get_efficiency_trend(exam_category: str | None = None, practice: str | None = None) -> list[EfficiencyTrendPoint]:
-    cache_key = "efficiency_trend_by_practice_category" if practice else "efficiency_trend_by_category"
-    payload, _ = cache_store.load(cache_key)
-    rows = payload or []
-    if practice:
-        rows = [r for r in rows if r.get("practice") == practice]
-    if exam_category:
-        rows = [r for r in rows if r.get("exam_category") == exam_category]
-
-    # Roll multiple exam-category rows for the same month back up to one point per month
-    # when no specific category is selected ("All categories").
+def _aggregate_trend_rows(rows: list[dict], practice: str | None, exam_category: str | None) -> list[EfficiencyTrendPoint]:
+    """Shared by get_efficiency_trend (practice/category filtered) and
+    get_efficiency_trend_by_local_team (grouped by Local team) - rolls arbitrary raw
+    efficiency_trend_by_practice_category rows up to one point per month and computes every
+    rate/pct_change, including the "Drafting Only" vs "Drafting + Capture" split."""
     by_period: dict[str, dict] = {}
     for row in rows:
         acc = by_period.setdefault(
@@ -302,6 +271,7 @@ def get_efficiency_trend(exam_category: str | None = None, practice: str | None 
                 "reporting_rad_count": 0, "reporting_exam_count": 0,
                 "drafting_tbwu": 0.0, "drafting_time": 0.0, "drafting_baseline_contrib": 0.0,
                 "drafting_rad_count": 0, "drafting_exam_count": 0,
+                "capture_tbwu": 0.0, "capture_time": 0.0, "capture_baseline_contrib": 0.0,
             },
         )
         for key in acc:
@@ -313,6 +283,10 @@ def get_efficiency_trend(exam_category: str | None = None, practice: str | None 
         reporting_eff = _rate(d["reporting_tbwu"], d["reporting_time"])
         drafting_eff = _rate(d["drafting_tbwu"], d["drafting_time"])
         full_mosaic_eff = _rate(d["reporting_tbwu"] + d["drafting_tbwu"], d["reporting_time"] + d["drafting_time"])
+        # "Drafting Only" = Drafting excluding Capture-modality (US/BD) rows - Capture is a
+        # subset of Drafting by modality, not a separate Period_Type (confirmed live
+        # 2026-10-20) - so this is just Drafting's totals minus Capture's.
+        drafting_only_eff = _rate(d["drafting_tbwu"] - d["capture_tbwu"], d["drafting_time"] - d["capture_time"])
         # baseline_contrib is already per-minute weighted by time (seconds), so divide by
         # raw seconds directly - see efficiency_store._baseline_rate for the derivation.
         reporting_baseline = (d["reporting_baseline_contrib"] / d["reporting_time"]) if d["reporting_time"] else None
@@ -320,6 +294,12 @@ def get_efficiency_trend(exam_category: str | None = None, practice: str | None 
         full_mosaic_baseline = (
             (d["reporting_baseline_contrib"] + d["drafting_baseline_contrib"]) / (d["reporting_time"] + d["drafting_time"])
             if (d["reporting_time"] + d["drafting_time"])
+            else None
+        )
+        drafting_only_time = d["drafting_time"] - d["capture_time"]
+        drafting_only_baseline = (
+            (d["drafting_baseline_contrib"] - d["capture_baseline_contrib"]) / drafting_only_time
+            if drafting_only_time
             else None
         )
         points.append(
@@ -330,13 +310,81 @@ def get_efficiency_trend(exam_category: str | None = None, practice: str | None 
                 reporting_tbwu_per_min=reporting_eff,
                 drafting_tbwu_per_min=drafting_eff,
                 full_mosaic_tbwu_per_min=full_mosaic_eff,
+                drafting_only_tbwu_per_min=drafting_only_eff,
                 reporting_pct_change=_pct_change(reporting_eff, reporting_baseline),
                 drafting_pct_change=_pct_change(drafting_eff, drafting_baseline),
                 full_mosaic_pct_change=_pct_change(full_mosaic_eff, full_mosaic_baseline),
+                drafting_only_pct_change=_pct_change(drafting_only_eff, drafting_only_baseline),
                 reporting_rad_count=int(d["reporting_rad_count"]),
                 drafting_rad_count=int(d["drafting_rad_count"]),
                 reporting_exam_count=int(d["reporting_exam_count"]),
                 drafting_exam_count=int(d["drafting_exam_count"]),
+            )
+        )
+    return points
+
+
+def get_efficiency_trend(exam_category: str | None = None, practice: str | None = None) -> list[EfficiencyTrendPoint]:
+    cache_key = "efficiency_trend_by_practice_category" if practice else "efficiency_trend_by_category"
+    payload, _ = cache_store.load(cache_key)
+    rows = payload or []
+    if practice:
+        rows = [r for r in rows if r.get("practice") == practice]
+    if exam_category:
+        rows = [r for r in rows if r.get("exam_category") == exam_category]
+    return _aggregate_trend_rows(rows, practice, exam_category)
+
+
+def get_efficiency_trend_by_local_team() -> dict[str, list[EfficiencyTrendPoint]]:
+    """MVP Area Detail dashboard's 4-line "Efficiency Change, Time Series" chart - all 6 Local
+    teams computed in one call (there are only 6, and the dashboard needs instant switching
+    between them) from the same already-cached efficiency_trend_by_practice_category rows,
+    grouped via local_region.get_local_region() instead of raw practice. No new EDW query."""
+    payload, _ = cache_store.load("efficiency_trend_by_practice_category")
+    by_team: dict[str, list[dict]] = {team: [] for team in local_region.LOCAL_REGIONS}
+    for row in payload or []:
+        team = local_region.get_local_region(row.get("practice"))
+        by_team[team].append(row)
+    return {team: _aggregate_trend_rows(rows, None, None) for team, rows in by_team.items()}
+
+
+def get_mammo_screening_trend() -> list[MammoScreeningTrendPoint]:
+    """RP-wide + MVP-mammo-cohort-only Screening-Mammo volume/efficiency, monthly - see
+    mosaic_service.get_mammo_screening_trend for the EDW query. Returns RP-wide points; the
+    MVP-mammo-only series is returned as a second, separately-keyed list from the same cached
+    rows so the frontend can render both combo charts without a second fetch."""
+    payload, _ = cache_store.load("mammo_screening_trend")
+    points = []
+    for row in payload or []:
+        eff = _rate(row.get("screening_tbwu"), row.get("screening_time"))
+        baseline = (row["screening_baseline_contrib"] / row["screening_time"]) if row.get("screening_time") else None
+        points.append(
+            MammoScreeningTrendPoint(
+                period=row["period"],
+                screening_volume=int(row.get("screening_volume") or 0),
+                screening_efficiency_change_pct=_pct_change(eff, baseline),
+            )
+        )
+    return points
+
+
+def get_mvp_mammo_screening_trend() -> list[MammoScreeningTrendPoint]:
+    """Same cached rows as get_mammo_screening_trend, reshaped to the MVP-mammo-cohort-only
+    columns instead of the RP-wide ones."""
+    payload, _ = cache_store.load("mammo_screening_trend")
+    points = []
+    for row in payload or []:
+        eff = _rate(row.get("mvp_mammo_screening_tbwu"), row.get("mvp_mammo_screening_time"))
+        baseline = (
+            row["mvp_mammo_screening_baseline_contrib"] / row["mvp_mammo_screening_time"]
+            if row.get("mvp_mammo_screening_time")
+            else None
+        )
+        points.append(
+            MammoScreeningTrendPoint(
+                period=row["period"],
+                screening_volume=int(row.get("mvp_mammo_screening_volume") or 0),
+                screening_efficiency_change_pct=_pct_change(eff, baseline),
             )
         )
     return points
@@ -358,106 +406,63 @@ def get_efficiency_trend_rp_avg() -> list[EfficiencyTrendRpAvgPoint]:
     return points
 
 
-def _mvp_rate_change(baseline_row: dict, current_row: dict, tbwu_key: str, time_key: str) -> float | None:
-    baseline_rate = _rate(baseline_row.get(tbwu_key) or 0, baseline_row.get(time_key) or 0)
-    current_rate = _rate(current_row.get(tbwu_key) or 0, current_row.get(time_key) or 0)
-    return _pct_change(current_rate, baseline_rate)
-
-
-def get_focus_radiologists() -> list[FocusRadiologistItem]:
-    """Flags radiologists per the real Mosaic Value Project (MVP) methodology: fixed baseline
-    (May-Jul 2026) vs. most recent full month, gated by a >=100 current-period D&C exam volume
-    floor and an "already gaining capacity" exclusion (>1% capacity gain), then tiered by
-    baseline capacity x efficiency-loss severity:
-      Tier 1: baseline capacity >= 80 TBWU/shift AND D&C efficiency change < 20%
-      Tier 2: baseline capacity 60-79 TBWU/shift AND D&C efficiency change < 20%
-      Tier 3: baseline capacity >= 60 AND any one modality (CT/XR Drafting, US Capture)
-              change < -10%, even when overall D&C change is positive
-    Tier assignment is a priority chain (Tier 1 checked first, then 2, then 3) - since Tier 1/2
-    both require D&C change < 20%, a rad with a >=20% overall gain but one bad modality falls
-    through to Tier 3 rather than Tier 1, which already achieves MVP's own documented
-    judgment call ("don't prioritize a rad who's +80% overall but -3% on one model") without a
-    separate demotion step.
-    Not modeled (no EDW source - lives only in MVP's manually-maintained CRM export):
-    "Q3 go-live practice" and "Do Not Revisit" exclusions."""
-    eff_payload, _ = cache_store.load("mvp_efficiency_by_radiologist")
-    eff_by_npi: dict[int, dict[str, dict]] = {}
-    for row in eff_payload or []:
-        label = row.get("period_label")
-        if label:
-            eff_by_npi.setdefault(row["npi"], {})[label] = row
-
-    cap_payload, _ = cache_store.load("mvp_capacity_by_radiologist")
-    cap_by_npi: dict[int, dict[str, dict]] = {}
-    for row in cap_payload or []:
-        label = row.get("period_label")
-        if label:
-            cap_by_npi.setdefault(row["npi"], {})[label] = row
-
-    roster_payload, _ = cache_store.load("radiologist_roster")
-    roster_by_npi = {row["npi"]: row for row in (roster_payload or [])}
-
-    results: list[FocusRadiologistItem] = []
-    for npi in set(eff_by_npi) & set(cap_by_npi):
-        eff_periods = eff_by_npi[npi]
-        cap_periods = cap_by_npi[npi]
-        if "baseline" not in eff_periods or "current" not in eff_periods:
-            continue
-        if "baseline" not in cap_periods or "current" not in cap_periods:
-            continue
-
-        baseline_eff, current_eff = eff_periods["baseline"], eff_periods["current"]
-        baseline_cap, current_cap = cap_periods["baseline"], cap_periods["current"]
-
-        current_dc_exam_count = int(current_eff.get("dc_exam_count") or 0)
-        if current_dc_exam_count < 100:
-            continue
-
-        baseline_capacity = baseline_cap.get("capacity_per_shift")
-        if baseline_capacity is None:
-            continue
-        capacity_change_pct = _pct_change(current_cap.get("capacity_per_shift"), baseline_capacity)
-        if capacity_change_pct is not None and capacity_change_pct > 0.01:
-            continue  # already gaining capacity - MVP excludes these
-
-        dc_change_pct = _mvp_rate_change(baseline_eff, current_eff, "dc_tbwu", "dc_time")
-        ct_change_pct = _mvp_rate_change(baseline_eff, current_eff, "ct_drafting_tbwu", "ct_drafting_time")
-        xr_change_pct = _mvp_rate_change(baseline_eff, current_eff, "xr_drafting_tbwu", "xr_drafting_time")
-        us_change_pct = _mvp_rate_change(baseline_eff, current_eff, "us_capture_tbwu", "us_capture_time")
-
-        tier: str | None = None
-        if baseline_capacity >= 80 and dc_change_pct is not None and dc_change_pct < 0.20:
-            tier = "Tier 1"
-        elif 60 <= baseline_capacity < 80 and dc_change_pct is not None and dc_change_pct < 0.20:
-            tier = "Tier 2"
-        elif baseline_capacity >= 60 and any(
-            c is not None and c < -0.10 for c in (ct_change_pct, xr_change_pct, us_change_pct)
-        ):
-            tier = "Tier 3"
-
-        if tier is None:
-            continue
-
-        roster = roster_by_npi.get(npi, {})
+def get_mvp_radiologists() -> list[MvpRadiologistItem]:
+    """Every radiologist the real Mosaic Value Project program has tiered or excluded, read
+    straight from rad_onboarding (see mosaic_service.get_mvp_rad_onboarding) - no EDW
+    re-derivation needed, the cached row already has everything the model wants. Attaches
+    mentor_match from the separate, hand-extracted peer-coach matching snapshot (see
+    app/data/mvp_mentor_matching.py) when this radiologist's NPI appears there - a real,
+    actively-worked status, unlike rad_onboarding's own near-always-empty mentor fields."""
+    payload, _ = cache_store.load("mvp_rad_onboarding_raw")
+    results = []
+    for row in payload or []:
+        npi = row.get("npi")
+        match = mvp_mentor_matching.MENTOR_MATCH_BY_NPI.get(int(npi)) if npi is not None else None
         results.append(
-            FocusRadiologistItem(
-                npi=npi,
-                radiologist_name=roster.get("radiologist_name"),
-                practice=roster.get("home_practice"),
-                subspecialty=roster.get("working_subspecialty"),
-                priority_tier=tier,
-                baseline_capacity_per_shift=baseline_capacity,
-                dc_efficiency_change_pct=dc_change_pct,
-                capacity_change_pct=capacity_change_pct,
-                ct_drafting_change_pct=ct_change_pct,
-                xr_drafting_change_pct=xr_change_pct,
-                us_capture_change_pct=us_change_pct,
-                current_dc_exam_count=current_dc_exam_count,
+            MvpRadiologistItem(
+                radiologist_name=row.get("rad_name"),
+                mentor_match=MentorMatchStatus(**match) if match else None,
+                **{k: v for k, v in row.items() if k != "rad_name"},
             )
         )
-
-    results.sort(key=lambda r: (r.priority_tier, r.radiologist_name or ""))
+    results.sort(key=lambda r: ((r.mvp_cohort or "zzz"), r.radiologist_name or ""))
     return results
+
+
+def get_mvp_methodology_check(scope: str) -> dict:
+    """Honest, live-recomputed checks on whether the Impact classification's before/after
+    comparison can be trusted for this scope - see app/data/mvp_methodology_checks.py's own
+    docstring for what each of the three checks means and why they exist. Operates on the raw
+    cache_store rows directly (same as mvp_weekly_report_service.py), not the Pydantic-validated
+    MvpRadiologistItem list, since the checks need the exact same string/float-mixed values
+    mvp_dashboard_stats.compute_impact_breakdown itself reads."""
+    rows, _ = cache_store.load("mvp_rad_onboarding_raw")
+    scoped = mvp_dashboard_stats.scope_rows(rows or [], scope)
+    return mvp_methodology_checks.compute_methodology_check(scoped)
+
+
+def get_mvp_context() -> MvpProgramContext:
+    """Static program narrative/glossary (see app/data/mvp_context.py for provenance) plus one
+    live field - ai_generated_narrative, precomputed on the normal 30-minute refresh cycle (see
+    refresh_service.DATASETS -> ai_context_service.generate_mvp_program_narrative), never
+    generated live on page load. Falls back to the static CURRENT_STATUS_NOTES text if the
+    narrative dataset hasn't refreshed yet (e.g. right after a fresh deploy)."""
+    payload, _ = cache_store.load("mvp_program_narrative")
+    overview_payload, _ = cache_store.load("mvp_overview_narrative")
+    mammo_payload, _ = cache_store.load("mvp_mammo_narrative")
+    return MvpProgramContext(
+        program_narrative=mvp_context.PROGRAM_NARRATIVE,
+        program_history=mvp_context.PROGRAM_HISTORY,
+        priority_tier_definitions=mvp_context.PRIORITY_TIER_DEFINITIONS,
+        exclusion_reason_glossary=mvp_context.EXCLUSION_REASON_GLOSSARY,
+        engagement_process_steps=mvp_context.ENGAGEMENT_PROCESS_STEPS,
+        mentorship_program_summary=mvp_context.MENTORSHIP_PROGRAM_SUMMARY,
+        current_status_notes=mvp_context.CURRENT_STATUS_NOTES,
+        ai_generated_narrative=payload or mvp_context.CURRENT_STATUS_NOTES,
+        engagement_capacity_plan=EngagementCapacityPlan(**mvp_context.ENGAGEMENT_CAPACITY_PLAN),
+        overview_narrative=overview_payload or "",
+        mammo_narrative=mammo_payload or "",
+    )
 
 
 def get_rad_survey_summary() -> RadSurveySummary:
@@ -782,43 +787,12 @@ def get_capacity_by_practice() -> list[CapacityPracticeRollup]:
     return [CapacityPracticeRollup(**row) for row in (payload or [])]
 
 
-# Metric names on ScorecardMetrics that come straight off the wide cached row (suffixed
-# `_top5`/.../`_all`) - must match mosaic_service._SCORECARD_METRICS' output names exactly.
-_SCORECARD_METRIC_NAMES = [
-    "shifts_worked", "case_count", "addl_capacity_per_shift", "efficiency", "shift_utilization",
-    "avg_units_per_shift", "ct_cases", "xr_cases", "us_cases", "mr_cases", "nm_cases", "pt_cases",
-    "mg_cases", "ir_cases", "other_modality_cases", "routine_cases", "stat_cases", "stroke_cases",
-    "trauma_cases", "otherp_cases",
-]
-_SCORECARD_WINDOWS = ["5", "10", "15", "20", "25", "30", "all"]
-
-
-def get_radiologist_scorecard(practice: str | None = None) -> list[RadiologistScorecard]:
-    payload, _ = cache_store.load("radiologist_scorecard")
+def get_shift_utilization_by_radiologist(practice: str | None = None) -> list[ShiftUtilizationItem]:
+    payload, _ = cache_store.load("shift_utilization_by_radiologist")
     rows = payload or []
     if practice:
         rows = [r for r in rows if r.get("practice") == practice]
-
-    items = []
-    for row in rows:
-        metrics = [
-            ScorecardMetrics(
-                top_n=window,
-                **{name: row.get(f"{name}_top{window}" if window != "all" else f"{name}_all") for name in _SCORECARD_METRIC_NAMES},
-            )
-            for window in _SCORECARD_WINDOWS
-        ]
-        items.append(
-            RadiologistScorecard(
-                npi=row["npi"],
-                radiologist_name=row.get("radiologist_name"),
-                team=row.get("team"),
-                practice=row.get("practice"),
-                mosaic_go_live_date=row.get("mosaic_go_live_date"),
-                metrics=metrics,
-            )
-        )
-    return items
+    return [ShiftUtilizationItem(**row) for row in rows]
 
 
 def get_undrafted_filter_options() -> UndraftedFilterOptions:
@@ -1090,13 +1064,85 @@ def get_baseline_proxy_candidates(npi: int | None = None, target_shift: str | No
     ]
 
 
-def get_external_feedback() -> list[ExternalFeedbackItem]:
-    payload, _ = cache_store.load("external_feedback_demo")
-    rows = payload or []
-    return [ExternalFeedbackItem(**row) for row in rows]
+def search_radiologist_lookup(query: str) -> list[RadiologistLookupMatch]:
+    """Minimal search-result shape, deliberately not the full roster payload - matches PCC's
+    own "no endpoint that lists a roster" rule for this exact kind of gated drilldown. Caller
+    (the route) is responsible for enforcing the 3-character minimum before calling this."""
+    payload, _ = cache_store.load("radiologist_roster")
+    needle = query.strip().lower()
+    matches = [
+        row for row in (payload or [])
+        if row.get("radiologist_name") and needle in row["radiologist_name"].lower()
+    ]
+    return [
+        RadiologistLookupMatch(
+            npi=row["npi"],
+            radiologist_name=row.get("radiologist_name"),
+            home_practice=row.get("home_practice"),
+        )
+        for row in matches[:25]
+    ]
 
 
-def get_reconciliation_findings() -> list[ReconciliationFinding]:
-    payload, _ = cache_store.load("reconciliation_findings")
-    rows = payload or []
-    return [ReconciliationFinding(**row) for row in rows]
+def get_radiologist_lookup_detail(npi: int) -> dict:
+    """Aggregated detail payload for one radiologist, assembled purely from already-cached
+    data (zero new EDW queries) - roster entry, per-category efficiency breakdown, capacity
+    rollup, and scorecard. Returns a plain dict (display-only composite, no single Pydantic
+    model fits all four shapes cleanly)."""
+    roster_payload, _ = cache_store.load("radiologist_roster")
+    roster_row = next((r for r in (roster_payload or []) if r.get("npi") == npi), None)
+
+    capacity_payload, _ = cache_store.load("capacity_by_radiologist")
+    capacity_row = next((r for r in (capacity_payload or []) if r.get("npi") == npi), None)
+
+    scorecard_payload, _ = cache_store.load("radiologist_scorecard")
+    scorecard_row = next((r for r in (scorecard_payload or []) if r.get("npi") == npi), None)
+
+    return {
+        "npi": npi,
+        "roster": roster_row,
+        "capacity": capacity_row,
+        "scorecard": scorecard_row,
+        "efficiency_by_category": efficiency_store.rows_for_npi(npi),
+    }
+
+
+_EMPTY_VOLUME_SUMMARY = {
+    "total_exams": 0,
+    "mosaic_exams": 0,
+    "pct_mosaic": None,
+    "drafting_exams": 0,
+    "pct_drafting": None,
+    "pct_rpce_reporting": None,
+    "pct_rpce_drafting": None,
+}
+
+
+def get_volume_summary() -> VolumeSummary:
+    payload, _ = cache_store.load("volume_summary")
+    return VolumeSummary(**(payload or _EMPTY_VOLUME_SUMMARY))
+
+
+def get_volume_by_practice() -> list[VolumeGroupRollup]:
+    payload, _ = cache_store.load("volume_by_practice")
+    return [VolumeGroupRollup(**row) for row in (payload or [])]
+
+
+def get_volume_by_team() -> list[VolumeGroupRollup]:
+    payload, _ = cache_store.load("volume_by_team")
+    return [VolumeGroupRollup(**row) for row in (payload or [])]
+
+
+def get_volume_by_local_region() -> list[VolumeGroupRollup]:
+    payload, _ = cache_store.load("volume_by_local_region")
+    return [VolumeGroupRollup(**row) for row in (payload or [])]
+
+
+def get_volume_trend() -> list[VolumeTrendPoint]:
+    payload, _ = cache_store.load("volume_trend")
+    return [VolumeTrendPoint(**row) for row in (payload or [])]
+
+
+def get_volume_filter_options() -> VolumeFilterOptions:
+    payload, _ = cache_store.load("volume_filter_options")
+    return VolumeFilterOptions(**(payload or {"practices": [], "teams": [], "local_regions": []}))

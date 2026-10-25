@@ -1,0 +1,268 @@
+relationship 8cfcd81c-55ac-4437-9a0b-36f2b5ce5d5c
+	joinOnDateBehavior: datePartOnly
+	fromColumn: Drafting_Calendar.Date
+	toColumn: LocalDateTable_1e5d44c6-eed3-498e-95be-1b8d6d60f1a1.Date
+
+relationship 6581bbf4-9322-4977-99d0-6d3dab0a42ff
+	joinOnDateBehavior: datePartOnly
+	fromColumn: Reporting_Calendar.Date
+	toColumn: LocalDateTable_a07ef54e-24f2-4d34-9efc-529b591d9099.Date
+
+relationship 0f138c67-6191-40cf-869d-7677e2a06209
+	joinOnDateBehavior: datePartOnly
+	fromColumn: RadPipeline.'Added to AD Group (CT Head)'
+	toColumn: LocalDateTable_211298e2-3300-4b8d-8ed9-833151287dd6.Date
+
+relationship 52dbf253-d72c-4c42-9bdf-cd0eb7943c55
+	joinOnDateBehavior: datePartOnly
+	fromColumn: RadPipeline.'Added to AD Group (CXR/ABD/MSK)'
+	toColumn: LocalDateTable_b5f5c60e-ae39-4f41-8ff9-d051433bd34d.Date
+
+relationship c03dbffa-22b6-45d4-ae39-8fc1ecf74d7b
+	joinOnDateBehavior: datePartOnly
+	fromColumn: RadPipeline.'Drafting Training Sent (CT Head)'
+	toColumn: LocalDateTable_943dccd0-ea1b-4a16-84df-48f1b297f8f9.Date
+
+relationship 6a28c533-10e0-497c-8a34-6d242140c7c6
+	joinOnDateBehavior: datePartOnly
+	fromColumn: radiologist_metrics.Week_Date
+	toColumn: LocalDateTable_58c92a4e-6169-4ee5-b10c-359dadf04b1a.Date
+
+relationship c2092a71-acb4-4bba-95bf-bf0b46931a8b
+	joinOnDateBehavior: datePartOnly
+	fromColumn: radiologist_metrics.Beginning_of_Month
+	toColumn: LocalDateTable_9b0907be-f3e3-4ffb-ab69-0586bad9e657.Date
+
+relationship aba2ed2c-0736-474d-b09a-1a8f2fe8e43e
+	joinOnDateBehavior: datePartOnly
+	fromColumn: RadPipeline.'Initial Scheduling End Time'
+	toColumn: LocalDateTable_b1ed68e3-8355-402f-99f7-c98c78a61620.Date
+
+relationship 9f9b0af2-2ec9-4e75-80e5-d88fdba97857
+	joinOnDateBehavior: datePartOnly
+	fromColumn: RadPipeline.'Initial Scheduling Start Time'
+	toColumn: LocalDateTable_9840f64d-9e82-4b1f-9aa0-63a0eeac921d.Date
+
+relationship eba6837e-f119-470d-9db2-fdb12b8c852d
+	joinOnDateBehavior: datePartOnly
+	fromColumn: RadPipeline.'Revisit Scheduling End Time'
+	toColumn: LocalDateTable_7bb16109-c35e-4110-983f-e1e6a4096668.Date
+
+relationship 56e13916-3ae0-411e-b6df-aae82fd2023c
+	joinOnDateBehavior: datePartOnly
+	fromColumn: RadPipeline.'Revisit Scheduling Start Time'
+	toColumn: LocalDateTable_5ec75921-be4c-44a5-8f7c-1c8308e65d8e.Date
+
+relationship AutoDetected_eb878c26-9e3f-41c5-830c-893a46f6a8f8
+	fromColumn: radiologist_metrics.Physician_NPI
+	toColumn: radiologist_summary.Physician_NPI
+
+relationship AutoDetected_d0329226-7415-4e5f-8bad-56b599b4d246
+	fromColumn: radiologist_metrics.Team
+	toColumn: team_rollups.Team
+
+relationship AutoDetected_1c5ef3d5-ec9e-4125-88e6-26ee1b232ae1
+	isActive: false
+	fromColumn: radiologist_summary.Team
+	toColumn: team_rollups.Team
+
+relationship b466102e-41d1-49ea-a4cc-b8d8f34ca216
+	joinOnDateBehavior: datePartOnly
+	fromColumn: Mosaic_Calendar.Date
+	toColumn: LocalDateTable_9d149d3d-44c0-407b-94bb-320e47ad3da1.Date
+
+relationship c24c9eef-96da-4ced-8dfd-1cd68961eb65
+	joinOnDateBehavior: datePartOnly
+	fromColumn: RadPipeline.'Okta Date Sent'
+	toColumn: LocalDateTable_ca6be428-2cb0-4add-a0be-01c50e0f82ec.Date
+
+relationship 3b22c157-82d1-449e-8cdd-60e93f52a058
+	joinOnDateBehavior: datePartOnly
+	fromColumn: RadPipeline.'Training Date (Initial) Duplicate'
+	toColumn: LocalDateTable_dddc24d9-ce1a-45b8-af3f-a77df37c782f.Date
+
+relationship f81d5dbe-c7e0-44e2-b088-1f758bd95808
+	joinOnDateBehavior: datePartOnly
+	fromColumn: RadPipeline.'Training Completion'
+	toColumn: LocalDateTable_b69c4854-8241-4291-9ce2-4f804058518b.Date
+
+relationship 8c36f55f-c750-472d-acf1-ee0cfc5fd0cd
+	joinOnDateBehavior: datePartOnly
+	fromColumn: RadPipeline.'Added to AD Group (CT Abd/Pelvis)'
+	toColumn: LocalDateTable_710c9663-c340-4b0a-b169-c822c1dcb3bd.Date
+
+relationship 5698d5a2-ba0d-4495-8acb-41632e4ed6ec
+	joinOnDateBehavior: datePartOnly
+	fromColumn: RadPipeline.'Drafting Training Complete (CT Abd/Pelvis)'
+	toColumn: LocalDateTable_3f2f15f8-09ef-4024-aa12-86adcda17543.Date
+
+relationship 003df2bf-f75f-480b-b93f-079a1b1d1ab2
+	joinOnDateBehavior: datePartOnly
+	fromColumn: RadPipeline.'Drafting Training Sent (CT Abd/Pelvis)'
+	toColumn: LocalDateTable_91051ba1-7e0a-4134-ad72-f21d393829d8.Date
+
+relationship 6c3be3e8-ed70-4b2b-a720-e9af8940bca6
+	joinOnDateBehavior: datePartOnly
+	fromColumn: radiologist_metrics.Exam_Date
+	toColumn: LocalDateTable_e6eddf89-ad40-4a9b-b9e8-1432f8dbecf4.Date
+
+relationship b2eb60dd-70a2-411d-bd88-d28f85c7722f
+	joinOnDateBehavior: datePartOnly
+	fromColumn: 'Report Refresh Info'.LastRefresh
+	toColumn: LocalDateTable_a8ad2615-cfa7-4b58-a50f-db7099855152.Date
+
+relationship dc9dc873-5fcf-4f39-9cd4-c16ad1416041
+	joinOnDateBehavior: datePartOnly
+	fromColumn: Timeline.Date
+	toColumn: LocalDateTable_259f894e-d53e-4e47-a23b-22a215dc3b16.Date
+
+relationship 81365981-f4fc-4337-8941-1938c44faff1
+	joinOnDateBehavior: datePartOnly
+	fromColumn: Baseline_Calendar.Date
+	toColumn: LocalDateTable_2c0e0ba7-9921-4344-82bc-df48e01f570f.Date
+
+relationship 5395abc0-0415-41ea-9c16-30621535ddd7
+	joinOnDateBehavior: datePartOnly
+	fromColumn: RadPipeline.'IR APP Templates Uploaded Date'
+	toColumn: LocalDateTable_cab2cec1-ab37-4450-900a-e641b557cfe0.Date
+
+relationship 45fa5012-8e70-4027-96b8-394e1ed816d6
+	joinOnDateBehavior: datePartOnly
+	fromColumn: RadPipeline.'OKTA Group Enabled Date'
+	toColumn: LocalDateTable_6ea5e40a-bf8a-41f3-9452-d6e322eb64a8.Date
+
+relationship 05dd798a-a377-455f-bf98-49ec54e59f44
+	joinOnDateBehavior: datePartOnly
+	fromColumn: RadPipeline.'OKTA Group Requested Date'
+	toColumn: LocalDateTable_1539fc92-5609-4fdf-ab15-377344048662.Date
+
+relationship 383c99e7-910f-4847-aa5e-e1bd7aa87342
+	joinOnDateBehavior: datePartOnly
+	fromColumn: RadPipeline.'Prelaunch Completion Date'
+	toColumn: LocalDateTable_73587801-b5e9-45c9-b39b-af961a4e916a.Date
+
+relationship 38e3ba62-2bba-4438-9b19-2315b51033e7
+	joinOnDateBehavior: datePartOnly
+	fromColumn: RadPipeline.'Default Clario Launcher Update to Mosaic Date'
+	toColumn: LocalDateTable_f0ced46b-1352-4f3f-bd38-e0394c4037f7.Date
+
+relationship 0af2ea55-0e9a-4d0e-bd68-af5a0de31d7b
+	joinOnDateBehavior: datePartOnly
+	fromColumn: RadPipeline.'Legacy VR Account Disabled Date'
+	toColumn: LocalDateTable_e3ca7784-1a68-4d91-962a-319cebca4fc1.Date
+
+relationship 4454bad2-ade9-487d-be41-8915e3b52381
+	joinOnDateBehavior: datePartOnly
+	fromColumn: RadPipeline.'Added to AD Group (CT Chest)'
+	toColumn: LocalDateTable_6e19a9cd-beb9-4b54-b3c6-58629ae82027.Date
+
+relationship e904e562-8a23-4025-ba67-d805d63b6937
+	joinOnDateBehavior: datePartOnly
+	fromColumn: RadPipeline.'Drafting Training Completed (CT Chest)'
+	toColumn: LocalDateTable_0cb56f34-1b73-4bda-b62b-13055f985262.Date
+
+relationship cd36d3a1-f335-45b4-8209-96df09e25096
+	joinOnDateBehavior: datePartOnly
+	fromColumn: RadPipeline.'Drafting Training Sent (CT Chest)'
+	toColumn: LocalDateTable_9a785699-7f7f-46c7-9991-7834e468ea81.Date
+
+relationship 186bf46d-465f-47cb-ae82-a5c36cae14fa
+	joinOnDateBehavior: datePartOnly
+	fromColumn: RadPipeline.'Added to AD Group (Triage)'
+	toColumn: LocalDateTable_521b0390-409d-4b01-9f2e-42f2fa59e38c.Date
+
+relationship 8d5378a0-892a-4ad9-999a-b87b15e34db5
+	joinOnDateBehavior: datePartOnly
+	fromColumn: radiologist_metrics(1).Exam_Date
+	toColumn: LocalDateTable_eebb747c-28ef-4e13-a280-6afec83c41a3.Date
+
+relationship AutoDetected_d325e4cf-2010-4a1a-aed8-f6d9036a6c27
+	fromColumn: radiologist_metrics(1).Physician_NPI
+	toColumn: radiologist_summary(1).Physician_NPI
+
+relationship 6f4534e0-3703-6666-8a66-b4955982a0d9
+	fromColumn: radiologist_metrics(1).Team
+	toColumn: team_rollups.Team
+
+relationship acb56987-58ed-142a-ea49-d36329b59ba6
+	crossFilteringBehavior: bothDirections
+	fromCardinality: one
+	fromColumn: contact.vrarp_npi
+	toColumn: radiologist_summary.Physician_NPI
+
+relationship 39e5d5aa-7f59-bbb5-2be2-2ac91fad5f8b
+	crossFilteringBehavior: bothDirections
+	fromCardinality: one
+	fromColumn: radiologist_summary(1).Physician_NPI
+	toColumn: contact.vrarp_npi
+
+relationship 0940078a-f394-f068-8910-bf3857ea1dd4
+	crossFilteringBehavior: bothDirections
+	fromCardinality: one
+	fromColumn: radiologist_summary(1).Physician_NPI
+	toColumn: provpractice_vw.NPI
+
+relationship f0a40d0d-0b40-0e04-025d-4eafa71f56e3
+	crossFilteringBehavior: bothDirections
+	fromCardinality: one
+	fromColumn: radiologist_summary(1).Physician_NPI
+	toColumn: radsubspecialty.npi
+
+relationship 80763bf4-a678-f7fb-daae-bcad315016ab
+	isActive: false
+	crossFilteringBehavior: bothDirections
+	fromCardinality: one
+	fromColumn: radsubspecialty.npi
+	toColumn: radiologist_summary.Physician_NPI
+
+relationship 33f95f49-2c5b-4143-ae90-109f6cffd6cd
+	joinOnDateBehavior: datePartOnly
+	fromColumn: RadPipeline.'Added to AD Group (CTA Chest)'
+	toColumn: LocalDateTable_296b59da-399b-47e2-ac8f-eab659a610ac.Date
+
+relationship d8d69838-c30c-4324-990a-4dddc47a9734
+	joinOnDateBehavior: datePartOnly
+	fromColumn: RadPipeline.'Drafting Training Completed (CTA Chest)'
+	toColumn: LocalDateTable_a3c1cc84-56ee-426d-ba64-befa7f20af06.Date
+
+relationship e4d658f6-b4cd-4211-8fd6-7451e5cd3a8f
+	joinOnDateBehavior: datePartOnly
+	fromColumn: RadPipeline.'Drafting Training Sent (CTA Chest)'
+	toColumn: LocalDateTable_7e2d216d-a43c-4e67-83d2-4fba68761183.Date
+
+relationship fa35dcc1-4643-4e1b-b317-59b3f7effd9e
+	joinOnDateBehavior: datePartOnly
+	fromColumn: RadPipeline.'Added to AD Group (CT Cervical Spine)'
+	toColumn: LocalDateTable_cf8db31b-5abc-4495-9152-2fe21c416a34.Date
+
+relationship bd4077ef-7795-4994-b66c-7979af77e173
+	joinOnDateBehavior: datePartOnly
+	fromColumn: RadPipeline.'Drafting Training Completed (CT Cervical Spine)'
+	toColumn: LocalDateTable_b4b5e9e1-9d42-4ef7-a724-6cecf58fb07f.Date
+
+relationship eb63952c-9112-494c-9f9f-faf21f1d7de9
+	joinOnDateBehavior: datePartOnly
+	fromColumn: RadPipeline.'Drafting Training Sent (CT Cervical Spine)'
+	toColumn: LocalDateTable_b86da1ae-e9cb-4944-9e31-7d6b352d67e9.Date
+
+relationship e9458e7a-5f77-4c09-9a49-a802faf90bb3
+	joinOnDateBehavior: datePartOnly
+	fromColumn: RadPipeline.'MVP Target Outreach Week'
+	toColumn: LocalDateTable_05fa8536-f824-4222-a5a5-9bc56fc75845.Date
+
+relationship 2d6fdcdd-09a2-494f-a279-c938af38882a
+	joinOnDateBehavior: datePartOnly
+	fromColumn: RadPipeline.'Optimization Last Updated'
+	toColumn: LocalDateTable_872b0b8c-6951-4617-b593-33ba9a7f21d5.Date
+
+relationship 42b329b9-8214-433e-84af-ff07567b9499
+	joinOnDateBehavior: datePartOnly
+	fromColumn: RadPipeline.'Date Mosaic Mentorship Completed'
+	toColumn: LocalDateTable_aec06368-ca99-4b58-afa7-1f84f182adec.Date
+
+relationship dbca32dd-5fd3-62c5-45e3-92eeb201f19c
+	crossFilteringBehavior: bothDirections
+	fromCardinality: one
+	fromColumn: radiologist_summary.Physician_NPI
+	toColumn: RadPipeline.NPI
+

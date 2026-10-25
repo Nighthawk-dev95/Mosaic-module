@@ -1,0 +1,35 @@
+table Weektable
+	lineageTag: adb4d99c-ac1a-4ef4-917f-29e20f25d888
+
+	column Weekstart
+		formatString: General Date
+		lineageTag: a798bc17-1c85-4229-b1e8-fa45683b7a1e
+		summarizeBy: none
+		isNameInferred
+		sourceColumn: Daily_Extract[WeekStart]
+		columnOrigin: Daily_Extract.Weekstart
+
+		annotation SummarizationSetBy = Automatic
+
+	column Weeklabel
+		lineageTag: 110546b4-41cd-48bd-9e9d-ac8138f8929e
+		summarizeBy: none
+		isNameInferred
+		sourceColumn: [Weeklabel]
+
+		annotation SummarizationSetBy = Automatic
+
+	partition Weektable = calculated
+		mode: import
+		source = ```
+				
+				ADDCOLUMNS(
+				    SUMMARIZE( 'Daily_Extract', 'Daily_Extract'[WeekStart]), 
+				    "Weeklabel", 
+				    FORMAT( 'Daily_Extract'[WeekStart] , "MMM dd") & " - " &
+				    FORMAT('Daily_Extract'[WeekStart] +6 , "MMM dd")
+				)
+				```
+
+	annotation PBI_Id = 21b40bfadcb849709b890478c68626cf
+

@@ -6,17 +6,27 @@ interface StatTileProps {
   sublabel?: string;
   accent?: string;
   trend?: number[];
+  // Click-to-drill-down / click-to-filter (MVP Overview/Mammo/Weekly Report impact tiles,
+  // All Radiologists' Priority/Cohort tiles). `active` highlights the tile currently driving a
+  // filter; `disabled` renders it visibly inert (e.g. Weekly Report's past-week tiles, where
+  // per-radiologist drill-down genuinely isn't available) rather than silently doing nothing.
+  onClick?: () => void;
+  active?: boolean;
+  disabled?: boolean;
+  title?: string;
 }
 
-export function StatTile({ label, value, sublabel, accent, trend }: StatTileProps) {
+export function StatTile({ label, value, sublabel, accent, trend, onClick, active, disabled, title }: StatTileProps) {
   return (
     <div
       className="mosaic-card-hover"
+      onClick={disabled ? undefined : onClick}
+      title={title}
       style={{
         background: "var(--glass-fill-card)",
         backdropFilter: "blur(var(--glass-blur-md))",
         WebkitBackdropFilter: "blur(var(--glass-blur-md))",
-        border: "var(--glass-border)",
+        border: active ? "1px solid var(--rp-moss, var(--domain-deployment))" : "var(--glass-border)",
         borderLeft: accent ? `3px solid ${accent}` : "var(--glass-border)",
         boxShadow: "var(--glass-shadow-card), var(--glass-highlight)",
         borderRadius: "var(--radius-lg)",
@@ -26,6 +36,8 @@ export function StatTile({ label, value, sublabel, accent, trend }: StatTileProp
         display: "flex",
         flexDirection: "column",
         gap: 4,
+        cursor: onClick && !disabled ? "pointer" : undefined,
+        opacity: disabled ? 0.5 : 1,
       }}
     >
       <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12 }}>

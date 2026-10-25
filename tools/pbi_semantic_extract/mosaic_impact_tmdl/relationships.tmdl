@@ -1,0 +1,74 @@
+relationship fad85eee-d6f3-43c8-9051-be50c9494d37
+	joinOnDateBehavior: datePartOnly
+	fromColumn: '0. Cur'.ShiftDate
+	toColumn: LocalDateTable_edadb232-7f17-46c8-b33c-94e5738fc8e1.Date
+
+relationship 3c6db996-d9de-4107-a900-7b6d03e9150c
+	joinOnDateBehavior: datePartOnly
+	fromColumn: '0. Cur'.Schedule_Start_DateTime
+	toColumn: LocalDateTable_fec0a0e5-7e29-44be-9ac1-2c676f350dff.Date
+
+relationship aa8f1ca6-9ebe-43a2-8ed9-891d3be86c86
+	joinOnDateBehavior: datePartOnly
+	fromColumn: '0. Cur'.Schedule_End_DateTime
+	toColumn: LocalDateTable_c1070846-784e-459e-b77f-e88fad8e2c2c.Date
+
+relationship a41a5158-04d4-40d3-873a-6184c017ab49
+	crossFilteringBehavior: bothDirections
+	securityFilteringBehavior: bothDirections
+	fromColumn: '0. Cur'.NPI
+	toColumn: '0. Historical'.physician_NPI
+
+relationship cb14393b-7cd8-47ec-8678-53f14517d384
+	joinOnDateBehavior: datePartOnly
+	fromColumn: '0. Cur'.'Shift Date (Year Month)'
+	toColumn: LocalDateTable_fe746e59-df30-4584-b368-1aa4994296ae.Date
+
+relationship 1ce8d35f-9b25-44a5-bd29-16fcba02edaa
+	joinOnDateBehavior: datePartOnly
+	fromColumn: '0. Cur'.refreshed_date
+	toColumn: LocalDateTable_f43e7c91-0e59-46c9-9e55-879e5fa68d56.Date
+
+relationship 627794db-ebbf-4b89-8c11-fb2fa5ea7722
+	joinOnDateBehavior: datePartOnly
+	fromColumn: '0. Cur'.Rad_Go_Live_date
+	toColumn: LocalDateTable_f20f3298-80d4-40db-a42f-2fa09de523ca.Date
+
+relationship 8e4bfbde-7e34-47e9-9890-8183e3ef1a2f
+	joinOnDateBehavior: datePartOnly
+	fromColumn: '0. Cur'.'Go Live Date'
+	toColumn: LocalDateTable_d159f131-d0b8-47f4-9ae5-dbecbfc5a532.Date
+
+relationship 62585b0d-f68b-4626-b1bd-3d6b611e7cd6
+	joinOnDateBehavior: datePartOnly
+	fromColumn: '0. Cur'.Mosaic_go_live_date
+	toColumn: LocalDateTable_2016e85f-d25a-46f9-a77e-0ba90e7ec8a0.Date
+
+relationship b0a79516-fdb6-0174-db14-7fb2046e7339
+	fromColumn: '0. Cur'.no_hours
+	toColumn: 'Shift Length Lookup'.no_hours
+
+relationship 5e0d6bcc-f5ad-96dd-744a-f1f232349452
+	fromColumn: '0. Cur'.NPI
+	toColumn: Query.NPI
+
+relationship a803a707-120d-a191-0717-f17e8170db29
+	crossFilteringBehavior: bothDirections
+	fromColumn: '0. Cur'.NPI
+	toColumn: 'Program Status'.npi
+
+relationship AutoDetected_41c288dd-281b-43a1-9937-fa8d55f002d8
+	fromColumn: '0. Cur'.Team
+	toColumn: team_rollups.Team
+
+relationship c565b89d-2a47-45a4-81d0-b8927fc7be7c
+	joinOnDateBehavior: datePartOnly
+	fromColumn: '0. Cur'.'Shift Week Start'
+	toColumn: LocalDateTable_064f8f36-7c41-4eb8-a097-f2d49a1cce7e.Date
+
+relationship 1576efc2-b617-da46-43f8-6bd3de06f760
+	crossFilteringBehavior: bothDirections
+	toCardinality: many
+	fromColumn: '0. Cur'.NPI
+	toColumn: stg_mosaic_baseline_master.NPI
+

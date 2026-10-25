@@ -2,21 +2,8 @@ import { NavLink, Outlet } from "react-router-dom";
 import { RefreshStatus } from "./RefreshStatus";
 import { CacheWarmupBanner } from "./CacheWarmupBanner";
 import { TimeOfDayGreeting } from "./TimeOfDayGreeting";
-
-const TABS = [
-  { to: "/", label: "Today", end: true },
-  { to: "/deployment", label: "Deployment" },
-  { to: "/efficiency", label: "Efficiency" },
-  { to: "/capacity", label: "Capacity" },
-  { to: "/baseline-review", label: "Baseline Review" },
-  { to: "/adoption-map", label: "Adoption Map" },
-  { to: "/reconciliation", label: "Reconciliation" },
-  { to: "/external-feedback", label: "External Feedback" },
-  { to: "/capture", label: "Capture" },
-  { to: "/scorecard", label: "Scorecard" },
-  { to: "/roster", label: "Roster" },
-  { to: "/non-drafted", label: "Non-Drafted" },
-];
+import { GenieAskPanel } from "./GenieAskPanel";
+import { TABS } from "../utils/tabs";
 
 // Persistent chrome (title, data-freshness badge, tab bar) around whichever tab's page is
 // currently routed - every tab is a real nested route (so URLs stay deep-linkable/shareable),
@@ -67,6 +54,8 @@ export function MosaicShell() {
       <div style={{ flex: 1, minHeight: 0, display: "flex" }}>
         <Outlet />
       </div>
+
+      <GenieAskPanel />
     </div>
   );
 }

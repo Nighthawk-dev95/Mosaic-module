@@ -10,6 +10,7 @@ interface DataTableProps<T> {
   columns: DataTableColumn<T>[];
   rows: T[];
   rowKey: (row: T) => string | number;
+  onRowClick?: (row: T) => void;
 }
 
 function defaultRender(value: unknown): ReactNode {
@@ -22,7 +23,7 @@ function defaultRender(value: unknown): ReactNode {
 // the one deliberate exception to the rest of the app's all-inline-styles convention.
 const HOVER_STYLE = `.dt-row:hover td { background: var(--surface-raised); }`;
 
-export function DataTable<T>({ columns, rows, rowKey }: DataTableProps<T>) {
+export function DataTable<T>({ columns, rows, rowKey, onRowClick }: DataTableProps<T>) {
   return (
     <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 14 }}>
       <style>{HOVER_STYLE}</style>
@@ -51,7 +52,12 @@ export function DataTable<T>({ columns, rows, rowKey }: DataTableProps<T>) {
       </thead>
       <tbody>
         {rows.map((row) => (
-          <tr key={rowKey(row)} className="dt-row">
+          <tr
+            key={rowKey(row)}
+            className="dt-row"
+            onClick={onRowClick ? () => onRowClick(row) : undefined}
+            style={onRowClick ? { cursor: "pointer" } : undefined}
+          >
             {columns.map((c) => (
               <td
                 key={c.key}

@@ -1,0 +1,753 @@
+table '2.Top N shift Table'
+	lineageTag: d6283beb-9978-4d13-9693-93d2f0bfe65b
+
+	measure 'Selected Shift No.' = SELECTEDVALUE('2.Top N shift Table'[Top N])
+		formatString: 0
+		lineageTag: 8c46987c-c2d0-47fe-9556-10666ffa0bd7
+
+	measure Rank_TopN =
+			
+			VAR n = COALESCE([Selected Shift No.], 0)
+			VAR rnk = SELECTEDVALUE('0. Cur'[ShiftRecencyRank])
+			RETURN
+			IF(
+			    HASONEVALUE('0. Cur'[NPI]) &&
+			    n > 0 &&
+			    NOT ISBLANK(rnk) &&
+			    rnk <= n,
+			    1, 0
+			)
+		formatString: 0
+		lineageTag: 3ce941db-03c4-43f1-a3cb-c0bba05a92ca
+
+	measure 'Average On Shift Cases (Top N)' = ```
+			
+			AVERAGEX(
+			    FILTER(
+			        ('0. Cur'),
+			                [Rank_TopN] =1),
+			    //'0. Cur'[on_shift_cases]
+			    [On-Shift Cases]
+			)
+			
+			```
+		formatString: 0
+		lineageTag: b7881227-f4dd-49a9-bd85-e7c2bf11a0da
+
+	measure 'Total On Shift assisted Cases (Top N)' = ```
+			
+			SUMX(
+			    FILTER(
+			        ('0. Cur'),
+			        [Rank_TopN] <> BLANK()),
+			    //'0. Cur'[on_shift_assisted_cases]
+			    [On-Shift Assisted Cases]
+			)
+			
+			```
+		formatString: 0
+		lineageTag: c8d84422-94d4-4ca9-8ec9-c2f1d8d6b9af
+
+	measure '% Autonext(Top N)' = ```
+			
+			CALCULATE([% Autonext],
+			    FILTER(
+			        ('0. Cur'),
+			        [Rank_TopN] =1)
+			)
+			
+			```
+		formatString: 0%;-0%;0%
+		lineageTag: 532fa274-2a0f-4122-bb4c-f044cac32a57
+
+	measure '% VRA Assisted(Top N)' = ```
+			
+			CALCULATE([% Assisted],
+			    FILTER(
+			        ('0. Cur'),
+			        [Rank_TopN] =1)
+			)
+			
+			```
+		formatString: 0%;-0%;0%
+		lineageTag: d71121fc-31b5-4c1c-9efd-2ecf5466bcde
+
+	measure '% CT(Top N)' = ```
+			
+			CALCULATE([% CT],
+			    FILTER(
+			        ('0. Cur'),
+			        [Rank_TopN] =1)
+			)
+			
+			```
+		lineageTag: 5cc2a314-9243-4926-ae6e-cecf2e8e1967
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	measure '% MR(Top N)' = ```
+			
+			CALCULATE([% MR],
+			    FILTER(
+			        ('0. Cur'),
+			        [Rank_TopN] =1)
+			)
+			
+			```
+		lineageTag: e7c280a1-8040-4011-b9c7-a2863fb94658
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	measure '% IR(Top N)' = ```
+			
+			CALCULATE([% IR],
+			    FILTER(
+			        ('0. Cur'),
+			        [Rank_TopN] =1)
+			)
+			
+			```
+		lineageTag: 48dbd754-bbfa-4732-8a48-c8de9f405175
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	measure '% NM(Top N)' = ```
+			
+			CALCULATE([% NM],
+			    FILTER(
+			        ('0. Cur'),
+			        [Rank_TopN] =1)
+			)
+			
+			```
+		lineageTag: 6fb1e665-397a-465d-abe4-b4f10e4b3965
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	measure '% Other(Top N)' = ```
+			
+			CALCULATE([% Other],
+			    FILTER(
+			        ('0. Cur'),
+			        [Rank_TopN] =1)
+			)
+			
+			```
+		lineageTag: 245d7277-8ba0-4f98-b6cf-7d464e0c4bbc
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	measure '% PT(Top N)' = ```
+			
+			CALCULATE([% PT],
+			    FILTER(
+			        ('0. Cur'),
+			        [Rank_TopN] =1)
+			)
+			
+			```
+		lineageTag: 01353060-8626-4406-931d-8391b6636759
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	measure '% Routine(Top N)' = ```
+			
+			CALCULATE([% Routine],
+			    FILTER(
+			        ('0. Cur'),
+			        [Rank_TopN] =1)
+			)
+			
+			```
+		lineageTag: ce85e1d5-7cb7-45ab-b8a7-7946bdb8ef37
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	measure '% Stat(Top N)' = ```
+			
+			CALCULATE([% Stat],
+			    FILTER(
+			        ('0. Cur'),
+			        [Rank_TopN] =1)
+			)
+			
+			```
+		lineageTag: 1885796d-38f0-4a76-bd9e-0d4208da154e
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	measure '% Stroke(Top N)' = ```
+			
+			CALCULATE([% Stroke],
+			    FILTER(
+			        ('0. Cur'),
+			        [Rank_TopN] =1)
+			)
+			
+			```
+		lineageTag: 2ff6d882-31c2-4cc7-831c-061289e5ce8f
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	measure '% Trauma(Top N)' = ```
+			
+			CALCULATE([% Trauma],
+			    FILTER(
+			        ('0. Cur'),
+			        [Rank_TopN] =1)
+			)
+			
+			```
+		lineageTag: adcd1117-c285-4cb6-b89a-8e63a1ccc0c1
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	measure '% US(Top N)' = ```
+			
+			CALCULATE([% US],
+			    FILTER(
+			        ('0. Cur'),
+			        [Rank_TopN] =1)
+			)
+			
+			```
+		lineageTag: af619089-f72f-43cc-902e-33e7c4909d2b
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	measure '% XR(Top N)' = ```
+			
+			CALCULATE([% XR],
+			    FILTER(
+			        ('0. Cur'),
+			        [Rank_TopN] =1)
+			)
+			
+			```
+		lineageTag: 87d779a0-e2c1-42e2-89ec-adff291a025b
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	measure 'Average Baseline (Top N)' = ```
+			
+			AVERAGEX(
+			    FILTER(
+			        ('0. Cur'),
+			        [Rank_TopN] =1),
+			   // '0. Cur'[shift_baseline]
+			   [Shift Baseline]
+			)
+			
+			```
+		formatString: 0
+		lineageTag: 6120273f-0720-4179-9d07-dca98b320919
+
+		annotation PBI_FormatHint = {"isDecimal":true}
+
+	measure 'Total On Shift Capacity (Top N)' = ```
+			
+			CALCULATE( [On-Shift Capacity],
+			    FILTER(
+			        ('0. Cur'),
+			                [Rank_TopN] =1)
+			)
+			
+			```
+		lineageTag: db33907b-94e9-4a5a-82c6-02ec76e05e56
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	measure '% Add''l Capacity (Top N)' =
+			
+			///IFERROR(([Total On Shift Capacity (Top N)] - [Total Baseline (Top N)])/[Total Baseline (Top N)],BLANK())
+			IF(ISBLANK([Average Baseline (Top N)]),BLANK(),[New Capacity (Top N)] - [Average Baseline (Top N)])/IF(ISBLANK([Average Baseline (Top N)]),BLANK(),[Average Baseline (Top N)])
+		formatString: 0%;-0%;0%
+		lineageTag: 1433b335-8d20-4160-bf2a-51abebb28760
+
+	measure 'Total Baseline (Top N)' = ```
+			
+			SUMX(
+			    FILTER(
+			        ('0. Cur'),
+			        [Rank_TopN] =1),
+			    //'0. Cur'[shift_baseline]
+			    [Shift Baseline]
+			)
+			
+			```
+		formatString: #,0
+		lineageTag: 19c1140d-52db-4a34-816b-80ca6c95c6f6
+
+		annotation PBI_FormatHint = {"isDecimal":true}
+
+	measure 'New Capacity (Top N)' =
+			
+			//[Average Baseline (Top N)] * (1+[% Add'l Capacity (Top N)])
+			AVERAGEX(
+			    FILTER(
+			        ('0. Cur'),
+			        [Rank_TopN] =1),
+			   // '0. Cur'[shift_baseline]
+			   [On-Shift Capacity]
+			)
+		formatString: 0
+		lineageTag: 8d491f09-d682-45db-bd3e-5a9c04641917
+
+		annotation PBI_FormatHint = {"isDecimal":true}
+
+	measure 'Add''l Capacity / Shift (Top N)' =
+			
+			//[New Capacity (Top N)] - [Average Baseline (Top N)]
+			IF(ISBLANK([Average Baseline (Top N)]),BLANK(),[New Capacity (Top N)] - [Average Baseline (Top N)])
+		formatString: 0.0
+		lineageTag: ce4a09c5-d7a3-4526-826b-4ddc9377db11
+
+	measure 'WU:RVU Ratio' = ```
+			
+			CALCULATE( DIVIDE(sum('0. Cur'[on_shift_capacity_RPWU]),sum('0. Cur'[on_shift_capacity_RVU])),
+			    FILTER(
+			        ('0. Cur'),
+			                [Rank_TopN] =1)
+			)
+			
+			```
+		lineageTag: 7954d759-b510-49bd-b7c6-1054831cdd4f
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	measure 'Avg Unit/Case(Top N)' = ```
+			
+			CALCULATE([Avg Unit per case],
+			    FILTER(
+			        ('0. Cur'),
+			                [Rank_TopN] =1)
+			)
+			
+			```
+		lineageTag: 43e6696b-78b5-411e-af68-8f3f2be99a1f
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	measure '% Other P(Top N)' = ```
+			
+			CALCULATE([% OtherP],
+			    FILTER(
+			        ('0. Cur'),
+			        [Rank_TopN] =1)
+			)
+			
+			```
+		lineageTag: ea1add41-333d-454c-8494-cbda060d90d4
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	measure 'Selected Shift Ct.' = COUNTROWS(filter(('0. Cur'),[Rank_TopN] = 1))
+		formatString: #,0
+		lineageTag: 4b4fc585-25cc-4d6e-a462-2e03528bdc14
+
+	measure Formatted_Addl_Capacity_per_shift = ```
+			
+			FORMAT(
+			    [Add'l Capacity / Shift (Top N)], 
+			    "+0;-0;0"
+			)
+			```
+		lineageTag: fb3818d9-e5e4-4aff-b7b6-c96a66ac5ca0
+
+	measure 'Formatted_Addl_capcacity %' = ```
+			
+			FORMAT(
+			    [% Add'l Capacity (Top N)], 
+			        "+0%;-0%;0%"
+			)
+			```
+		lineageTag: bc0e714a-f4cb-44b0-af2c-50cbbff64978
+
+	measure 'Annualized_addl_capacity (Top N)' = [Add'l Capacity / Shift (Top N)] * MIN('0. Cur'[annual_shift_count])
+		formatString: 0
+		lineageTag: 1d396041-a0ad-452f-8574-2d9270c67833
+
+		annotation PBI_FormatHint = {"isDecimal":true}
+
+	measure 'Capacity Increase Incon' = [Add'l Capacity / Shift (Top N)]
+		lineageTag: afec89e7-8e6a-4c4d-bea6-5e8e9afeba06
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	measure 'Annualized_addl_capacity (Top N)(overwrite display)' = ```
+			
+			VAR SummaryTable =
+			    ADDCOLUMNS (
+			        SUMMARIZE (
+			            '0. Cur',
+			            '0. Cur'[NPI]  -- Replace with your actual group column
+			        ),
+			        "MaxValue", CALCULATE ( MAX ( '0. Cur'[annual_shift_count] ) )
+			    )
+			
+			
+			VAR TopNTable =
+			    TOPN (
+			        100,  -- Replace 5 with however many top values you want
+			        SummaryTable,
+			        [MaxValue],
+			        DESC
+			    )
+			//var  add_avlue = IF([Add'l Capacity / Shift (Top N)] <0, 0,[Add'l Capacity / Shift (Top N)])
+			var  add_avlue = [Add'l Capacity / Shift (Top N)] 
+			
+			RETURN
+			    IF(SUMX ( TopNTable, [MaxValue]*add_avlue ) = 0, "n/a",SUMX ( TopNTable, [MaxValue]*add_avlue ))
+			
+			```
+		formatString: #,0
+		lineageTag: 487e8c39-a590-4861-b0a5-61fbcb9b5ff6
+
+		annotation PBI_FormatHint = {"isDecimal":true}
+
+	measure 'Add''l Capacity/Shift(Top N) Practice Detail FORMATED' = (FORMAT([Add'l Capacity / Shift (Top N)],0) & " " & SELECTEDVALUE('1. Unit_Tbl'[Productivity Unit]))
+		lineageTag: 16ebd8a8-4e39-494d-9a37-1c1fecd3c5b6
+
+	measure 'Missing Baseline' =
+			
+			VAR SummaryTable =
+			        SUMMARIZE (
+			            '0. Cur',
+			            '0. Cur'[NPI],'0. Cur'[Task_ID],'0. Cur'[shift_baseline_RPWU],'0. Cur'[shift_baseline_RVU]  -- Replace with your actual group column
+			        )
+			RETURN
+			COUNTROWS(FILTER(SummaryTable,[Shift Baseline] = BLANK()))
+		formatString: 0
+		lineageTag: 0972fc46-80d7-4547-b325-d2a13e54e9ec
+
+	measure 'Total Capacity (Top N)' = ```
+			[Total On Shift Capacity (Top N)]+
+			SUMX(
+			    FILTER(
+			        ('0. Cur'),
+			        [Rank_TopN] =1),
+			    //'0. Cur'[shift_baseline]
+			    [Off-Shift Assisted Capacity]
+			)
+			
+			```
+		formatString: #,0
+		lineageTag: f3d3e71a-249c-455a-aa81-af0dea479f17
+
+		annotation PBI_FormatHint = {"isDecimal":true}
+
+	measure 'Total Adjustment (Top N)' = ```
+			
+			SUMX(
+			    FILTER(
+			        ('0. Cur'),
+			        [Rank_TopN] =1),
+			    //'0. Cur'[shift_baseline]
+			    [Adjustment]
+			)
+			
+			```
+		formatString: #,0
+		lineageTag: c250fd29-9a3c-4eef-8579-3a002877bfa2
+
+		annotation PBI_FormatHint = {"isDecimal":true}
+
+	measure 'Adjusted Unit (Top N)' =
+			
+			[Total Capacity (Top N)]+[Adjustment]
+		formatString: #,0
+		lineageTag: c5ac2505-6367-45a1-a7cb-6c82ff9a06f3
+
+		annotation PBI_FormatHint = {"isDecimal":true}
+
+	measure 'Average On Shift Capacity (Top N)' = ```
+			
+			AVERAGEX(  FILTER(('0. Cur'),[Rank_TopN] =1),[Total Capacity (Top N)])
+			
+			```
+		formatString: #,0
+		lineageTag: a1d76112-056f-451d-bbcf-40139d39fb14
+
+		annotation PBI_FormatHint = {"isDecimal":true}
+
+	measure VRA =
+			
+			
+			VAR SummaryTable =
+			    ADDCOLUMNS (
+			        SUMMARIZE (
+			            '0. Cur',
+			            '0. Cur'[Team],
+			            '0. Cur'[NPI],
+			            '0. Cur'[Shift Date (Year Month)]
+			            -- Replace with your actual group column
+			        ),
+			        "no_vra", IF([Average On Shift Capacity (Top N)] >90,2,1),
+			        "no_shift", [Selected Shift Ct.],
+			        "Total_shift", [Selected Shift Ct.]*IF([Average On Shift Capacity (Top N)] >90,2,1)
+			    )
+			
+			
+			RETURN
+			    SUMX(SummaryTable,[Total_shift])/SUMX(SummaryTable,[no_shift])
+		lineageTag: 720aa866-02ad-4aee-befc-964dc68256aa
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	measure 'Shift Cost' =
+			
+			125*[VRA]*[Selected Shift Ct.]
+		formatString: \$#,0;(\$#,0);\$#,0
+		lineageTag: e6b6571b-8eb6-4c12-a3ff-584be04bd512
+
+	measure 'Rad Equivalents Created' =
+			
+			VAR SummaryTable =
+			    ADDCOLUMNS (
+			        SUMMARIZE (
+			            '0. Cur',
+			            '0. Cur'[NPI]  -- Replace with your actual group column
+			        ),
+			        "MaxValue", CALCULATE ( MAX ( '0. Cur'[annual_shift_count] ) )
+			    )
+			
+			
+			VAR TopNTable =
+			    TOPN (
+			        100,  -- Replace 5 with however many top values you want
+			        SummaryTable,
+			        [MaxValue],
+			        DESC
+			    )
+			//var  add_avlue = IF([Add'l Capacity / Shift (Top N)] <0, 0,[Add'l Capacity / Shift (Top N)])
+			var  add_avlue = [Add'l Capacity / Shift (Top N)]
+			RETURN
+			    SUMX (TopNTable, [MaxValue]*add_avlue)/12000
+		lineageTag: 8d9a5cea-8b2b-45dc-bfcf-2136857a7e4f
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	measure '% Mosaic(Top N)' = ```
+			
+			CALCULATE([% Mosaic],
+			    FILTER(
+			        ('0. Cur'),
+			        [Rank_TopN] =1)
+			)
+			
+			```
+		formatString: 0%;-0%;0%
+		lineageTag: 538c22cb-862a-4925-bd9d-e82181d97674
+
+	measure '% MG(Top N)' = ```
+			
+			CALCULATE([% MG],
+			    FILTER(
+			        ('0. Cur'),
+			        [Rank_TopN] =1)
+			)
+			
+			```
+		lineageTag: 94e14f22-327f-4ea3-84e1-893951bfa985
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	measure '% Mosaic drafting (Top N)' = ```
+			
+			CALCULATE([% Mosaic Drafting],
+			    FILTER(
+			        ('0. Cur'),
+			        [Rank_TopN] =1)
+			)
+			
+			```
+		lineageTag: b174ec89-9b9c-4f02-9585-4c441901a170
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	measure 'Average Baseline mosaic (Top N)' = ```
+			
+			AVERAGEX(
+			    FILTER(
+			        ('0. Cur'),
+			        [Rank_TopN] =1),
+			   // '0. Cur'[shift_baseline]
+			   [shift baseline premosaic]
+			)
+			
+			```
+		lineageTag: 176beefe-f0be-4464-afcc-228c16241429
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	measure 'New Capacity mosaic (Top N)' =
+			
+			//[Average Baseline (Top N)] * (1+[% Add'l Capacity (Top N)])
+			AVERAGEX(
+			    FILTER(
+			        ('0. Cur'),
+			        [Rank_TopN] =1),
+			   // '0. Cur'[shift_baseline]
+			   [on-shift capacity mosaic]
+			)
+		lineageTag: c4643200-0ed9-40fe-aae1-832e274ac3b7
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	measure 'Add''l Capacity / Shift (Top N) mosaic' =
+			
+			//[New Capacity (Top N)] - [Average Baseline (Top N)]
+			IF(ISBLANK([Average Baseline mosaic (Top N)]),BLANK(),[New Capacity mosaic (Top N)] - [Average Baseline mosaic (Top N)])
+		lineageTag: daad0f71-4fcf-4da4-a689-9c8c942e1d54
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	measure '% Add''l Capacity (Top N) mosaic' =
+			
+			///IFERROR(([Total On Shift Capacity (Top N)] - [Total Baseline (Top N)])/[Total Baseline (Top N)],BLANK())
+			IF(ISBLANK([Average Baseline mosaic (Top N)]),BLANK(),[New Capacity mosaic (Top N)] - [Average Baseline mosaic (Top N)])/IF(ISBLANK([Average Baseline mosaic (Top N)]),BLANK(),[Average Baseline mosaic (Top N)])
+		formatString: 0%;-0%;0%
+		lineageTag: 4457f5b3-fe82-4f10-9541-fbb3ed7a6f02
+
+	measure 'Annualized_addl_capacity (Top N)(overwrite display) mosaic' = ```
+			
+			VAR SummaryTable =
+			    ADDCOLUMNS (
+			        SUMMARIZE (
+			            '0. Cur',
+			            '0. Cur'[NPI]  -- Replace with your actual group column
+			        ),
+			        "MaxValue", CALCULATE ( MAX ( '0. Cur'[annual_shift_count] ) )
+			    )
+			
+			
+			VAR TopNTable =
+			    TOPN (
+			        100,  -- Replace 5 with however many top values you want
+			        SummaryTable,
+			        [MaxValue],
+			        DESC
+			    )
+			//var  add_avlue = IF([Add'l Capacity / Shift (Top N)] <0, 0,[Add'l Capacity / Shift (Top N)])
+			var  add_avlue = [Add'l Capacity / Shift (Top N) mosaic] 
+			
+			RETURN
+			    IF(SUMX ( TopNTable, [MaxValue]*add_avlue ) = 0, "n/a",SUMX ( TopNTable, [MaxValue]*add_avlue ))
+			
+			```
+		lineageTag: 4a7cab62-3094-4821-a26a-3b65171efeca
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	measure 'Rad Equivalents MosaicCreated' =
+			
+			VAR SummaryTable =
+			    ADDCOLUMNS (
+			        SUMMARIZE (
+			            '0. Cur',
+			            '0. Cur'[NPI]  -- Replace with your actual group column
+			        ),
+			        "MaxValue", CALCULATE ( MAX ( '0. Cur'[annual_shift_count] ) )
+			    )
+			
+			
+			VAR TopNTable =
+			    TOPN (
+			        100,  -- Replace 5 with however many top values you want
+			        SummaryTable,
+			        [MaxValue],
+			        DESC
+			    )
+			//var  add_avlue = IF([Add'l Capacity / Shift (Top N)] <0, 0,[Add'l Capacity / Shift (Top N)])
+			var  add_avlue = [Add'l Capacity / Shift (Top N) mosaic]
+			RETURN
+			    SUMX (TopNTable, [MaxValue]*add_avlue)/12000
+		lineageTag: 520b41ee-a4db-4993-829b-d14f1ca37e7d
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	measure '% Mosaic Capture(Top N)' = ```
+			
+			CALCULATE([% Mosaic Capture],
+			    FILTER(
+			        ('0. Cur'),
+			        [Rank_TopN] =1)
+			)
+			
+			```
+		lineageTag: 06bae1c0-6629-4467-a99e-6b3c1a0896e5
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	measure 'New Utilization(Top N)' =
+			
+			//[Average Baseline (Top N)] * (1+[% Add'l Capacity (Top N)])
+			AVERAGEX(
+			    FILTER(
+			        ('0. Cur'),
+			        [Rank_TopN] =1),
+			   // '0. Cur'[shift_baseline]
+			   [On-Shift Utilization]
+			)
+		formatString: 0%;-0%;0%
+		lineageTag: 00d142f7-f1b4-404e-9312-b2cda2f18014
+
+	measure 'New Efficiency(Top N)' =
+			
+			//[Average Baseline (Top N)] * (1+[% Add'l Capacity (Top N)])
+			AVERAGEX(
+			    FILTER(
+			        ('0. Cur'),
+			        [Rank_TopN] =1),
+			   // '0. Cur'[shift_baseline]
+			   [On-Shift Efficiency]
+			)
+		formatString: 0.000
+		lineageTag: bc679738-800d-4808-921b-3a3b9358cc10
+
+	measure 'New Capacity RPWU 9h(Top N)' =
+			
+			AVERAGEX(
+			    FILTER(
+			        ('0. Cur'),
+			        [Rank_TopN] = 1
+			    ),
+			    '0. Cur'[on_shift_capacity_RPWU_per_9hours]
+			)
+		formatString: 0
+		lineageTag: 977ce0bf-5aec-4002-a6e7-5428acc0e0e6
+
+		annotation PBI_FormatHint = {"isDecimal":true}
+
+	column 'Top N'
+		formatString: 0
+		lineageTag: 5c8c8d80-e5b0-4e72-bd07-1874c1bcc75d
+		summarizeBy: sum
+		sourceColumn: [Value]
+
+		annotation SummarizationSetBy = Automatic
+
+	column 'No. Shifts' = ```
+			IF('2.Top N shift Table'[Top N] <=30, 
+			                CONCATENATE(CONCATENATE("Last ",'2.Top N shift Table'[Top N])," Shift"),
+			                            IF('2.Top N shift Table'[Top N] = MAX('2.Top N shift Table'[Top N]), "All Shifts", "All Other Shift"))
+			```
+		lineageTag: fea9b981-ecb5-4915-b272-fafa7adcf287
+		summarizeBy: none
+		sortByColumn: 'Drop Down Sort'
+
+		annotation SummarizationSetBy = Automatic
+
+	column 'Drop Down Sort' = IF('2.Top N shift Table'[Top N] > 30, 9999,'2.Top N shift Table'[Top N])
+		formatString: 0
+		lineageTag: 79744399-d76d-4518-999a-e6840ea35e1c
+		summarizeBy: sum
+
+		annotation SummarizationSetBy = Automatic
+
+	partition '2.Top N shift Table' = calculated
+		mode: import
+		source = GENERATESERIES(5,[Max_shift_no_for_Top N series],5)
+
+	annotation PBI_Id = d6732cad3e9641c7b43f3d84364cada0
+

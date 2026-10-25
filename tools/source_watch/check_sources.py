@@ -38,14 +38,37 @@ CORE_FILES: dict[str, str] = {
     os.path.join(ROOT, "Carlton Prickett - Decks", "Mosaic Rad Experience_MASTER.pptx"):
         "General context/ontology only - not wired into a specific data file yet.",
     os.path.join(ROOT, "Carlton Prickett - Deployment", "260724 Mosaic Value Project.pptx"):
-        "Focus Rads MVP methodology (baseline window, tier thresholds, volume floor) "
-        "is hardcoded in backend/app/services/cache_service.py get_focus_radiologists() "
-        "and mosaic_service.py get_mvp_efficiency_by_radiologist/get_mvp_capacity_by_radiologist. "
-        "A change here may require code changes, not just data literals.",
+        "Feeds backend/app/data/mvp_context.py (program narrative, priority-tier definitions, "
+        "exclusion-reason glossary, engagement process, mentorship summary, dated current-"
+        "status notes). This file is overwritten in place with each week's update rather than "
+        "versioned (confirmed 2026-10-17: contains both the original July 2026 methodology "
+        "slides and the latest weekly status) - a change here means re-extracting "
+        "mvp_context.py's constants, especially CURRENT_STATUS_NOTES.",
     os.path.join(ROOT, "Carlton Prickett - Deployment", "260724 MVP Master Data.xlsx"):
-        "Corroborating source for the same Focus Rads MVP methodology as the MVP deck above.",
+        "Corroborating source for the same MVP program context as the MVP deck above - the "
+        "live per-radiologist numbers now come from rad_onboarding (EDW), not this file.",
     os.path.join(ROOT, "Carlton Prickett - Deployment", "260827 MVP Rad Engagement Model.xlsx"):
-        "Informational only - staffing calculator, not wired into the app.",
+        "Superseded by '260831 Mosaic_Rad_Engagement_Model (1).xlsx' below (confirmed 2026-10-20 "
+        "- materially different assumptions: 1.25 vs 4.29 hrs/radiologist, 66.1 vs 32.2 rads/week "
+        "throughput). No longer wired into the app - kept here only so a future diff against this "
+        "file doesn't look like new information.",
+    os.path.join(ROOT, "Carlton Prickett - Deployment", "260831 Mosaic_Rad_Engagement_Model (1).xlsx"):
+        "Feeds backend/app/data/mvp_context.py's ENGAGEMENT_CAPACITY_PLAN (shown on the MVP tab "
+        "as a dated staffing/timeline planning snapshot - not a live forecast). A change here "
+        "means re-extracting the Inputs/Answer/Weekly Plan tabs and updating that constant's "
+        "numbers + source_date (use the file's own last-modified date, not its filename date - "
+        "confirmed this file's content was last touched 2026-09-10, after its 260831 filename).",
+    os.path.join(ROOT, "Carlton Prickett - Deployment", "260820 MVP_Peer Coach List for Review.xlsx"):
+        "Feeds backend/app/data/mvp_mentor_matching.py (MENTOR_MATCHING_STATUS, "
+        "PEER_COACH_QUALIFICATION_THRESHOLDS, MENTOR_MATCH_STATUS_DEFINITIONS) - the real "
+        "Mosaic Mentors/peer-coach matching pipeline, shown on the MVP tab's 'Mentor Match' "
+        "column and Notes drawer. Actively edited day-to-day (unlike the weekly-cadence deck) - "
+        "this is a point-in-time snapshot of its 'Matching Status' sheet (15 rows as of "
+        "2026-10-20), not a live feed; re-extracting means re-reading that sheet in full and "
+        "replacing MENTOR_MATCHING_STATUS wholesale. Deliberately NOT wired in: the 1,385-row "
+        "candidate peer-coach pool ('Peer Coaches Qualification Data'), the 811-row raw "
+        "interest-survey responses, and the Perception of Challenges/Optimizations Completed "
+        "narrative fields (out of scope per the 2026-10-20 scoping conversation).",
     os.path.join(ROOT, "Carlton Prickett - Deployment", "260901 Rads on Drafting Analysis.xlsx"):
         "Informational only - feeds the deferred Deployment blocker-taxonomy follow-up (not built).",
     os.path.join(ROOT, "Carlton Prickett - Deployment", "Mosaic - Rads w No Drafting 8-31-2026.xlsx"):

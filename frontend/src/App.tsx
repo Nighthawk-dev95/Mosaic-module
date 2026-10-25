@@ -4,18 +4,19 @@ import { MosaicShell } from "./components/MosaicShell";
 import { FilterProvider } from "./context/FilterContext";
 import { ThemeProvider } from "./context/ThemeContext";
 import { MosaicIntelligence } from "./pages/MosaicIntelligence";
+import { Mvp } from "./pages/Mvp";
 import { RadiologistRoster } from "./pages/RadiologistRoster";
-import { DeploymentDetail } from "./pages/DeploymentDetail";
 import { EfficiencyDetail } from "./pages/EfficiencyDetail";
+import { VolumeDetail } from "./pages/VolumeDetail";
 import { CapacityDetail } from "./pages/CapacityDetail";
 import { BaselineReviewQueue } from "./pages/BaselineReviewQueue";
-import { ExternalFeedback } from "./pages/ExternalFeedback";
-import { AdoptionMap } from "./pages/AdoptionMap";
-import { Reconciliation } from "./pages/Reconciliation";
+import { RadiologistLookup } from "./pages/RadiologistLookup";
 import { NonDraftedDetail } from "./pages/NonDraftedDetail";
 import { CaptureDetail } from "./pages/CaptureDetail";
-import { ScorecardDetail } from "./pages/ScorecardDetail";
+import { RadMosaicScorecard } from "./pages/RadMosaicScorecard";
 import { DraftVsFinal } from "./pages/DraftVsFinal";
+import { MosaicPulse } from "./pages/MosaicPulse";
+import { ShiftUtilization } from "./pages/ShiftUtilization";
 
 export default function App() {
   return (
@@ -26,18 +27,19 @@ export default function App() {
           <Routes>
             <Route element={<MosaicShell />}>
               <Route path="/" element={<MosaicIntelligence />} />
+              <Route path="/mvp" element={<Mvp />} />
               <Route path="/roster" element={<RadiologistRoster />} />
-              <Route path="/deployment" element={<DeploymentDetail />} />
+              <Route path="/volume" element={<VolumeDetail />} />
               <Route path="/efficiency" element={<EfficiencyDetail />} />
               <Route path="/capacity" element={<CapacityDetail />} />
               <Route path="/baseline-review" element={<BaselineReviewQueue />} />
-              <Route path="/external-feedback" element={<ExternalFeedback />} />
-              <Route path="/adoption-map" element={<AdoptionMap />} />
-              <Route path="/reconciliation" element={<Reconciliation />} />
+              <Route path="/radiologist-lookup" element={<RadiologistLookup />} />
               <Route path="/non-drafted" element={<NonDraftedDetail />} />
               <Route path="/capture" element={<CaptureDetail />} />
-              <Route path="/scorecard" element={<ScorecardDetail />} />
+              <Route path="/scorecard" element={<RadMosaicScorecard />} />
               <Route path="/draft-vs-final" element={<DraftVsFinal />} />
+              <Route path="/pulse" element={<MosaicPulse />} />
+              <Route path="/shift-utilization" element={<ShiftUtilization />} />
             </Route>
           </Routes>
         </div>

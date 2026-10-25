@@ -2,7 +2,9 @@ import { useEffect, useMemo, useState } from "react";
 import { mosaicApi } from "../api/client";
 import { useFetch } from "../hooks/useFetch";
 import { Badge } from "../components/Badge";
+import { AIHoverCard } from "../components/AIHoverCard";
 import { ReviewActivityTicker } from "../components/ReviewActivityTicker";
+import { RingGauge } from "../components/RingGauge";
 import { CARD_STYLE } from "../styles/glassCard";
 import type { BaselineProxyCandidate, BaselineProxyDetail, BaselineReviewDecision } from "../api/types";
 
@@ -31,84 +33,14 @@ function totalScoreColor(score: number | null): string {
   return score < 40 ? "var(--status-critical)" : "var(--status-good)";
 }
 
-// Animated circular gauge (progress ring) - value sweeps in from 0 on mount/candidate change
-// rather than snapping to its final position, so switching candidates reads as the dashboard
-// "recomputing" the match instead of silently swapping a static image.
-function RingGauge({
-  value,
-  max,
-  size,
-  strokeWidth,
-  color,
-  delayMs = 0,
-  label,
-  replayTrigger = 0,
-}: {
-  value: number | null;
-  max: number;
-  size: number;
-  strokeWidth: number;
-  color: string;
-  delayMs?: number;
-  label?: string;
-  replayTrigger?: number;
-}) {
-  const targetPct = value === null ? 0 : Math.max(0, Math.min(100, (value / max) * 100));
-  const [pct, setPct] = useState(0);
-
-  // replayTrigger changes on every hover (see CandidateCard) even though value/max don't -
-  // that's the point, it's how hovering re-sweeps a gauge that's already at its final position.
-  useEffect(() => {
-    setPct(0);
-    const t = setTimeout(() => setPct(targetPct), 30 + delayMs);
-    return () => clearTimeout(t);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [targetPct, delayMs, value, replayTrigger]);
-
-  const radius = (size - strokeWidth) / 2;
-  const circumference = 2 * Math.PI * radius;
-  const offset = circumference * (1 - pct / 100);
-  const center = size / 2;
-
-  return (
-    <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 4 }}>
-      <svg width={size} height={size}>
-        <g transform={`rotate(-90 ${center} ${center})`}>
-          <circle cx={center} cy={center} r={radius} fill="none" stroke="var(--surface-raised)" strokeWidth={strokeWidth} />
-          <circle
-            cx={center}
-            cy={center}
-            r={radius}
-            fill="none"
-            stroke={color}
-            strokeWidth={strokeWidth}
-            strokeLinecap="round"
-            strokeDasharray={circumference}
-            strokeDashoffset={offset}
-            style={{ transition: "stroke-dashoffset var(--dur-kpi) var(--ease-spring)" }}
-          />
-        </g>
-        <text
-          x={center}
-          y={center}
-          textAnchor="middle"
-          dominantBaseline="central"
-          style={{ fontSize: size * 0.3, fontWeight: 700, fill: "var(--text-primary)" }}
-        >
-          {value ?? "—"}
-        </text>
-      </svg>
-      {label && <div style={{ fontSize: 10, color: "var(--text-muted)", textAlign: "center", lineHeight: 1.2 }}>{label}</div>}
-    </div>
-  );
-}
-
 function CandidateCard({
   candidate,
+  entityLabel,
   onChoose,
   disabled,
 }: {
   candidate: BaselineProxyCandidate;
+  entityLabel: string;
   onChoose: () => void;
   disabled: boolean;
 }) {
@@ -136,14 +68,23 @@ function CandidateCard({
         <span style={{ fontWeight: 600, fontSize: 13 }}>{candidate.proxy_shift}</span>
       </div>
 
-      <RingGauge
-        value={candidate.total_match_score}
-        max={70}
-        size={96}
-        strokeWidth={9}
-        color={totalScoreColor(candidate.total_match_score)}
-        replayTrigger={replayTrigger}
-      />
+      <AIHoverCard
+        feature="baseline_review_match"
+        entityLabel={entityLabel}
+        metricLabel={`Match score for borrowing "${candidate.proxy_shift}"`}
+        value={String(candidate.total_match_score ?? "—")}
+        extra={{ rank: String(candidate.rank) }}
+        underline={false}
+      >
+        <RingGauge
+          value={candidate.total_match_score}
+          max={70}
+          size={96}
+          strokeWidth={9}
+          color={totalScoreColor(candidate.total_match_score)}
+          replayTrigger={replayTrigger}
+        />
+      </AIHoverCard>
 
       <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 6 }}>
         {SCORE_DIMENSIONS.map((d, i) => (
@@ -338,6 +279,7 @@ export function BaselineReviewQueue() {
               <CandidateCard
                 key={c.rank}
                 candidate={c}
+                entityLabel={currentItem.radiologist_name ?? `NPI ${currentItem.npi}`}
                 disabled={submitting}
                 onChoose={() => submitDecision(c.rank === 1 ? "accepted" : "overridden", c)}
               />

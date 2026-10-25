@@ -30,5 +30,25 @@ class Settings:
     def qualified(self) -> str:
         return f"{self.catalog}.{self.schema}"
 
+    # Foundation Model API endpoint for AI hover-context explanations (see
+    # app/services/ai_context_service.py). The name itself is a fixed, workspace-wide moniker -
+    # no env var needed to discover it, just to grant CAN_QUERY in production (see
+    # resources/practice_command_bhargav.app.yml's serving_endpoint resource). Defaults to the
+    # fastest/cheapest Foundation Model available (confirmed via `serving-endpoints list`),
+    # right-sized for a short hover tooltip, not a chat-quality response.
+    ai_context_serving_endpoint: str = os.environ.get(
+        "AI_CONTEXT_SERVING_ENDPOINT", "databricks-claude-haiku-5-5"
+    )
+
+    # "Mosaic performance metrics" Genie Space (see app/services/genie_service.py) - an existing,
+    # actively-maintained space purpose-built for this exact domain (Deployment/Volume/
+    # Efficiency/Read-Times/Capacity via mv_mosaic_* metric views), confirmed live this session.
+    # Unlike the serving endpoint above, Genie access is a workspace-object ACL on the space
+    # itself (CAN_RUN), not something declared in the app's resources yaml - the deployed app's
+    # service principal needs that grant explicitly, separate from its SQL-warehouse access.
+    genie_space_id: str = os.environ.get(
+        "GENIE_SPACE_ID", "01f174e507061378bcc30e3d9244535b"
+    )
+
 
 settings = Settings()

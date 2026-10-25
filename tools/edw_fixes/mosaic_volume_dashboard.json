@@ -1,0 +1,532 @@
+{
+  "datasets": [
+    {
+      "name": "ds_volume",
+      "displayName": "Mosaic Volume",
+      "asset_name": "edw_test.enterprise_analytics.mosaic_volume_metric_view"
+    },
+    {
+      "name": "ds_resident",
+      "displayName": "Resident Utilization",
+      "asset_name": "edw_test.enterprise_analytics.mosaic_resident_utilization_metric_view"
+    }
+  ],
+  "pages": [
+    {
+      "name": "overview",
+      "displayName": "Overview",
+      "pageType": "PAGE_TYPE_CANVAS",
+      "layoutVersion": "GRID_V1",
+      "layout": [
+        {
+          "widget": {
+            "name": "header",
+            "multilineTextboxSpec": {
+              "lines": [
+                "# Mosaic Volume Report\n",
+                "\n",
+                "Governed replacement for the PowerBI \"Mosaic Volume Report\", built on `mosaic_volume_metric_view` / `mosaic_resident_utilization_metric_view` (Unity Catalog Metric Views over `tbl_exam_inventory`). All-time totals on the left two KPI rows below; the third row is a rolling 14-day window. The trend chart shows Mosaic adoption ramping from mid-2025 onward."
+              ]
+            }
+          },
+          "position": {"x": 0, "y": 0, "width": 12, "height": 2}
+        },
+        {
+          "widget": {
+            "name": "kpi-exam-count",
+            "queries": [{"name": "main_query", "query": {
+              "datasetName": "ds_volume",
+              "fields": [{"name": "measure(Exam Count)", "expression": "MEASURE(`Exam Count`)"}],
+              "disaggregated": false
+            }}],
+            "spec": {
+              "version": 2, "widgetType": "counter",
+              "encodings": {"value": {
+                "fieldName": "measure(Exam Count)", "displayName": "Total Exams",
+                "format": {"type": "number", "abbreviation": "compact", "decimalPlaces": {"type": "max", "places": 1}}
+              }},
+              "frame": {"title": "Total Exams (All-Time)", "showTitle": true}
+            }
+          },
+          "position": {"x": 0, "y": 2, "width": 3, "height": 3}
+        },
+        {
+          "widget": {
+            "name": "kpi-pct-mosaic",
+            "queries": [{"name": "main_query", "query": {
+              "datasetName": "ds_volume",
+              "fields": [{"name": "measure(Pct Mosaic Exams)", "expression": "MEASURE(`Pct Mosaic Exams`)"}],
+              "disaggregated": false
+            }}],
+            "spec": {
+              "version": 2, "widgetType": "counter",
+              "encodings": {"value": {
+                "fieldName": "measure(Pct Mosaic Exams)", "displayName": "Mosaic Adoption",
+                "format": {"type": "number-percent", "decimalPlaces": {"type": "max", "places": 1}}
+              }},
+              "frame": {"title": "Mosaic Adoption % (All-Time)", "showTitle": true}
+            }
+          },
+          "position": {"x": 3, "y": 2, "width": 3, "height": 3}
+        },
+        {
+          "widget": {
+            "name": "kpi-pct-drafting",
+            "queries": [{"name": "main_query", "query": {
+              "datasetName": "ds_volume",
+              "fields": [{"name": "measure(Pct Drafting Exams)", "expression": "MEASURE(`Pct Drafting Exams`)"}],
+              "disaggregated": false
+            }}],
+            "spec": {
+              "version": 2, "widgetType": "counter",
+              "encodings": {"value": {
+                "fieldName": "measure(Pct Drafting Exams)", "displayName": "Drafting Adoption",
+                "format": {"type": "number-percent", "decimalPlaces": {"type": "max", "places": 1}}
+              }},
+              "frame": {"title": "Drafting Adoption % (All-Time)", "showTitle": true}
+            }
+          },
+          "position": {"x": 6, "y": 2, "width": 3, "height": 3}
+        },
+        {
+          "widget": {
+            "name": "kpi-pct-rpce",
+            "queries": [{"name": "main_query", "query": {
+              "datasetName": "ds_volume",
+              "fields": [{"name": "measure(Pct RPCE Reporting)", "expression": "MEASURE(`Pct RPCE Reporting`)"}],
+              "disaggregated": false
+            }}],
+            "spec": {
+              "version": 2, "widgetType": "counter",
+              "encodings": {"value": {
+                "fieldName": "measure(Pct RPCE Reporting)", "displayName": "RPCE % Reporting",
+                "format": {"type": "number-percent", "decimalPlaces": {"type": "max", "places": 1}}
+              }},
+              "frame": {"title": "Mosaic % of RPCE Reporting", "showTitle": true, "showDescription": true, "description": "Share of RPCE-sourced exam volume reported on Mosaic"}
+            }
+          },
+          "position": {"x": 9, "y": 2, "width": 3, "height": 3}
+        },
+        {
+          "widget": {
+            "name": "window-section",
+            "multilineTextboxSpec": {"lines": ["### Last 14 Days"]}
+          },
+          "position": {"x": 0, "y": 5, "width": 12, "height": 1}
+        },
+        {
+          "widget": {
+            "name": "kpi-exam-window",
+            "queries": [{"name": "main_query", "query": {
+              "datasetName": "ds_volume",
+              "fields": [{"name": "measure(Exam Count In Window)", "expression": "MEASURE(`Exam Count In Window`)"}],
+              "disaggregated": false
+            }}],
+            "spec": {
+              "version": 2, "widgetType": "counter",
+              "encodings": {"value": {
+                "fieldName": "measure(Exam Count In Window)", "displayName": "Exams (14d)",
+                "format": {"type": "number", "abbreviation": "compact", "decimalPlaces": {"type": "max", "places": 1}}
+              }},
+              "frame": {"title": "Exams (Last 14 Days)", "showTitle": true}
+            }
+          },
+          "position": {"x": 0, "y": 6, "width": 4, "height": 3}
+        },
+        {
+          "widget": {
+            "name": "kpi-mosaic-window",
+            "queries": [{"name": "main_query", "query": {
+              "datasetName": "ds_volume",
+              "fields": [{"name": "measure(Pct Mosaic Exams In Window)", "expression": "MEASURE(`Pct Mosaic Exams In Window`)"}],
+              "disaggregated": false
+            }}],
+            "spec": {
+              "version": 2, "widgetType": "counter",
+              "encodings": {"value": {
+                "fieldName": "measure(Pct Mosaic Exams In Window)", "displayName": "Mosaic % (14d)",
+                "format": {"type": "number-percent", "decimalPlaces": {"type": "max", "places": 1}}
+              }},
+              "frame": {"title": "Mosaic Adoption % (Last 14 Days)", "showTitle": true}
+            }
+          },
+          "position": {"x": 4, "y": 6, "width": 4, "height": 3}
+        },
+        {
+          "widget": {
+            "name": "kpi-drafting-window",
+            "queries": [{"name": "main_query", "query": {
+              "datasetName": "ds_volume",
+              "fields": [{"name": "measure(Pct Drafting In Window)", "expression": "MEASURE(`Pct Drafting In Window`)"}],
+              "disaggregated": false
+            }}],
+            "spec": {
+              "version": 2, "widgetType": "counter",
+              "encodings": {"value": {
+                "fieldName": "measure(Pct Drafting In Window)", "displayName": "Drafting % (14d)",
+                "format": {"type": "number-percent", "decimalPlaces": {"type": "max", "places": 1}}
+              }},
+              "frame": {"title": "Drafting Adoption % (Last 14 Days)", "showTitle": true}
+            }
+          },
+          "position": {"x": 8, "y": 6, "width": 4, "height": 3}
+        },
+        {
+          "widget": {
+            "name": "trend-chart",
+            "queries": [{"name": "main_query", "query": {
+              "datasetName": "ds_volume",
+              "fields": [
+                {"name": "Final Month", "expression": "`Final Month`"},
+                {"name": "measure(Exam Count)", "expression": "MEASURE(`Exam Count`)"},
+                {"name": "measure(Mosaic Exam Count)", "expression": "MEASURE(`Mosaic Exam Count`)"}
+              ],
+              "disaggregated": false,
+              "filters": [{"expression": "`Final Month` IS NOT NULL"}],
+              "orders": [{"direction": "ASC", "expression": "`Final Month`"}]
+            }}],
+            "spec": {
+              "version": 3, "widgetType": "line",
+              "encodings": {
+                "x": {"fieldName": "Final Month", "scale": {"type": "temporal"}, "displayName": "Month"},
+                "y": {
+                  "scale": {"type": "quantitative"},
+                  "fields": [
+                    {"fieldName": "measure(Exam Count)", "displayName": "Total Exams"},
+                    {"fieldName": "measure(Mosaic Exam Count)", "displayName": "Mosaic Exams"}
+                  ]
+                }
+              },
+              "frame": {"title": "Monthly Exam Volume & Mosaic Adoption", "showTitle": true}
+            }
+          },
+          "position": {"x": 0, "y": 9, "width": 12, "height": 6}
+        },
+        {
+          "widget": {
+            "name": "modality-bar",
+            "queries": [{"name": "main_query", "query": {
+              "datasetName": "ds_volume",
+              "fields": [
+                {"name": "Modality", "expression": "`Modality`"},
+                {"name": "measure(Pct Mosaic Exams)", "expression": "MEASURE(`Pct Mosaic Exams`)"}
+              ],
+              "disaggregated": false,
+              "filters": [{"expression": "`Modality` IN ('CR','CT','US','MG','MR','RF','BD','OT','XA','NM')"}],
+              "orders": [{"direction": "DESC", "expression": "MEASURE(`Pct Mosaic Exams`)"}]
+            }}],
+            "spec": {
+              "version": 3, "widgetType": "bar",
+              "encodings": {
+                "x": {"fieldName": "Modality", "scale": {"type": "categorical", "sort": {"by": "value"}}},
+                "y": {"fieldName": "measure(Pct Mosaic Exams)", "scale": {"type": "quantitative"}, "displayName": "Mosaic %",
+                  "format": {"type": "number-percent", "decimalPlaces": {"type": "max", "places": 1}}}
+              },
+              "frame": {"title": "Mosaic Adoption % by Modality", "showTitle": true}
+            }
+          },
+          "position": {"x": 0, "y": 15, "width": 6, "height": 6}
+        },
+        {
+          "widget": {
+            "name": "practice-table",
+            "queries": [{"name": "main_query", "query": {
+              "datasetName": "ds_volume",
+              "fields": [
+                {"name": "Practice", "expression": "`Practice`"},
+                {"name": "measure(Exam Count)", "expression": "MEASURE(`Exam Count`)"},
+                {"name": "measure(Pct Mosaic Exams)", "expression": "MEASURE(`Pct Mosaic Exams`)"},
+                {"name": "measure(Pct Drafting Exams)", "expression": "MEASURE(`Pct Drafting Exams`)"}
+              ],
+              "disaggregated": false,
+              "filters": [{"expression": "`Practice` IS NOT NULL"}],
+              "orders": [{"direction": "DESC", "expression": "MEASURE(`Exam Count`)"}]
+            }}],
+            "spec": {
+              "version": 2, "widgetType": "table",
+              "encodings": {"columns": [
+                {"fieldName": "Practice", "displayName": "Practice"},
+                {"fieldName": "measure(Exam Count)", "displayName": "Exams",
+                  "format": {"type": "number", "abbreviation": "compact", "decimalPlaces": {"type": "max", "places": 1}}},
+                {"fieldName": "measure(Pct Mosaic Exams)", "displayName": "Mosaic %",
+                  "format": {"type": "number-percent", "decimalPlaces": {"type": "max", "places": 1}}},
+                {"fieldName": "measure(Pct Drafting Exams)", "displayName": "Drafting %",
+                  "format": {"type": "number-percent", "decimalPlaces": {"type": "max", "places": 1}}}
+              ]},
+              "frame": {"title": "Practices by Volume", "showTitle": true}
+            }
+          },
+          "position": {"x": 6, "y": 15, "width": 6, "height": 6}
+        }
+      ]
+    },
+    {
+      "name": "drafting",
+      "displayName": "Drafting & Capture",
+      "pageType": "PAGE_TYPE_CANVAS",
+      "layoutVersion": "GRID_V1",
+      "layout": [
+        {
+          "widget": {
+            "name": "drafting-header",
+            "multilineTextboxSpec": {
+              "lines": [
+                "# Drafting & Capture Adoption\n",
+                "\n",
+                "Draftable/Drafted exam counts are scoped to the 7 live drafting-model categories (CT Head, CT Chest, CT Abd/Pel, CT Spine, US Capturable, DEXA Capturable, XR/MSK). Capture covers US + DEXA/BD only."
+              ]
+            }
+          },
+          "position": {"x": 0, "y": 0, "width": 12, "height": 2}
+        },
+        {
+          "widget": {
+            "name": "kpi-draftable",
+            "queries": [{"name": "main_query", "query": {
+              "datasetName": "ds_volume",
+              "fields": [{"name": "measure(Draftable Exam Count)", "expression": "MEASURE(`Draftable Exam Count`)"}],
+              "disaggregated": false
+            }}],
+            "spec": {
+              "version": 2, "widgetType": "counter",
+              "encodings": {"value": {"fieldName": "measure(Draftable Exam Count)", "displayName": "Draftable Exams",
+                "format": {"type": "number", "abbreviation": "compact", "decimalPlaces": {"type": "max", "places": 1}}}},
+              "frame": {"title": "Draftable Exams", "showTitle": true}
+            }
+          },
+          "position": {"x": 0, "y": 2, "width": 3, "height": 3}
+        },
+        {
+          "widget": {
+            "name": "kpi-drafted",
+            "queries": [{"name": "main_query", "query": {
+              "datasetName": "ds_volume",
+              "fields": [{"name": "measure(Drafted Exam Count)", "expression": "MEASURE(`Drafted Exam Count`)"}],
+              "disaggregated": false
+            }}],
+            "spec": {
+              "version": 2, "widgetType": "counter",
+              "encodings": {"value": {"fieldName": "measure(Drafted Exam Count)", "displayName": "Drafted Exams",
+                "format": {"type": "number", "abbreviation": "compact", "decimalPlaces": {"type": "max", "places": 1}}}},
+              "frame": {"title": "Drafted Exams", "showTitle": true}
+            }
+          },
+          "position": {"x": 3, "y": 2, "width": 3, "height": 3}
+        },
+        {
+          "widget": {
+            "name": "kpi-pct-drafted",
+            "queries": [{"name": "main_query", "query": {
+              "datasetName": "ds_volume",
+              "fields": [{"name": "measure(Pct Drafted Of Draftable)", "expression": "MEASURE(`Pct Drafted Of Draftable`)"}],
+              "disaggregated": false
+            }}],
+            "spec": {
+              "version": 2, "widgetType": "counter",
+              "encodings": {"value": {"fieldName": "measure(Pct Drafted Of Draftable)", "displayName": "% Drafted",
+                "format": {"type": "number-percent", "decimalPlaces": {"type": "max", "places": 1}}}},
+              "frame": {"title": "% Drafted of Draftable", "showTitle": true}
+            }
+          },
+          "position": {"x": 6, "y": 2, "width": 3, "height": 3}
+        },
+        {
+          "widget": {
+            "name": "kpi-pct-capture",
+            "queries": [{"name": "main_query", "query": {
+              "datasetName": "ds_volume",
+              "fields": [{"name": "measure(Pct Capture Read)", "expression": "MEASURE(`Pct Capture Read`)"}],
+              "disaggregated": false
+            }}],
+            "spec": {
+              "version": 2, "widgetType": "counter",
+              "encodings": {"value": {"fieldName": "measure(Pct Capture Read)", "displayName": "% Capture Read",
+                "format": {"type": "number-percent", "decimalPlaces": {"type": "max", "places": 1}}}},
+              "frame": {"title": "% Capture Read (US + DEXA/BD)", "showTitle": true}
+            }
+          },
+          "position": {"x": 9, "y": 2, "width": 3, "height": 3}
+        },
+        {
+          "widget": {
+            "name": "category-bar",
+            "queries": [{"name": "main_query", "query": {
+              "datasetName": "ds_volume",
+              "fields": [
+                {"name": "Drafting Model Category", "expression": "`Drafting Model Category`"},
+                {"name": "measure(Draftable Exam Count)", "expression": "MEASURE(`Draftable Exam Count`)"},
+                {"name": "measure(Drafted Exam Count)", "expression": "MEASURE(`Drafted Exam Count`)"}
+              ],
+              "disaggregated": false,
+              "filters": [{"expression": "`Drafting Model Category` IS NOT NULL"}],
+              "orders": [{"direction": "DESC", "expression": "MEASURE(`Draftable Exam Count`)"}]
+            }}],
+            "spec": {
+              "version": 3, "widgetType": "bar",
+              "mark": {"layout": "group"},
+              "encodings": {
+                "x": {"fieldName": "Drafting Model Category", "scale": {"type": "categorical", "sort": {"by": "value"}}},
+                "y": {
+                  "scale": {"type": "quantitative"},
+                  "fields": [
+                    {"fieldName": "measure(Draftable Exam Count)", "displayName": "Draftable"},
+                    {"fieldName": "measure(Drafted Exam Count)", "displayName": "Drafted"}
+                  ]
+                }
+              },
+              "frame": {"title": "Draftable vs Drafted by Category", "showTitle": true}
+            }
+          },
+          "position": {"x": 0, "y": 5, "width": 12, "height": 6}
+        },
+        {
+          "widget": {
+            "name": "kpi-in-pipeline",
+            "queries": [{"name": "main_query", "query": {
+              "datasetName": "ds_volume",
+              "fields": [{"name": "measure(In Drafting Pipeline Exam Count)", "expression": "MEASURE(`In Drafting Pipeline Exam Count`)"}],
+              "disaggregated": false
+            }}],
+            "spec": {
+              "version": 2, "widgetType": "counter",
+              "encodings": {"value": {"fieldName": "measure(In Drafting Pipeline Exam Count)", "displayName": "In Pipeline",
+                "format": {"type": "number", "abbreviation": "compact", "decimalPlaces": {"type": "max", "places": 1}}}},
+              "frame": {"title": "Exams in AD-Group Drafting Pipeline", "showTitle": true,
+                "showDescription": true, "description": "Radiologist+category combination has been added to the AD group at all"}
+            }
+          },
+          "position": {"x": 0, "y": 11, "width": 6, "height": 3}
+        },
+        {
+          "widget": {
+            "name": "kpi-not-enabled",
+            "queries": [{"name": "main_query", "query": {
+              "datasetName": "ds_volume",
+              "fields": [{"name": "measure(Drafted But Not Enabled Exam Count)", "expression": "MEASURE(`Drafted But Not Enabled Exam Count`)"}],
+              "disaggregated": false
+            }}],
+            "spec": {
+              "version": 2, "widgetType": "counter",
+              "encodings": {"value": {"fieldName": "measure(Drafted But Not Enabled Exam Count)", "displayName": "Drafted, Not Enabled",
+                "format": {"type": "number", "abbreviation": "compact", "decimalPlaces": {"type": "max", "places": 1}}}},
+              "frame": {"title": "Drafted But Not Formally Enabled", "showTitle": true,
+                "showDescription": true, "description": "Data-quality flag: AI-drafted but the radiologist/category combo isn't recorded as enabled"}
+            }
+          },
+          "position": {"x": 6, "y": 11, "width": 6, "height": 3}
+        }
+      ]
+    },
+    {
+      "name": "resident",
+      "displayName": "Resident Utilization",
+      "pageType": "PAGE_TYPE_CANVAS",
+      "layoutVersion": "GRID_V1",
+      "layout": [
+        {
+          "widget": {
+            "name": "resident-header",
+            "multilineTextboxSpec": {"lines": ["# Resident Utilization\n", "\n", "Mosaic adoption among resident-read exams, excluding unidentified/placeholder residents."]}
+          },
+          "position": {"x": 0, "y": 0, "width": 12, "height": 2}
+        },
+        {
+          "widget": {
+            "name": "kpi-resident-exam",
+            "queries": [{"name": "main_query", "query": {
+              "datasetName": "ds_resident",
+              "fields": [{"name": "measure(Exam Count)", "expression": "MEASURE(`Exam Count`)"}],
+              "disaggregated": false,
+              "filters": [{"expression": "`Resident Name` NOT IN ('Unknown, Unknown', 'Not Applicable, Not Applicable')"}]
+            }}],
+            "spec": {
+              "version": 2, "widgetType": "counter",
+              "encodings": {"value": {"fieldName": "measure(Exam Count)", "displayName": "Resident Exams",
+                "format": {"type": "number", "abbreviation": "compact", "decimalPlaces": {"type": "max", "places": 1}}}},
+              "frame": {"title": "Total Resident-Read Exams", "showTitle": true}
+            }
+          },
+          "position": {"x": 0, "y": 2, "width": 4, "height": 3}
+        },
+        {
+          "widget": {
+            "name": "kpi-resident-mosaic",
+            "queries": [{"name": "main_query", "query": {
+              "datasetName": "ds_resident",
+              "fields": [{"name": "measure(Mosaic Exam Count)", "expression": "MEASURE(`Mosaic Exam Count`)"}],
+              "disaggregated": false,
+              "filters": [{"expression": "`Resident Name` NOT IN ('Unknown, Unknown', 'Not Applicable, Not Applicable')"}]
+            }}],
+            "spec": {
+              "version": 2, "widgetType": "counter",
+              "encodings": {"value": {"fieldName": "measure(Mosaic Exam Count)", "displayName": "Mosaic Exams",
+                "format": {"type": "number", "abbreviation": "compact", "decimalPlaces": {"type": "max", "places": 1}}}},
+              "frame": {"title": "Mosaic-Read Resident Exams", "showTitle": true}
+            }
+          },
+          "position": {"x": 4, "y": 2, "width": 4, "height": 3}
+        },
+        {
+          "widget": {
+            "name": "kpi-resident-pct",
+            "queries": [{"name": "main_query", "query": {
+              "datasetName": "ds_resident",
+              "fields": [{"name": "measure(Pct Mosaic Exams)", "expression": "MEASURE(`Pct Mosaic Exams`)"}],
+              "disaggregated": false,
+              "filters": [{"expression": "`Resident Name` NOT IN ('Unknown, Unknown', 'Not Applicable, Not Applicable')"}]
+            }}],
+            "spec": {
+              "version": 2, "widgetType": "counter",
+              "encodings": {"value": {"fieldName": "measure(Pct Mosaic Exams)", "displayName": "Mosaic %",
+                "format": {"type": "number-percent", "decimalPlaces": {"type": "max", "places": 1}}}},
+              "frame": {"title": "Resident Mosaic Adoption %", "showTitle": true}
+            }
+          },
+          "position": {"x": 8, "y": 2, "width": 4, "height": 3}
+        },
+        {
+          "widget": {
+            "name": "resident-table",
+            "queries": [{"name": "main_query", "query": {
+              "datasetName": "ds_resident",
+              "fields": [
+                {"name": "Resident Name", "expression": "`Resident Name`"},
+                {"name": "measure(Exam Count)", "expression": "MEASURE(`Exam Count`)"},
+                {"name": "measure(Mosaic Exam Count)", "expression": "MEASURE(`Mosaic Exam Count`)"},
+                {"name": "measure(Pct Mosaic Exams)", "expression": "MEASURE(`Pct Mosaic Exams`)"}
+              ],
+              "disaggregated": false,
+              "filters": [{"expression": "`Resident Name` NOT IN ('Unknown, Unknown', 'Not Applicable, Not Applicable')"}],
+              "orders": [{"direction": "DESC", "expression": "MEASURE(`Exam Count`)"}]
+            }}],
+            "spec": {
+              "version": 2, "widgetType": "table",
+              "encodings": {"columns": [
+                {"fieldName": "Resident Name", "displayName": "Resident"},
+                {"fieldName": "measure(Exam Count)", "displayName": "Exams",
+                  "format": {"type": "number", "abbreviation": "compact", "decimalPlaces": {"type": "max", "places": 1}}},
+                {"fieldName": "measure(Mosaic Exam Count)", "displayName": "Mosaic Exams",
+                  "format": {"type": "number", "abbreviation": "compact", "decimalPlaces": {"type": "max", "places": 1}}},
+                {"fieldName": "measure(Pct Mosaic Exams)", "displayName": "Mosaic %",
+                  "format": {"type": "number-percent", "decimalPlaces": {"type": "max", "places": 1}}}
+              ]},
+              "frame": {"title": "Residents by Volume", "showTitle": true}
+            }
+          },
+          "position": {"x": 0, "y": 5, "width": 12, "height": 7}
+        }
+      ]
+    }
+  ],
+  "uiSettings": {
+    "theme": {
+      "canvasBackgroundColor": {"light": "#FCFCFC", "dark": "#1F272D"},
+      "widgetBackgroundColor": {"light": "#FFFFFF", "dark": "#11171C"},
+      "widgetBorderColor": {"light": "#FFFFFF", "dark": "#11171C"},
+      "fontColor": {"light": "#11171C", "dark": "#E8ECF0"},
+      "selectionColor": {"light": "#0072B2", "dark": "#56B4E9"},
+      "visualizationColors": ["#0072B2", "#E69F00", "#009E73", "#CC79A7", "#D55E00", "#56B4E9", "#F0E442"],
+      "widgetHeaderAlignment": "LEFT"
+    }
+  }
+}

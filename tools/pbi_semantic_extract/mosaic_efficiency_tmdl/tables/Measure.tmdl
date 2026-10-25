@@ -1,0 +1,43 @@
+table Measure
+	lineageTag: 0e6b8179-065b-4918-b28d-0b0e48987601
+
+	column Parameter
+		lineageTag: 26824fcd-21ab-463d-93a1-62d05f2663a9
+		summarizeBy: none
+		sourceColumn: [Value1]
+		sortByColumn: 'Parameter Order'
+
+		relatedColumnDetails
+			groupByColumn: 'Parameter Fields'
+
+		annotation SummarizationSetBy = Automatic
+
+	column 'Parameter Fields'
+		isHidden
+		lineageTag: 9dd802b6-cbba-45e6-a8ad-f34baa775300
+		summarizeBy: none
+		sourceColumn: [Value2]
+		sortByColumn: 'Parameter Order'
+
+		extendedProperty ParameterMetadata = {"version":3,"kind":2}
+
+		annotation SummarizationSetBy = Automatic
+
+	column 'Parameter Order'
+		isHidden
+		formatString: 0
+		lineageTag: 67dce98f-ae4c-47b0-b40d-7e787e60e479
+		summarizeBy: sum
+		sourceColumn: [Value3]
+
+		annotation SummarizationSetBy = Automatic
+
+	partition Measure = calculated
+		mode: import
+		source =
+				{
+				    ("Mean Dictation(sec)", NAMEOF('Mosaic metric'[Mean Dictation (With Vol)]), 0)
+				}
+
+	annotation PBI_Id = ddd7c96cbee64d98851244a2799398e9
+

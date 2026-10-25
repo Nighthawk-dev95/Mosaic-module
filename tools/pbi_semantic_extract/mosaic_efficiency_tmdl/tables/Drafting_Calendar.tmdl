@@ -1,0 +1,38 @@
+table Drafting_Calendar
+	lineageTag: 82219e05-7d79-4ae4-bc9c-2e0498fbb2f0
+
+	column Date
+		formatString: Short Date
+		lineageTag: 6ef285ac-f560-41c3-966b-bbcd3c86ffed
+		summarizeBy: none
+		isNameInferred
+		sourceColumn: [Date]
+
+		variation Variation
+			isDefault
+			relationship: 8cfcd81c-55ac-4437-9a0b-36f2b5ce5d5c
+			defaultHierarchy: LocalDateTable_1e5d44c6-eed3-498e-95be-1b8d6d60f1a1.'Date Hierarchy'
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation UnderlyingDateTimeDataType = Date
+
+	column Datetext
+		lineageTag: 1c77f780-8dc6-49e6-9b26-ae148323ef4b
+		summarizeBy: none
+		isNameInferred
+		sourceColumn: [Datetext]
+
+		annotation SummarizationSetBy = Automatic
+
+	partition Drafting_Calendar = calculated
+		mode: import
+		source = ```
+				
+				ADDCOLUMNS(CALENDAR(DATE(2025,4,1), TODAY()), 
+				"Datetext", FORMAT([Date], "M/dd/yyyy")
+				)
+				```
+
+	annotation PBI_Id = 1c552c1cded14a3ca11ed28cfb10f73f
+

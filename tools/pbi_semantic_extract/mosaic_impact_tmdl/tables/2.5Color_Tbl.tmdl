@@ -1,0 +1,197 @@
+table '2.5Color_Tbl'
+	lineageTag: f6b680f2-4061-45bc-a63b-f3d4b20afac8
+
+	measure 'Impact selection filter flag' =
+			
+			VAR SelectedCategories = VALUES('2.5Color_Tbl'[Success])
+			VAR ThisCategory = [AddlCap_Shift_Category]
+			
+			RETURN
+			IF (
+			    ISBLANK(ThisCategory),
+			    0,
+			    IF(
+			        CONTAINS(SelectedCategories, '2.5Color_Tbl'[Success], ThisCategory),
+			        0,
+			        1
+			    )
+			)
+		formatString: 0
+		lineageTag: 13b5c339-405e-4e1e-99b3-58f8b4f05dba
+
+	measure AddlCap_Shift_Category = ```
+			
+			VAR ValueToFormat = ROUND([Add'l Capacity / Shift (Top N)], 0)
+			RETURN 
+			SWITCH(
+			    TRUE(),
+			    ISBLANK(ValueToFormat), BLANK(),
+			    ValueToFormat >= 0, "Successful",   -- Green
+			    "Unsuccessful"                      -- Red, everything negative
+			)
+			```
+		lineageTag: fff15c61-c138-48b5-8251-ffb8a2b7209e
+
+	measure AddlCap_Shift_Color = ```
+			
+			SWITCH(
+			    [AddlCap_Shift_Category],
+			    "Successful", "#DAF2D0",        // Green
+			    
+			    "Unsuccessful", "#FFE1E1",   // Red
+			    BLANK()                     // Default (white)
+			)
+			```
+		lineageTag: 480f3fbf-c9e5-40f8-910b-44cd0727d95b
+
+	measure Legend_Display =
+			
+			VAR SelectedUnit = SELECTEDVALUE('1. Unit_Tbl'[Productivity Unit])
+			RETURN
+			SWITCH(
+			    TRUE(),
+			    SelectedUnit = "RVU/Shift",SELECTEDVALUE('2.5Color_Tbl'[Legend]),
+			    SelectedUnit = "TBWU/Shift",SELECTEDVALUE('2.5Color_Tbl'[Legend]),
+			    SelectedUnit = "RVU/Hour",SELECTEDVALUE('2.5Color_Tbl'[Cap Chg (u/hr)]),
+			    SelectedUnit = "TBWU/Hour",SELECTEDVALUE('2.5Color_Tbl'[Cap Chg (u/hr)]),
+			    SelectedUnit = "RVU/9 Hour",SELECTEDVALUE('2.5Color_Tbl'[Cap Chg (u/9hr)]),
+			    SelectedUnit = "TBWU/9 Hour",SELECTEDVALUE('2.5Color_Tbl'[Cap Chg (u/9hr)]),
+			    BLANK()
+			)
+		lineageTag: 86fe9c12-9302-49e5-ac72-0c92bb050e8e
+
+	measure AddlCap_Shift_Categorymosaic = ```
+			
+			VAR ValueToFormat  = ROUND([Add'l Capacity / Shift (Top N) mosaic],0)
+			VAR SelectedUnit  = SELECTEDVALUE('1. Unit_Tbl'[Productivity Unit])
+			VAR GreenMin = LOOKUPVALUE('1. Unit_Tbl'[GreenMin],'1. Unit_Tbl'[Productivity Unit],SelectedUnit)
+			VAR YellowMin = LOOKUPVALUE('1. Unit_Tbl'[YellowMin],'1. Unit_Tbl'[Productivity Unit],SelectedUnit)
+			VAR RedMax = LOOKUPVALUE('1. Unit_Tbl'[RedMax], '1. Unit_Tbl'[Productivity Unit], SelectedUnit)
+			
+			RETURN 
+			SWITCH(
+			    TRUE(),
+			    ISBLANK(ValueToFormat), BLANK(),
+			    ValueToFormat >= GreenMin, "Successful",     -- Green
+			    ValueToFormat >= YellowMin, "Marginal",   -- Yellow
+			    ValueToFormat < RedMax, "Unsuccessful",  -- Red  
+			    BLANK()
+			)
+			```
+		lineageTag: e1774b13-de56-40e7-b6ef-26683d846a31
+
+	measure AddlCap_Shift_mosaicColor =
+			
+			SWITCH(
+			    [AddlCap_Shift_Categorymosaic],
+			    "Successful", "#DAF2D0",        // Green
+			    "Marginal", "#FFFFCE",       // Yellow
+			    "Unsuccessful", "#FFE1E1",   // Red
+			    BLANK()                     // Default (white)
+			)
+		lineageTag: e24e3520-410f-4fac-a24d-bf757f47a186
+
+	column Color
+		dataType: string
+		lineageTag: 8004bf8a-70b0-4213-b615-0395c3a0c24a
+		summarizeBy: none
+		sourceColumn: Color
+		sortByColumn: Sort
+
+		changedProperty = IsHidden
+
+		changedProperty = SortByColumn
+
+		annotation SummarizationSetBy = Automatic
+
+	column Sort
+		dataType: string
+		lineageTag: 5a924d9c-d4c3-4942-bb26-78af56c71d77
+		summarizeBy: none
+		sourceColumn: Sort
+
+		annotation SummarizationSetBy = Automatic
+
+	column Concat = CONCATENATE('2.5Color_Tbl'[Color],CONCATENATE("  ",'2.5Color_Tbl'[Legend]))
+		lineageTag: 37736971-ca49-4746-85a6-94ae09353061
+		summarizeBy: none
+		sortByColumn: Sort
+
+		changedProperty = SortByColumn
+
+		annotation SummarizationSetBy = Automatic
+
+	column '% assisited/autonext'
+		dataType: string
+		lineageTag: 3a6ef5ce-5ad7-4e7c-8972-b0da3a54f125
+		summarizeBy: none
+		sourceColumn: % assisited/autonext
+
+		annotation SummarizationSetBy = Automatic
+
+	column 'Color code'
+		dataType: string
+		lineageTag: 6a3a2b60-0905-41f1-b1fe-65421f6fede1
+		summarizeBy: none
+		sourceColumn: Color code
+
+		annotation SummarizationSetBy = Automatic
+
+	column Success
+		dataType: string
+		lineageTag: 3804b963-2e47-48bd-b366-d476f2bf986b
+		summarizeBy: none
+		sourceColumn: Success
+		sortByColumn: Sort
+
+		changedProperty = SortByColumn
+
+		annotation SummarizationSetBy = Automatic
+
+	column 'Cap Chg (u/9hr)'
+		dataType: string
+		lineageTag: 4a953d65-0df8-4240-944f-5f2ff1c6c7ac
+		summarizeBy: none
+		sourceColumn: Cap Chg (u/9hr)
+
+		annotation SummarizationSetBy = Automatic
+
+	column 'Cap Chg (u/hr)'
+		dataType: string
+		lineageTag: 864e27d8-a2e7-4260-8520-3cd0a2ec5a1b
+		summarizeBy: none
+		sourceColumn: Cap Chg (u/hr)
+
+		annotation SummarizationSetBy = Automatic
+
+	column Legend
+		dataType: string
+		lineageTag: 6b14b18a-8448-4fcf-a2ee-fa4c7d407476
+		summarizeBy: none
+		sourceColumn: Legend
+
+		annotation SummarizationSetBy = Automatic
+
+	column Impact
+		dataType: string
+		lineageTag: eb3061a7-22bf-4d63-974a-0afb7ae5d9aa
+		summarizeBy: none
+		sourceColumn: Impact
+
+		annotation SummarizationSetBy = Automatic
+
+	partition '2.5Color_Tbl' = m
+		mode: import
+		source =
+				let
+				    Source = Table.FromRows(Json.Document(Binary.Decompress(Binary.FromText("i45Wci9KTc1T0lGKKTUwME61MFUFsg2BWNnF0c3IxQDIetS51EQhMSUFpMLIPEehNC+zpFi/OCMzrQQoG1yanJxaXJxWmoNTqaVCRhFE0kDPBIs8WNYtsSy/KDEpJ1UpVidaKTI1Jye/HChsbqALcZMRyE1ubq6GriDXGejicZJvYlF6Zl5iDi51ClAHGejicQ/cEJBzglJTYEGUbG4Aco4xxDlubs6uQJZfanpiSWZZKpAZmleMHCJIMiiK0hDejQUA", BinaryEncoding.Base64), Compression.Deflate)), let _t = ((type nullable text) meta [Serialized.Text = true]) in type table [Color = _t, #"% assisited/autonext" = _t, Sort = _t, #"Color code" = _t, Legend = _t, Category = _t, #"Cap Chg (u/9hr)" = _t, #"Cap Chg (u/hr)" = _t, Impact = _t]),
+				    #"Renamed Columns" = Table.RenameColumns(Source,{{"Category", "Success"}})
+				in
+				    #"Renamed Columns"
+
+	changedProperty = IsHidden
+
+	annotation PBI_ResultType = Table
+
+	annotation PBI_NavigationStepName = Navigation
+

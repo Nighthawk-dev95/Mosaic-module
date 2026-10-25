@@ -1,0 +1,26 @@
+table Measureselector
+	lineageTag: 43c57fd8-117f-41d0-be8a-bdf587072a65
+
+	column Measure
+		lineageTag: 87dba5e3-59d1-4f10-982f-bd3614d5ea1a
+		summarizeBy: none
+		isNameInferred
+		sourceColumn: [Measure]
+
+		annotation SummarizationSetBy = Automatic
+
+	partition Measureselector = calculated
+		mode: import
+		source = ```
+				datatable (
+				
+				"Measure" , String,
+				{
+				    { "Exam Count"}, 
+				    {"RVUs"}
+				}
+				)
+				```
+
+	annotation PBI_Id = 621600f23782430bbd791756f12fd796
+

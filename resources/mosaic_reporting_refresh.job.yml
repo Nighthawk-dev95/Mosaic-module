@@ -1,0 +1,48 @@
+# Lakeflow Job covering the "Group 1" (Mosaic Reporting Version Adoption dashboard) and
+# "Group 2" (mosaic-module app) stale-table refreshes identified in this session's staleness
+# audit. tbl_exam_category_lookup_xwalk is intentionally excluded per instruction.
+#
+# NOT included: edw_prod.enterprise_analytics.mosaic_version_exam_lookup's own refresh
+# (tools/mosaic_version_pipeline/sync_exam_lookup.py) - it pulls from the AWS workspace
+# (p_use1_rp_aws_dbx_workspace01) via the `databricks` CLI and local OAuth profiles, which a
+# job task running on this (Azure) workspace cannot reach without its own cross-workspace auth
+# setup. Keep that one running manually (or on its own schedule elsewhere) before this job fires
+# each day, until the pending radpair_instance Delta Share lands and removes the AWS pull
+# entirely.
+#
+# Also NOT included: edw_dev.enterprise_analytics.practice_to_local_mapping - it only changes
+# when Practice_to_Local_Mapping.xlsx is manually edited, so there's no repeatable EDW-side
+# query to schedule; re-run its load by hand when the Excel file changes.
+#
+resources:
+  jobs:
+    mosaic_reporting_refresh:
+      name: "Mosaic Reporting - Enterprise Analytics Refresh"
+      tasks:
+        - task_key: refresh_exam_detail
+          sql_task:
+            warehouse_id: ${var.warehouse_id}
+            file:
+              path: ../tools/jobs/refresh_mosaic_version_exam_detail.sql
+        - task_key: refresh_efficiency_detail
+          depends_on:
+            - task_key: refresh_exam_detail
+          sql_task:
+            warehouse_id: ${var.warehouse_id}
+            file:
+              path: ../tools/jobs/refresh_mosaic_efficiency_detail.sql
+        - task_key: refresh_shift_utilization
+          sql_task:
+            warehouse_id: ${var.warehouse_id}
+            file:
+              path: ../tools/jobs/refresh_tbl_mosaic_shift_utilization.sql
+        - task_key: refresh_mvp_rad_onboarding
+          sql_task:
+            warehouse_id: ${var.warehouse_id}
+            file:
+              path: ../tools/jobs/refresh_tbl_mvp_rad_onboarding.sql
+      schedule:
+        quartz_cron_expression: "0 0 5 * * ?"
+        timezone_id: "America/Chicago"
+        pause_status: UNPAUSED
+      max_concurrent_runs: 1

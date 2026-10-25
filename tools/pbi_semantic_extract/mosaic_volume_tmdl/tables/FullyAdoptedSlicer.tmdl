@@ -1,0 +1,130 @@
+table FullyAdoptedSlicer
+	lineageTag: 75247cbd-52ec-40fc-a695-dea1b83f562c
+
+	measure adoptionstatusflag = ```
+			
+			SUMX(
+			    FILTER(
+			    VALUES('Daily_Extract'[NPI]), 
+			    not ISEMPTY( CALCULATETABLE(
+			        VALUES('Daily_Extract'[Final_DateTime - Date]), 
+			        'Daily_Extract'[Mosaic Exam Flag] = 1
+			    )
+			    )
+			),
+			var firstcase = 
+			CALCULATE(
+			    MIN('Daily_Extract'[Final_DateTime - Date]), 'Daily_Extract'[Mosaic Exam Flag] = 1, 
+			  ALLEXCEPT('Daily_Extract', 'Daily_Extract'[NPI])
+			)
+			
+			
+			
+			
+			var pctmosaic = [%reportingadj]
+			
+			RETURN 
+			IF(not ISBLANK(firstcase) && firstcase <= TODAY() - 2 && pctmosaic >0.8 ,1,0)
+			)
+			
+			
+			```
+		formatString: 0
+		lineageTag: 64c1663b-748d-4dba-a8ae-570c14e5454a
+
+	measure adoptionstatusfiltermeasure = ```
+			
+			VAR SelectedStatus = VALUES('FullyAdoptedSlicer'[Flag])
+			VAR statusflag = [adoptionstatusflag]
+			
+			RETURN
+			IF(
+			    COUNTROWS(SelectedStatus) = 0, 
+			    1, 
+			    IF(statusflag in SelectedStatus ,1,0)
+			)
+			```
+		formatString: 0
+		lineageTag: 0f633324-788f-4214-8e2b-aae090092e43
+
+	measure testfirstcase = ```
+			
+			CALCULATE(
+			    MIN('Daily_Extract'[Final_DateTime - Date]), 'Daily_Extract'[Mosaic Exam Flag] = 1, 
+			ALLEXCEPT('Daily_Extract', 'Daily_Extract'[NPI])
+			)
+			```
+		formatString: General Date
+		lineageTag: 9f18c71c-2c6b-4202-8baa-34a3643b7763
+
+	measure 'Fully Utilizing Value' =
+			
+			VAR CurrentNPI = SELECTEDVALUE('Daily_Extract'[NPI])
+			RETURN
+			    IF(
+			        NOT(ISBLANK(CurrentNPI)),
+			        [adoptionstatusflag],
+			        BLANK()
+			    )
+		formatString: 0
+		lineageTag: 7e6e6769-e852-446f-9440-ab4cfecf6456
+
+	measure adoptionstatusflagagnostic = ```
+			
+			VAR CurrentNPI = SELECTEDVALUE('Daily_Extract'[NPI])
+			
+			VAR firstcase = 
+			    CALCULATE(
+			        MIN('Daily_Extract'[Final_DateTime - Date]), 
+			        ALL('Daily_Extract'),
+			        'Daily_Extract'[NPI] = CurrentNPI,
+			        'Daily_Extract'[Mosaic Exam Flag] = 1
+			    )
+			
+			VAR pctmosaic = [%reportingeligagnostic]
+			
+			RETURN 
+			    IF(
+			        NOT ISBLANK(firstcase) && 
+			        firstcase <= TODAY() - 2 && 
+			        pctmosaic > 0.8,
+			        1,
+			        0
+			    )
+			```
+		formatString: 0
+		lineageTag: 25f8bfd6-5140-44d5-965a-7360ef749945
+
+	column Status
+		lineageTag: 547dbb32-8c3f-4072-8f39-de75c98af953
+		summarizeBy: none
+		isNameInferred
+		sourceColumn: [Status]
+
+		annotation SummarizationSetBy = Automatic
+
+	column Flag
+		formatString: 0
+		lineageTag: 9f8a3f91-1e07-44fb-9276-a5db68c7086d
+		summarizeBy: sum
+		isNameInferred
+		sourceColumn: [Flag]
+
+		annotation SummarizationSetBy = Automatic
+
+	partition FullyAdoptedSlicer = calculated
+		mode: import
+		source = ```
+				
+				DATATABLE( 
+				    "Status", String, "Flag" , INTEGER, 
+				    { 
+				        
+				        {"Fully Utilizing" , 1 },
+				        {"Not Fully Utilizing" , 0}
+				    }
+				)
+				```
+
+	annotation PBI_Id = 31f8a524c2594b4cb72ceb6bbe50beab
+

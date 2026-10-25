@@ -1,0 +1,263 @@
+table radiologist_metrics(1)
+	lineageTag: 51cd9b6c-b555-4a12-bff5-a3d741edc855
+
+	column Radiologist
+		dataType: string
+		lineageTag: dd8e4322-6787-43bb-a670-519265725d42
+		summarizeBy: none
+		sourceColumn: Radiologist
+
+		annotation SummarizationSetBy = Automatic
+
+	column Physician_NPI
+		dataType: double
+		lineageTag: 50883f1f-cd16-44f3-8fc1-9691c30981e3
+		summarizeBy: none
+		sourceColumn: Physician_NPI
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column Team
+		dataType: string
+		lineageTag: 4dc0f4d1-e0b3-457d-a46d-947bb463f86e
+		summarizeBy: none
+		sourceColumn: Team
+
+		annotation SummarizationSetBy = Automatic
+
+	column Parent_Procedure_name
+		dataType: string
+		lineageTag: 9290e957-5396-4e98-bebe-5c89cafde7fb
+		summarizeBy: none
+		sourceColumn: Parent_Procedure_name
+
+		annotation SummarizationSetBy = Automatic
+
+	column Practice
+		dataType: string
+		lineageTag: cdc81e32-5823-4755-9b98-643e9004a58a
+		summarizeBy: none
+		sourceColumn: Practice
+
+		annotation SummarizationSetBy = Automatic
+
+	column Location_Name
+		dataType: string
+		lineageTag: d0e67ae0-aed6-47d4-9f75-3c829d1ed18a
+		summarizeBy: none
+		sourceColumn: Location_Name
+
+		annotation SummarizationSetBy = Automatic
+
+	column working_subspecialty
+		dataType: string
+		lineageTag: 5ff6b40f-3fbf-4dee-8f94-e615c7082bcf
+		summarizeBy: none
+		sourceColumn: working_subspecialty
+
+		annotation SummarizationSetBy = Automatic
+
+	column Place_of_Service
+		dataType: string
+		lineageTag: f4d2ee84-3f17-4aee-a8bd-a2827363cbc3
+		summarizeBy: none
+		sourceColumn: Place_of_Service
+
+		annotation SummarizationSetBy = Automatic
+
+	column Priority_Description
+		dataType: string
+		lineageTag: e63cdb9f-893f-447b-b0c8-6014b17c4d78
+		summarizeBy: none
+		sourceColumn: Priority_Description
+
+		annotation SummarizationSetBy = Automatic
+
+	column Modality_Code
+		dataType: string
+		lineageTag: 55454ff4-5832-40bd-9ebb-2145c37710c8
+		summarizeBy: none
+		sourceColumn: Modality_Code
+
+		annotation SummarizationSetBy = Automatic
+
+	column Interventional_Flag
+		dataType: int64
+		formatString: 0
+		lineageTag: f4c8723e-1a7b-4d53-b9bf-3eeea4f21ea9
+		summarizeBy: sum
+		sourceColumn: Interventional_Flag
+
+		annotation SummarizationSetBy = Automatic
+
+	column Exam_Date
+		dataType: dateTime
+		formatString: Long Date
+		lineageTag: 8f338b43-ec2c-46ba-95f9-fe68d66f97ee
+		summarizeBy: none
+		sourceColumn: Exam_Date
+
+		variation Variation
+			isDefault
+			relationship: 8d5378a0-892a-4ad9-999a-b87b15e34db5
+			defaultHierarchy: LocalDateTable_eebb747c-28ef-4e13-a280-6afec83c41a3.'Date Hierarchy'
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation UnderlyingDateTimeDataType = Date
+
+	column Exam_Category
+		dataType: string
+		lineageTag: f9d0ace4-7cf7-432a-9563-f53730d62504
+		summarizeBy: none
+		sourceColumn: Exam_Category
+
+		annotation SummarizationSetBy = Automatic
+
+	column Outliers
+		dataType: string
+		lineageTag: 947fde5b-c6c4-40f3-b317-d020105f442b
+		summarizeBy: none
+		sourceColumn: Outliers
+
+		annotation SummarizationSetBy = Automatic
+
+	column Period_Type
+		dataType: string
+		lineageTag: 4b8a4c5a-4f0d-42bf-8aa6-323c978f8449
+		summarizeBy: none
+		sourceColumn: Period_Type
+
+		annotation SummarizationSetBy = Automatic
+
+	column TotalTime
+		dataType: int64
+		formatString: 0
+		lineageTag: cecd60a9-5846-4239-a345-37a4b59e06ae
+		summarizeBy: sum
+		sourceColumn: TotalTime
+
+		annotation SummarizationSetBy = Automatic
+
+	column TotalRVU
+		dataType: double
+		lineageTag: e81851b3-20dd-49cb-b2d5-814b2ee27772
+		summarizeBy: sum
+		sourceColumn: TotalRVU
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column TotalTBWU
+		dataType: double
+		lineageTag: 50fb53b5-6b1b-4d2f-9449-a3e800204c60
+		summarizeBy: sum
+		sourceColumn: TotalTBWU
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column ExamCount
+		dataType: int64
+		formatString: 0
+		lineageTag: 4d3c9b3d-b4c0-46a4-96e7-083eec0e97ee
+		summarizeBy: sum
+		sourceColumn: ExamCount
+
+		annotation SummarizationSetBy = Automatic
+
+	column Local =
+			
+			
+			SWITCH(
+			
+			    TRUE(),
+			
+			    'radiologist_metrics(1)'[Team] IN {"ESR", "LFI", "Jefferson", "GLI", "RAI", "RP Cascade", "RP Crossroads","JR","DRSRP","RP East Florida","RP North Florida", "RP Palm Beach","RP Florida West","PRA","ESRMH Garnet","ESRMH Hackensack","ESRMH Legacy","ESR Long Island","ESR Metro Hudson","SEAL Team", "SEAL Legacy","vRad","Spec Ops Reserve"}, "Special Operations",
+			
+			    'radiologist_metrics(1)'[Team] IN {"ADI", "ADR", "CRC Central", "CRC NW", "CRC SW", "Midstate", "NEOH", "Rad Alliance", "RP Kentucky", "RP Bluegrass","RAC","RACSW","RPKY","RPBG","RA","ADR Legacy","CRC","Rad Alliance Legacy", "Rad Alliance NorthCrest","RP Bluegrass Legacy"}, "Apex",
+			
+			   'radiologist_metrics(1)'[Team]  IN {"Coastal", "Greensboro", "MBB", "Northside", "Greensboro Canopy", "RAF", "RP Florida", "RP Sandhills", "RP South Carolina", "SOAR","BOCA","GR","NRA","RASF","MBB Legacy","MBB Phoebe Putney","Northside Radiology","RAF East Coast", "RAF Panhandle", "RAF Sarasota", "RAF Tampa", "RAF Tele","RASF Miami", "RASF Naples","RP Florida Legacy", "RP Florida West"}, "Genesis",
+			
+			    'radiologist_metrics(1)'[Team]   IN {"Advanced Radiology", "Alaska", "CIR", "Desert", "GIMA", "RP SoCal", "IAM", "IAMSE", "MIA", "Mountain", "NIR", "RAA", "MXC", "Red Rock", "RIMA", "RP Sol", "RP Sun City", "RP Chicago", "RP Forest City", "Saline Valley", "RP Valley Radiologists", "SVDI", "Western Colorado","WIR","RP IOWA","GSIA","SVL","MR","DR","NWIR","ARSC","DR Legacy","DR DRS","IAMSE Hurley", "IAM Marquette", "IAM Midlands","Lakefront Imaging","Mountain Legacy", "Mountain Yampa","RP NWIR", "RP SMIL", "RP SoCal Lakewood", "RP SoCal Legacy", "RP SoCal Palmdale", "RP Valley","SVDI Legacy", "SVDI San Ramon","SMI","RIMA", "RIMA California"}, "Maverick",
+			
+			    'radiologist_metrics(1)'[Team]  IN {"Access Alexandria", "ARA", "BR Academic", "BR Community", "CIRPA", "Community", "RP Eagle", "EBI", "GIA", "Lake Charles", "RP Borderlands", "RP Brazosport", "RP Corpus Christi", "RP Dallas", "RP El Paso", "RP Gulf Coast", "RP Houston", "RP Laredo", "RP Victoria","BR","Slidell","ACC","RPNM","EAG","RPEP","RPGC","RPH","Other","EXTHMC" ,"RP Singleton Academic" ,"RP Singleton Community", "RP Singleton","Rose","RP North Houston","Synergy", "Access Lake Charles","Community Laredo", "Community Legacy", "Community Victoria","Elite","RP Borderlands Legacy", "RP Borderlands Lovelace","RP Helios"}, "Trailblazer",
+			
+			    "Matrix"
+			
+			)
+		lineageTag: 2d936b13-f86a-4633-8e9a-cd5e36bf0aa8
+		summarizeBy: none
+
+		annotation SummarizationSetBy = Automatic
+
+	column 'Drafting Enabled' =
+			
+			VAR CurrentNPI = 'radiologist_metrics(1)'[Physician_NPI]
+			
+			VAR HasCXR = NOT(ISBLANK(
+			    LOOKUPVALUE(
+			        'RadPipeline'[Added to AD Group (CXR/ABD/MSK)],
+			        'RadPipeline'[NPI], CurrentNPI
+			    )
+			))
+			
+			VAR HasCT = NOT(ISBLANK(
+			    LOOKUPVALUE(
+			        'RadPipeline'[Added to AD Group (CT Head)],
+			        'RadPipeline'[NPI], CurrentNPI
+			    )
+			))
+			
+			RETURN
+			SWITCH(
+			    TRUE(),
+			    HasCT, "Rads on CT Drafting",
+			    HasCXR, "Rads on XR Drafting",
+			    "Rads not on Drafting"
+			)
+		lineageTag: acb11dda-0887-4161-82af-5d5e07904059
+		summarizeBy: none
+
+		annotation SummarizationSetBy = Automatic
+
+	column YearMonth = FORMAT('radiologist_metrics(1)'[Exam_Date], "MMM YYYY")
+		lineageTag: 78eb17c2-5117-48bc-a5d2-fb0381bd4243
+		summarizeBy: none
+		sortByColumn: YearMonthSort
+
+		changedProperty = SortByColumn
+
+		annotation SummarizationSetBy = Automatic
+
+	column YearMonthSort = YEAR('radiologist_metrics(1)'[Exam_Date]) * 100 + MONTH('radiologist_metrics(1)'[Exam_Date])
+		formatString: 0
+		lineageTag: 8cfb2253-44db-45d1-9936-00af24db91e1
+		summarizeBy: sum
+
+		annotation SummarizationSetBy = Automatic
+
+	partition radiologist_metrics(1) = m
+		mode: import
+		source =
+				let
+				    Source = Databricks.Catalogs(
+				    "adb-7306149455716415.15.azuredatabricks.net",
+				    "/sql/1.0/warehouses/fe0ad987563c672a", [Catalog=null, Database=null, EnableAutomaticProxyDiscovery=null, Implementation=null]),
+				    edw_dev_Database = Source{[Name="edw_dev",Kind="Database"]}[Data],
+				    bipa_analytics_Schema = edw_dev_Database{[Name="bipa_analytics",Kind="Schema"]}[Data],
+				    radiologist_metrics_minexams_rtupdatedshadow_View = bipa_analytics_Schema{[Name="radiologist_metrics_minexams_rtupdatedshadow",Kind="View"]}[Data],
+				    #"Removed Columns" = Table.RemoveColumns(radiologist_metrics_minexams_rtupdatedshadow_View,{"mpproc", "vra_assisted_flag", "Exam_Category"}),
+				    #"Renamed Columns" = Table.RenameColumns(#"Removed Columns",{{"mpcat", "Exam_Category"}}),
+				    #"Removed Columns1" = Table.RemoveColumns(#"Renamed Columns",{"Rad_Total_Drafting_ExclOutliers", "Rad_Total_Drafting_InclOutliers", "Rad_Total_Reporting_ExclOutliers", "Rad_Total_Reporting_InclOutliers", "Rad_Total_FullMosaic_ExclOutliers", "Rad_Total_FullMosaic_InclOutliers"})
+				in
+				    #"Removed Columns1"
+
+	annotation PBI_NavigationStepName = Navigation
+
+	annotation PBI_ResultType = Table
+

@@ -1,0 +1,18 @@
+table 'Min Captured Exams'
+	lineageTag: b7f985c7-18ba-448a-b64a-4a8c6d3c83f5
+
+	column Value
+		formatString: 0
+		lineageTag: 71db9802-38d2-454b-bab8-ded7eede5c59
+		summarizeBy: sum
+		isNameInferred
+		sourceColumn: [Value]
+
+		annotation SummarizationSetBy = Automatic
+
+	partition 'Min Captured Exams' = calculated
+		mode: import
+		source = GENERATESERIES(0, 500, 50)
+
+	annotation PBI_Id = 32f864b74294436a9ebe408f2fb58695
+

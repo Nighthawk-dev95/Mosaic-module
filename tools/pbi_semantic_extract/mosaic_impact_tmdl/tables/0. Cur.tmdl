@@ -1,0 +1,2100 @@
+table '0. Cur'
+	lineageTag: b2cfeb07-c2cb-4b0e-8dfe-0fe1eabc268c
+
+	measure 'Practice Detail Summary Title' = CONCATENATE([Page Title Team]," Practice Summary")
+		lineageTag: 8c9d1fd7-9113-44b7-bf48-d5ce36a7f645
+
+	measure 'Page Title - Rad Scorecard' = "Dr. " & [Page Title RAD] & ", " & [Page Title Team]
+		lineageTag: d8f1a23d-c15e-4091-a6be-29abab1df56a
+
+	measure 'Page Title - Practice Rad List' = CONCATENATE("VRA Practice Rad List - ",[Page Title Team])
+		lineageTag: e93aef61-b933-455f-abc3-c48b449402f8
+
+	measure 'Page Title Footer' = CONCATENATE("Live Rads, Current as of ", FORMAT(MAX('0. Cur'[refreshed_date]),"m/d"))
+		lineageTag: 5994fa12-03a7-426e-a94b-ade75b35c4a7
+
+	measure 'Page Title - Practice Scorecard' = CONCATENATE("VRA Practice Scorecard - ",SELECTEDVALUE('0. Cur'[Team]))
+		lineageTag: 8cb4b48a-d74a-4fd9-bc0a-1ed6a2218121
+
+	measure 'Page Title - Rad Deatil' =
+			
+			CONCATENATE(CONCATENATE([Page Title RAD], " - "),[Page Title Team])
+		lineageTag: 83f8c6ba-bf9a-47cf-8c7d-c9db069d1752
+
+	measure 'Page Title RAD' =
+			
+			VAR _Count = COUNTROWS(VALUES('0. Cur'[Rad_name]))
+			RETURN IF(_Count>1,"Multiple Rads",SELECTEDVALUE('0. Cur'[Rad_name]))
+		lineageTag: c17879e4-d9ca-4720-85b7-bc523fc1deb8
+
+	measure 'Page Title Team' =
+			
+			VAR _Count = COUNTROWS(DISTINCT(VALUES('0. Cur'[Team])))
+			RETURN IF(_Count>1,"Multiple Teams",SELECTEDVALUE('0. Cur'[Team]))
+		lineageTag: a0a54524-c9f0-4ed3-838a-c12d01f93579
+
+	measure 'Page Title - Practice Summary' = CONCATENATE("Practice Summary - ",[Page Title Team])
+		lineageTag: bc1ab040-dc6b-4edc-8bb2-2c4a051cc251
+
+	measure 'Rank Within Model Selection' =
+			
+			VAR npi = SELECTEDVALUE('0. Cur'[NPI])
+			RETURN
+			IF (
+			    HASONEVALUE('0. Cur'[NPI]),
+			    RANKX (
+			        FILTER (
+			            ALLSELECTED('0. Cur'),
+			            '0. Cur'[NPI] = npi
+			        ),
+			        CALCULATE ( MIN ( '0. Cur'[RecordRank] ) ),
+			        ,
+			        ASC,
+			        DENSE
+			    )
+			)
+		formatString: 0
+		lineageTag: df3465cf-66d6-4421-b208-6a25fee640b8
+
+	measure 'Page TitleR - Practice Summary' = CONCATENATE("Rad Summary - ",[Page Title Team])
+		lineageTag: 2f12eb31-b017-485a-b7ea-abf68706be38
+
+	measure Refreshdt = ```
+			
+			"Report Refreshed: " & 
+			FORMAT(
+			    CALCULATE(
+			        MAX('0. Cur'[refreshed_date]),
+			        REMOVEFILTERS('0. Cur')
+			    ), 
+			    "MM/DD/YYYY hh:mm AM/PM"
+			) & 
+			" | Refresh Schedule: Daily | Data Source(s): Clinical"
+			```
+		lineageTag: 4ddbd6bd-557c-401e-995b-bebdcf73ef31
+
+	column NPI
+		dataType: double
+		formatString: 0
+		lineageTag: 2ee23894-2444-46eb-9929-678dde7f19d5
+		summarizeBy: none
+		sourceColumn: NPI
+
+		annotation SummarizationSetBy = User
+
+	column Team
+		dataType: string
+		lineageTag: 7e1b6b01-570b-462c-9a81-bb87518d8990
+		summarizeBy: none
+		sourceColumn: Team
+
+		annotation SummarizationSetBy = Automatic
+
+	column ShiftNo
+		dataType: int64
+		formatString: 0
+		lineageTag: 3aa0c641-338c-4363-acfe-d634d47c3548
+		summarizeBy: none
+		sourceColumn: ShiftNo
+
+		annotation SummarizationSetBy = User
+
+	column ShiftDate
+		dataType: dateTime
+		formatString: mm/dd/yy
+		lineageTag: 9c93b0f6-10b6-4af9-aaaa-592e4a14169d
+		summarizeBy: none
+		sourceColumn: ShiftDate
+
+		variation Variation
+			isDefault
+			relationship: fad85eee-d6f3-43c8-9051-be50c9494d37
+			defaultHierarchy: LocalDateTable_edadb232-7f17-46c8-b33c-94e5738fc8e1.'Date Hierarchy'
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation UnderlyingDateTimeDataType = Date
+
+		annotation PBI_FormatHint = {"isDateTimeCustom":true}
+
+	column ShiftName
+		dataType: string
+		lineageTag: 6030738a-3cbe-46c4-8d98-011b442ac6a4
+		summarizeBy: none
+		sourceColumn: ShiftName
+
+		annotation SummarizationSetBy = Automatic
+
+	column RecordRank = ```
+			
+			RANKX(
+			    FILTER('0. Cur', ('0. Cur'[NPI] = EARLIER('0. Cur'[NPI]))),
+			    '0. Cur'[ShiftNo],
+			    , 
+			    DESC, 
+			    DENSE
+			)
+			/*RANKX(
+			    FILTER('0. Cur', and('0. Cur'[NPI] = EARLIER('0. Cur'[NPI]),'0. Cur'[VRAShift_TAG] = 1)),
+			    '0. Cur'[ShiftNo],
+			    , 
+			    DESC, 
+			    DENSE
+			)*/
+			
+			```
+		formatString: 0
+		lineageTag: 3940b62b-dd68-485d-a11b-5b16fa45b365
+		summarizeBy: sum
+
+		annotation SummarizationSetBy = Automatic
+
+	column Rad_name
+		dataType: string
+		lineageTag: 19c9104a-7c49-4b78-bdc8-06538f5ee73c
+		summarizeBy: none
+		sourceColumn: Rad_name
+
+		annotation SummarizationSetBy = Automatic
+
+	column Schedule_start_weekday
+		dataType: int64
+		formatString: 0
+		lineageTag: 4c4479a1-1b4f-4d0a-8f22-605a8730602c
+		summarizeBy: sum
+		sourceColumn: Schedule_start_weekday
+
+		annotation SummarizationSetBy = Automatic
+
+	column Task_ID
+		dataType: string
+		lineageTag: 15a02096-1958-4116-bb7e-fe94b699cf58
+		summarizeBy: none
+		sourceColumn: Task_ID
+
+		annotation SummarizationSetBy = Automatic
+
+	column shift_time
+		dataType: string
+		lineageTag: 39eff432-ab4c-476b-9e05-d054bf381665
+		summarizeBy: none
+		sourceColumn: shift_time
+
+		annotation SummarizationSetBy = Automatic
+
+	column Schedule_Start_DateTime
+		dataType: dateTime
+		formatString: m/d/yy h:nn:ss AM/PM
+		lineageTag: a41edc71-0ef8-4293-b171-05f040d881db
+		summarizeBy: none
+		sourceColumn: Schedule_Start_DateTime
+
+		variation Variation
+			isDefault
+			relationship: 3c6db996-d9de-4107-a900-7b6d03e9150c
+			defaultHierarchy: LocalDateTable_fec0a0e5-7e29-44be-9ac1-2c676f350dff.'Date Hierarchy'
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isCustom":true}
+
+	column Schedule_End_DateTime
+		dataType: dateTime
+		formatString: m/d/yy h:nn:ss AM/PM
+		lineageTag: 8915c145-a0d6-4acd-8249-45dfc74d0abd
+		summarizeBy: none
+		sourceColumn: Schedule_End_DateTime
+
+		variation Variation
+			isDefault
+			relationship: aa8f1ca6-9ebe-43a2-8ed9-891d3be86c86
+			defaultHierarchy: LocalDateTable_c1070846-784e-459e-b77f-e88fad8e2c2c.'Date Hierarchy'
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isCustom":true}
+
+	column no_hours
+		dataType: double
+		lineageTag: 33b3ef01-afd9-4656-98da-d907a14ed2a5
+		summarizeBy: none
+		sourceColumn: no_hours
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column on_shift_cases
+		dataType: int64
+		formatString: 0
+		lineageTag: f2dcf74d-392a-4296-8e43-bacbd50bf118
+		summarizeBy: sum
+		sourceColumn: on_shift_cases
+
+		annotation SummarizationSetBy = Automatic
+
+	column off_shift_assisted_cases
+		dataType: int64
+		formatString: 0
+		lineageTag: b59c340c-1c1d-4ac2-9b9a-72d25c85beb5
+		summarizeBy: sum
+		sourceColumn: off_shift_assisted_cases
+
+		annotation SummarizationSetBy = Automatic
+
+	column Histogram_label
+		dataType: string
+		lineageTag: 18f2b2a8-2a71-4c0f-8cec-203f3eb658f7
+		summarizeBy: none
+		sourceColumn: Histogram_label
+
+		annotation SummarizationSetBy = Automatic
+
+	column dup_flag
+		dataType: int64
+		formatString: 0
+		lineageTag: e1f8b755-79c5-448a-8c2a-7ac70cb2a7ce
+		summarizeBy: sum
+		sourceColumn: dup_flag
+
+		annotation SummarizationSetBy = Automatic
+
+	column VRAShift_TAG
+		dataType: int64
+		formatString: 0
+		lineageTag: 7cea1c4f-c9be-44f5-97cd-51b79c377ee5
+		summarizeBy: none
+		sourceColumn: VRAShift_TAG
+
+		annotation SummarizationSetBy = User
+
+	column 'Preferred Unit'
+		dataType: string
+		lineageTag: 99c3593e-7e40-4388-9285-da8d45840911
+		summarizeBy: none
+		sourceColumn: Preferred Unit
+
+		annotation SummarizationSetBy = Automatic
+
+	column on_shift_assisted_cases
+		dataType: int64
+		formatString: 0
+		lineageTag: f81043e8-92d0-49e1-90cb-b1f6c852ef84
+		summarizeBy: sum
+		sourceColumn: on_shift_assisted_cases
+
+		annotation SummarizationSetBy = Automatic
+
+	column 'Shift Date (Year Month)' = STARTOFMONTH('0. Cur'[ShiftDate])
+		formatString: mmm yy
+		lineageTag: 922e84df-0966-4ece-bbae-40b587b2ef8f
+		summarizeBy: none
+
+		variation Variation
+			isDefault
+			relationship: cb14393b-7cd8-47ec-8678-53f14517d384
+			defaultHierarchy: LocalDateTable_fe746e59-df30-4584-b368-1aa4994296ae.'Date Hierarchy'
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isCustom":true}
+
+	column on_shift_capacity_RVU
+		dataType: double
+		lineageTag: d3036b77-354d-45af-921c-a11766d7debe
+		summarizeBy: sum
+		sourceColumn: on_shift_capacity_RVU
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column on_shift_capacity_vs_baseline_RVU
+		dataType: double
+		lineageTag: 0c1a06c8-8490-4baa-9519-ea53a949ec30
+		summarizeBy: sum
+		sourceColumn: on_shift_capacity_vs_baseline_RVU
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column OnShiftuptoBL_RVU
+		dataType: double
+		lineageTag: 1462aca4-12f2-4ced-8362-9f3ad2061be0
+		summarizeBy: sum
+		sourceColumn: OnShiftuptoBL_RVU
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column OnShiftaboveBL_RVU
+		dataType: double
+		lineageTag: 3aa36acc-5b42-4a8b-8a6e-c3a1fc73397d
+		summarizeBy: sum
+		sourceColumn: OnShiftaboveBL_RVU
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column off_shift_assisted_capacity_RVU
+		dataType: double
+		lineageTag: e9d93291-7ef8-43bc-9e4d-520423c0533e
+		summarizeBy: sum
+		sourceColumn: off_shift_assisted_capacity_RVU
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column refreshed_date
+		dataType: dateTime
+		formatString: General Date
+		lineageTag: b3c487e4-9d09-47fc-b166-347c7351c464
+		summarizeBy: none
+		sourceColumn: refreshed_date
+
+		variation Variation
+			isDefault
+			relationship: 1ce8d35f-9b25-44a5-bd29-16fcba02edaa
+			defaultHierarchy: LocalDateTable_f43e7c91-0e59-46c9-9e55-879e5fa68d56.'Date Hierarchy'
+
+		annotation SummarizationSetBy = Automatic
+
+	column Rad_Go_Live_date
+		dataType: dateTime
+		formatString: mmm-yy
+		lineageTag: 88848d21-01bb-4fa5-8a51-3694c2b80abb
+		summarizeBy: none
+		sourceColumn: Rad_Go_Live_date
+
+		variation Variation
+			isDefault
+			relationship: 627794db-ebbf-4b89-8c11-fb2fa5ea7722
+			defaultHierarchy: LocalDateTable_f20f3298-80d4-40db-a42f-2fa09de523ca.'Date Hierarchy'
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation UnderlyingDateTimeDataType = Date
+
+		annotation PBI_FormatHint = {"isCustom":true}
+
+	column on_shift_autonext_cases
+		dataType: int64
+		formatString: 0
+		lineageTag: b1da9d64-d39d-4f43-8f9e-4f5b60b75b7b
+		summarizeBy: sum
+		sourceColumn: on_shift_autonext_cases
+
+		annotation SummarizationSetBy = Automatic
+
+	column on_shift_XR_cases
+		dataType: int64
+		formatString: 0
+		lineageTag: c5af329e-8799-4175-bb7d-8b81cfa76690
+		summarizeBy: sum
+		sourceColumn: on_shift_XR_cases
+
+		annotation SummarizationSetBy = Automatic
+
+	column on_shift_CT_cases
+		dataType: int64
+		formatString: 0
+		lineageTag: d18d73ba-6176-4580-9efd-ff02c1db340c
+		summarizeBy: sum
+		sourceColumn: on_shift_CT_cases
+
+		annotation SummarizationSetBy = Automatic
+
+	column on_shift_US_cases
+		dataType: int64
+		formatString: 0
+		lineageTag: d0d260e8-1234-46e8-92e2-b109807388f6
+		summarizeBy: sum
+		sourceColumn: on_shift_US_cases
+
+		annotation SummarizationSetBy = Automatic
+
+	column on_shift_MR_cases
+		dataType: int64
+		formatString: 0
+		lineageTag: ac02bff3-f6ea-479e-a23f-ac4b0bfb6c75
+		summarizeBy: sum
+		sourceColumn: on_shift_MR_cases
+
+		annotation SummarizationSetBy = Automatic
+
+	column on_shift_NM_cases
+		dataType: int64
+		formatString: 0
+		lineageTag: 09f752cc-4466-41e7-87a8-7db7e8482915
+		summarizeBy: sum
+		sourceColumn: on_shift_NM_cases
+
+		annotation SummarizationSetBy = Automatic
+
+	column on_shift_PT_cases
+		dataType: int64
+		formatString: 0
+		lineageTag: 406db31d-d023-4ddb-a3d5-629de70619be
+		summarizeBy: sum
+		sourceColumn: on_shift_PT_cases
+
+		annotation SummarizationSetBy = Automatic
+
+	column on_shift_Other_Modality_cases
+		dataType: int64
+		formatString: 0
+		lineageTag: 39e10d62-c6a5-4821-ac4e-3ec639f1b700
+		summarizeBy: sum
+		sourceColumn: on_shift_Other_Modality_cases
+
+		annotation SummarizationSetBy = Automatic
+
+	column on_shift_Routine_cases
+		dataType: int64
+		formatString: 0
+		lineageTag: 4d991d5d-955d-4e94-bac6-443837e72339
+		summarizeBy: sum
+		sourceColumn: on_shift_Routine_cases
+
+		annotation SummarizationSetBy = Automatic
+
+	column on_shift_Stat_cases
+		dataType: int64
+		formatString: 0
+		lineageTag: 9dc4d9e0-ceba-4d5d-8d9e-cc7a25a2f0ec
+		summarizeBy: sum
+		sourceColumn: on_shift_Stat_cases
+
+		annotation SummarizationSetBy = Automatic
+
+	column on_shift_Stroke_cases
+		dataType: int64
+		formatString: 0
+		lineageTag: 716eb179-6910-4422-96aa-47d3b78044f0
+		summarizeBy: sum
+		sourceColumn: on_shift_Stroke_cases
+
+		annotation SummarizationSetBy = Automatic
+
+	column on_shift_Trauma_cases
+		dataType: int64
+		formatString: 0
+		lineageTag: dae9c0fe-a435-42b3-9363-999b103186e4
+		summarizeBy: sum
+		sourceColumn: on_shift_Trauma_cases
+
+		annotation SummarizationSetBy = Automatic
+
+	column on_shift_non_irStrokeTrauma_cases
+		dataType: int64
+		formatString: 0
+		lineageTag: 25b604e6-28f4-4a62-ad14-33ea3804c2dd
+		summarizeBy: sum
+		sourceColumn: on_shift_non_irStrokeTrauma_cases
+
+		annotation SummarizationSetBy = Automatic
+
+	column on_shift_IR_cases
+		dataType: int64
+		formatString: 0
+		lineageTag: af5f0d92-81a9-4523-9b0b-7ffe30cfb17f
+		summarizeBy: sum
+		sourceColumn: on_shift_IR_cases
+
+		annotation SummarizationSetBy = Automatic
+
+	column on_shift_OtherP_cases
+		dataType: int64
+		formatString: 0
+		lineageTag: 0be77394-115b-4dca-a488-8160775822f2
+		summarizeBy: sum
+		sourceColumn: on_shift_OtherP_cases
+
+		annotation SummarizationSetBy = Automatic
+
+	column annual_shift_count
+		dataType: int64
+		lineageTag: 77ec8a36-9a85-473d-bb4d-2a089558e50d
+		summarizeBy: sum
+		sourceColumn: annual_shift_count
+
+		changedProperty = DataType
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column on_shift_capacity_RVU_per_hour
+		dataType: double
+		lineageTag: 93e56c34-1872-4914-808e-edaffea3b6b7
+		summarizeBy: sum
+		sourceColumn: on_shift_capacity_RVU_per_hour
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column on_shift_capacity_RVU_per_9hours
+		dataType: double
+		lineageTag: 8183ad2d-d714-4a48-b39b-6ffe4d3f0fa3
+		summarizeBy: sum
+		sourceColumn: on_shift_capacity_RVU_per_9hours
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column on_shift_capacity_vs_baseline_RVU_per_hour
+		dataType: double
+		lineageTag: c1173833-cda8-4f8e-a042-5a1bb8c76bd0
+		summarizeBy: sum
+		sourceColumn: on_shift_capacity_vs_baseline_RVU_per_hour
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column on_shift_capacity_vs_baseline_RVU_per_9hours
+		dataType: double
+		lineageTag: 6e2d3155-8baa-4aec-8260-3663bd33bd32
+		summarizeBy: sum
+		sourceColumn: on_shift_capacity_vs_baseline_RVU_per_9hours
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column OnShiftuptoBL_RVU_per_hour
+		dataType: double
+		lineageTag: 52a03770-13fc-47a0-aaef-69ff1eb2211d
+		summarizeBy: sum
+		sourceColumn: OnShiftuptoBL_RVU_per_hour
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column OnShiftuptoBL_RVU_per_9hours
+		dataType: double
+		lineageTag: e6aa3434-50c7-4b1e-88c6-ac7d0fda76e3
+		summarizeBy: sum
+		sourceColumn: OnShiftuptoBL_RVU_per_9hours
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column OnShiftaboveBL_RVU_per_hour
+		dataType: double
+		lineageTag: 4c6a96e5-4e33-477b-9fa4-9628ceba89e5
+		summarizeBy: sum
+		sourceColumn: OnShiftaboveBL_RVU_per_hour
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column OnShiftaboveBL_RVU_per_9hours
+		dataType: double
+		lineageTag: 51b3fcb7-e15e-48ab-a5ad-207bfff4e89a
+		summarizeBy: sum
+		sourceColumn: OnShiftaboveBL_RVU_per_9hours
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column on_shift_cases_per_hour
+		dataType: double
+		lineageTag: 0a71cf36-8d5e-4531-9059-d7b1dd393286
+		summarizeBy: sum
+		sourceColumn: on_shift_cases_per_hour
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column on_shift_cases_per_9hours
+		dataType: double
+		lineageTag: 6dc654ea-e670-40f6-a09d-41c2405840ba
+		summarizeBy: sum
+		sourceColumn: on_shift_cases_per_9hours
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column on_shift_non_irStrokeTrauma_cases_per_hour
+		dataType: double
+		lineageTag: 3b6de14a-c7eb-4c1c-83c7-944b9de3729e
+		summarizeBy: sum
+		sourceColumn: on_shift_non_irStrokeTrauma_cases_per_hour
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column on_shift_non_irStrokeTrauma_cases_per_9hours
+		dataType: double
+		lineageTag: 5feaafc5-a3a1-47cd-aaff-34c47008e60c
+		summarizeBy: sum
+		sourceColumn: on_shift_non_irStrokeTrauma_cases_per_9hours
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column on_shift_assisted_cases_per_hour
+		dataType: double
+		lineageTag: 84a08993-7779-4fa3-817e-6daa5ac25eed
+		summarizeBy: sum
+		sourceColumn: on_shift_assisted_cases_per_hour
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column on_shift_assisted_cases_per_9hours
+		dataType: double
+		lineageTag: 11441f42-b84e-4be6-b1e0-85eb447bab31
+		summarizeBy: sum
+		sourceColumn: on_shift_assisted_cases_per_9hours
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column on_shift_autonext_cases_per_hour
+		dataType: double
+		lineageTag: 9b0bf007-2b85-4a06-9c43-cff25bc4b0cc
+		summarizeBy: sum
+		sourceColumn: on_shift_autonext_cases_per_hour
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column on_shift_autonext_cases_per_9hours
+		dataType: double
+		lineageTag: ae947f03-b421-435d-8242-7b6d0db7915a
+		summarizeBy: sum
+		sourceColumn: on_shift_autonext_cases_per_9hours
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column on_shift_IR_cases_per_hour
+		dataType: double
+		lineageTag: 8d2f973f-81b9-4c96-b5b7-79c47ddb59d9
+		summarizeBy: sum
+		sourceColumn: on_shift_IR_cases_per_hour
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column on_shift_IR_cases_per_9hours
+		dataType: double
+		lineageTag: dcefe844-e43f-4cb9-b6ca-9d61b7946a49
+		summarizeBy: sum
+		sourceColumn: on_shift_IR_cases_per_9hours
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column on_shift_XR_cases_per_hour
+		dataType: double
+		lineageTag: 96e93555-df71-45cd-8ea2-419cf0787032
+		summarizeBy: sum
+		sourceColumn: on_shift_XR_cases_per_hour
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column on_shift_XR_cases_per_9hours
+		dataType: double
+		lineageTag: 2e39157d-ee93-4134-b339-94340392ccb5
+		summarizeBy: sum
+		sourceColumn: on_shift_XR_cases_per_9hours
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column on_shift_CT_cases_per_hour
+		dataType: double
+		lineageTag: 825bd216-c7aa-4067-8da7-d923551c1ae2
+		summarizeBy: sum
+		sourceColumn: on_shift_CT_cases_per_hour
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column on_shift_CT_cases_per_9hours
+		dataType: double
+		lineageTag: 2458d1bf-5887-4165-b697-0e394ead6773
+		summarizeBy: sum
+		sourceColumn: on_shift_CT_cases_per_9hours
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column on_shift_US_cases_per_hour
+		dataType: double
+		lineageTag: 91536764-5856-4ea8-be34-8f476f68ebbb
+		summarizeBy: sum
+		sourceColumn: on_shift_US_cases_per_hour
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column on_shift_US_cases_per_9hours
+		dataType: double
+		lineageTag: 25656936-8309-48c3-9a1e-e01b7233cb46
+		summarizeBy: sum
+		sourceColumn: on_shift_US_cases_per_9hours
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column on_shift_MR_cases_per_hour
+		dataType: double
+		lineageTag: d4b1a49f-3b84-479b-8d08-6a0453010f2e
+		summarizeBy: sum
+		sourceColumn: on_shift_MR_cases_per_hour
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column on_shift_MR_cases_per_9hours
+		dataType: double
+		lineageTag: 65ed0cf0-ed17-4d72-b968-8c7f87784f9c
+		summarizeBy: sum
+		sourceColumn: on_shift_MR_cases_per_9hours
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column on_shift_NM_cases_per_hour
+		dataType: double
+		lineageTag: 85e45f01-1f1f-4f39-8220-1de2a1152b74
+		summarizeBy: sum
+		sourceColumn: on_shift_NM_cases_per_hour
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column on_shift_NM_cases_per_9hours
+		dataType: double
+		lineageTag: 668fc681-ceb2-4e87-9663-1f6e06a03c91
+		summarizeBy: sum
+		sourceColumn: on_shift_NM_cases_per_9hours
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column on_shift_PT_cases_per_hour
+		dataType: double
+		lineageTag: c83094a2-583e-4d19-80b7-ff76dc93d8f5
+		summarizeBy: sum
+		sourceColumn: on_shift_PT_cases_per_hour
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column on_shift_PT_cases_per_9hours
+		dataType: double
+		lineageTag: b2ba61d4-bff4-4b01-89a5-7240da45e6f4
+		summarizeBy: sum
+		sourceColumn: on_shift_PT_cases_per_9hours
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column on_shift_Other_cases_per_hour
+		dataType: double
+		lineageTag: ebb8ce43-f913-45c0-a827-3181a43c5627
+		summarizeBy: sum
+		sourceColumn: on_shift_Other_cases_per_hour
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column on_shift_Other_cases_per_9hours
+		dataType: double
+		lineageTag: 934ceee8-2af4-4647-82bb-9f865dac8504
+		summarizeBy: sum
+		sourceColumn: on_shift_Other_cases_per_9hours
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column on_shift_Routine_cases_per_hour
+		dataType: double
+		lineageTag: 2d93b5c9-6b8c-4001-9e7f-8398b2630f33
+		summarizeBy: sum
+		sourceColumn: on_shift_Routine_cases_per_hour
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column on_shift_Routine_cases_per_9hours
+		dataType: double
+		lineageTag: 156d2651-8652-4841-ae9a-e5d91ce5aa0c
+		summarizeBy: sum
+		sourceColumn: on_shift_Routine_cases_per_9hours
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column on_shift_Stat_cases_per_hour
+		dataType: double
+		lineageTag: fff31a12-6bfc-477a-a580-9f055005a664
+		summarizeBy: sum
+		sourceColumn: on_shift_Stat_cases_per_hour
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column on_shift_Stat_cases_per_9hours
+		dataType: double
+		lineageTag: aa194351-73d2-4d34-bce0-a061957da50e
+		summarizeBy: sum
+		sourceColumn: on_shift_Stat_cases_per_9hours
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column on_shift_Stroke_cases_per_hour
+		dataType: double
+		lineageTag: c974aa90-c1f1-4e05-ad24-9fb5282b43cc
+		summarizeBy: sum
+		sourceColumn: on_shift_Stroke_cases_per_hour
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column on_shift_Stroke_cases_per_9hours
+		dataType: double
+		lineageTag: 66beea57-2ee8-49e1-8ff0-fbc14dea4cda
+		summarizeBy: sum
+		sourceColumn: on_shift_Stroke_cases_per_9hours
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column on_shift_Trauma_cases_per_hour
+		dataType: double
+		lineageTag: bd9bf2f9-f03a-4835-86b9-4787dd344eea
+		summarizeBy: sum
+		sourceColumn: on_shift_Trauma_cases_per_hour
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column on_shift_Trauma_cases_per_9hours
+		dataType: double
+		lineageTag: 344f96d7-9aac-4b8f-8a20-e0a3c09bc0a6
+		summarizeBy: sum
+		sourceColumn: on_shift_Trauma_cases_per_9hours
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column on_shift_OtherP_cases_per_hour
+		dataType: double
+		lineageTag: 333a5bc2-db5e-469d-9f73-88c80e370cd3
+		summarizeBy: sum
+		sourceColumn: on_shift_OtherP_cases_per_hour
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column on_shift_OtherP_cases_per_9hours
+		dataType: double
+		lineageTag: e2531386-f691-4921-aaa7-bc992bf7fceb
+		summarizeBy: sum
+		sourceColumn: on_shift_OtherP_cases_per_9hours
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column shift_count_excel
+		dataType: int64
+		lineageTag: 8c50592f-58af-459a-abfc-e01cc465d6cc
+		summarizeBy: sum
+		sourceColumn: shift_count_excel
+
+		changedProperty = DataType
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column shift_count_radeff
+		dataType: int64
+		formatString: 0
+		lineageTag: 927ac8dd-4817-4aae-aac9-ca50f32f9055
+		summarizeBy: sum
+		sourceColumn: shift_count_radeff
+
+		annotation SummarizationSetBy = Automatic
+
+	column adjustment_RVU
+		dataType: double
+		lineageTag: 187977ce-e2e5-4a64-86a6-443d78530bc1
+		summarizeBy: sum
+		sourceColumn: adjustment_RVU
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column adjustment_TBWU
+		dataType: double
+		lineageTag: 38477817-d067-4982-937f-bc0f0ee4c894
+		summarizeBy: sum
+		sourceColumn: adjustment_TBWU
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column 'Go Live Date' = '0. Cur'[Rad_Go_Live_date]
+		formatString: General Date
+		lineageTag: 16875553-d01d-47a5-838e-002f402ae8af
+		summarizeBy: none
+
+		variation Variation
+			isDefault
+			relationship: 8e4bfbde-7e34-47e9-9890-8183e3ef1a2f
+			defaultHierarchy: LocalDateTable_d159f131-d0b8-47f4-9ae5-dbecbfc5a532.'Date Hierarchy'
+
+		annotation SummarizationSetBy = Automatic
+
+	column 'Shift to Include' = IF(ISBLANK('0. Cur'[shift_baseline_RVU]) && ISBLANK('0. Cur'[shift_baseline_RPWU]),"Shifts w/o Baselines","Shifts with Baselines")
+		lineageTag: 6315c551-a6bd-455c-948b-5b962708e5fe
+		summarizeBy: none
+
+		annotation SummarizationSetBy = Automatic
+
+	column Mosaic_go_live_date
+		dataType: dateTime
+		formatString: mmm-yy
+		lineageTag: c8057ace-a1b1-4d63-b9c5-3f19f9a93d74
+		summarizeBy: none
+		sourceColumn: Mosaic_go_live_date
+
+		variation Variation
+			isDefault
+			relationship: 62585b0d-f68b-4626-b1bd-3d6b611e7cd6
+			defaultHierarchy: LocalDateTable_2016e85f-d25a-46f9-a77e-0ba90e7ec8a0.'Date Hierarchy'
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation UnderlyingDateTimeDataType = Date
+
+		annotation PBI_FormatHint = {"isCustom":true}
+
+	column on_shift_mosaic_cases
+		dataType: int64
+		formatString: 0
+		lineageTag: 2d60dadb-d612-4a73-8874-df6680a5c09a
+		summarizeBy: sum
+		sourceColumn: on_shift_mosaic_cases
+
+		annotation SummarizationSetBy = Automatic
+
+	column on_shift_mosaic_cases_per_hour
+		dataType: double
+		lineageTag: cb2fb95f-a0fe-4303-a000-3a72f69c7537
+		summarizeBy: sum
+		sourceColumn: on_shift_mosaic_cases_per_hour
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column on_shift_mosaic_cases_per_9hours
+		dataType: double
+		lineageTag: c60ec2a7-295a-436e-a0d7-a5bc7cb701c5
+		summarizeBy: sum
+		sourceColumn: on_shift_mosaic_cases_per_9hours
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column on_shift_mosaic_percentage_status
+		dataType: string
+		lineageTag: 93d3574a-13b8-4ad0-87ff-80ca85639832
+		summarizeBy: none
+		sourceColumn: on_shift_mosaic_percentage_status
+
+		annotation SummarizationSetBy = Automatic
+
+	column shift_baseline_RVU
+		dataType: double
+		lineageTag: 8fefaebb-8a19-49ee-aa5b-fc7099859939
+		summarizeBy: sum
+		sourceColumn: shift_baseline_RVU
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column shift_baseline_per_hour_RVU
+		dataType: double
+		lineageTag: 3aa786f4-43fc-4f0b-8209-001b122e9967
+		summarizeBy: sum
+		sourceColumn: shift_baseline_per_hour_RVU
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column shift_baseline_per_9hours_RVU
+		dataType: double
+		lineageTag: 7253cdd2-3893-47a7-b7ed-f3eab61c129d
+		summarizeBy: sum
+		sourceColumn: shift_baseline_per_9hours_RVU
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column shift_baseline_RPWU
+		dataType: double
+		lineageTag: 713f26f2-37e1-4f37-bed4-594d5581a47c
+		summarizeBy: sum
+		sourceColumn: shift_baseline_RPWU
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column shift_baseline_per_hour_RPWU
+		dataType: double
+		lineageTag: b67b96cd-57bd-46ca-a884-3f3771bfb529
+		summarizeBy: sum
+		sourceColumn: shift_baseline_per_hour_RPWU
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column shift_baseline_per_9hours_RPWU
+		dataType: double
+		lineageTag: b9611633-81b4-43be-bcc1-3d974237630b
+		summarizeBy: sum
+		sourceColumn: shift_baseline_per_9hours_RPWU
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column shift_baseline_case
+		dataType: double
+		lineageTag: 036b20dc-a571-4923-8ffe-571b80e9885d
+		summarizeBy: sum
+		sourceColumn: shift_baseline_case
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column shift_baseline_per_hour_case
+		dataType: double
+		lineageTag: 4cafb80d-3071-4bb5-b7b3-d5e6e6913acf
+		summarizeBy: sum
+		sourceColumn: shift_baseline_per_hour_case
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column shift_baseline_per_9hours_case
+		dataType: double
+		lineageTag: d34596ce-1ff2-4ca9-8e4c-42ff9a001279
+		summarizeBy: sum
+		sourceColumn: shift_baseline_per_9hours_case
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column on_shift_capacity_RPWU
+		dataType: double
+		lineageTag: 655f7e29-587a-4459-ae03-aa478292cd8a
+		summarizeBy: sum
+		sourceColumn: on_shift_capacity_RPWU
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column on_shift_capacity_RPWU_per_hour
+		dataType: double
+		lineageTag: 9e7c5297-6667-4502-9ddd-e4e98d51a1ae
+		summarizeBy: sum
+		sourceColumn: on_shift_capacity_RPWU_per_hour
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column on_shift_capacity_RPWU_per_9hours
+		dataType: double
+		lineageTag: 3ab4bbfd-b1fd-4cc2-aff3-2c3aa343dc21
+		summarizeBy: sum
+		sourceColumn: on_shift_capacity_RPWU_per_9hours
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column on_shift_capacity_vs_baseline_RPWU
+		dataType: double
+		lineageTag: 392df100-66b2-466f-b1d1-128541885153
+		summarizeBy: sum
+		sourceColumn: on_shift_capacity_vs_baseline_RPWU
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column on_shift_capacity_vs_baseline_RPWU_per_hour
+		dataType: double
+		lineageTag: 5d08293d-15d5-4385-90d7-83ce64927136
+		summarizeBy: sum
+		sourceColumn: on_shift_capacity_vs_baseline_RPWU_per_hour
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column on_shift_capacity_vs_baseline_RPWU_per_9hours
+		dataType: double
+		lineageTag: c118b94b-48e3-45a7-a6f7-3703750e87cf
+		summarizeBy: sum
+		sourceColumn: on_shift_capacity_vs_baseline_RPWU_per_9hours
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column OnShiftuptoBL_RPWU
+		dataType: double
+		lineageTag: 1124f3cc-7a34-4e64-8712-f0adb9d09004
+		summarizeBy: sum
+		sourceColumn: OnShiftuptoBL_RPWU
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column OnShiftuptoBL_RPWU_per_hour
+		dataType: double
+		lineageTag: 3a561762-09d2-4593-9e39-178b9e7f0242
+		summarizeBy: sum
+		sourceColumn: OnShiftuptoBL_RPWU_per_hour
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column OnShiftuptoBL_RPWU_per_9hours
+		dataType: double
+		lineageTag: 27f33230-0863-49f9-95f5-9d5ae7957991
+		summarizeBy: sum
+		sourceColumn: OnShiftuptoBL_RPWU_per_9hours
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column OnShiftaboveBL_RPWU
+		dataType: double
+		lineageTag: b7b926ea-27e6-4b34-ae9a-6574d67cc3c4
+		summarizeBy: sum
+		sourceColumn: OnShiftaboveBL_RPWU
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column OnShiftaboveBL_RPWU_per_hour
+		dataType: double
+		lineageTag: 7734c909-a85f-4417-9ceb-bdb0e2248098
+		summarizeBy: sum
+		sourceColumn: OnShiftaboveBL_RPWU_per_hour
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column OnShiftaboveBL_RPWU_per_9hours
+		dataType: double
+		lineageTag: d29ef9c2-442b-44de-abff-c41178161483
+		summarizeBy: sum
+		sourceColumn: OnShiftaboveBL_RPWU_per_9hours
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column off_shift_assisted_capacity_RPWU
+		dataType: double
+		lineageTag: 6ee0e370-99e3-4959-a686-3942d9bd0d4c
+		summarizeBy: sum
+		sourceColumn: off_shift_assisted_capacity_RPWU
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column VRA_Shift_No
+		dataType: int64
+		formatString: 0
+		lineageTag: 1d537967-2c44-47b2-a12e-33803b47065b
+		summarizeBy: sum
+		sourceColumn: VRA_Shift_No
+
+		annotation SummarizationSetBy = Automatic
+
+	column Model
+		dataType: string
+		lineageTag: 212a9df1-546e-49ff-a73e-b5c5b9a63636
+		summarizeBy: none
+		sourceColumn: Model
+
+		annotation SummarizationSetBy = Automatic
+
+	column on_shift_MG_cases
+		dataType: int64
+		formatString: 0
+		lineageTag: 1a51b9e7-06a3-4910-908e-cf5a10f26a88
+		summarizeBy: sum
+		sourceColumn: on_shift_MG_cases
+
+		annotation SummarizationSetBy = Automatic
+
+	column on_shift_MG_cases_per_hour
+		dataType: double
+		lineageTag: a401bd46-3dab-4334-ac11-3fdfd46bc043
+		summarizeBy: sum
+		sourceColumn: on_shift_MG_cases_per_hour
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column on_shift_MG_cases_per_9hours
+		dataType: double
+		lineageTag: cf87b5c6-3bd3-4785-8cab-02fd884b8518
+		summarizeBy: sum
+		sourceColumn: on_shift_MG_cases_per_9hours
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column on_shift_assigned_cases
+		dataType: int64
+		formatString: 0
+		lineageTag: b421dc67-549c-4fad-bf9b-54ced2eeccf1
+		summarizeBy: sum
+		sourceColumn: on_shift_assigned_cases
+
+		annotation SummarizationSetBy = Automatic
+
+	column on_shift_assigned_cases_per_hour
+		dataType: double
+		lineageTag: 85372721-1f4a-4f8d-8d11-c36fa3470656
+		summarizeBy: sum
+		sourceColumn: on_shift_assigned_cases_per_hour
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column on_shift_assigned_cases_per_9hours
+		dataType: double
+		lineageTag: 8973fcf7-97a2-40ae-a89c-d9c0dc9c98eb
+		summarizeBy: sum
+		sourceColumn: on_shift_assigned_cases_per_9hours
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column on_shift_pool_cases
+		dataType: int64
+		formatString: 0
+		lineageTag: 3c97a066-c901-424a-845f-a25241b1ca12
+		summarizeBy: sum
+		sourceColumn: on_shift_pool_cases
+
+		annotation SummarizationSetBy = Automatic
+
+	column on_shift_pool_cases_per_hour
+		dataType: double
+		lineageTag: 5b45746b-8c4e-406b-a498-50755f2da32d
+		summarizeBy: sum
+		sourceColumn: on_shift_pool_cases_per_hour
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column on_shift_pool_cases_per_9hours
+		dataType: double
+		lineageTag: fdb8ffb9-f399-4e01-95be-01a6c8bbbf20
+		summarizeBy: sum
+		sourceColumn: on_shift_pool_cases_per_9hours
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column on_shift_mosaic_drafting_cases
+		dataType: int64
+		formatString: 0
+		lineageTag: bdff61ea-b6f7-40fb-b296-5cdedc071f35
+		summarizeBy: sum
+		sourceColumn: on_shift_mosaic_drafting_cases
+
+		annotation SummarizationSetBy = Automatic
+
+	column on_shift_mosaic_drafting_cases_per_hour
+		dataType: double
+		lineageTag: 71549071-2f88-4c80-840d-ca1911f621a7
+		summarizeBy: sum
+		sourceColumn: on_shift_mosaic_drafting_cases_per_hour
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column on_shift_mosaic_drafting_cases_per_9hours
+		dataType: double
+		lineageTag: c861fa5a-936d-4f09-b0d6-a0b6bc382380
+		summarizeBy: sum
+		sourceColumn: on_shift_mosaic_drafting_cases_per_9hours
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column localpractice
+		dataType: string
+		lineageTag: e416dbd5-db0e-45cf-bfca-44e15ab61add
+		summarizeBy: none
+		sourceColumn: localpractice
+
+		annotation SummarizationSetBy = Automatic
+
+	column 'Shift Length (Text)' = ```
+			
+			VAR RoundedHours = ROUND('0. Cur'[no_hours], 0)  
+			RETURN
+			FORMAT(RoundedHours, "0")
+			```
+		lineageTag: 20a83674-70a7-4d4e-aec0-3d217715305c
+		summarizeBy: none
+
+		annotation SummarizationSetBy = Automatic
+
+	column overlapping_shiftv2 =
+			
+			Var x1= CALCULATE(MAX('0. Cur'[Schedule_End_DateTime]), ALL())
+			var x2 = MAXX(FILTER(ALL('0. Cur'), '0. Cur'[Schedule_End_DateTime]= EARLIER('0. Cur'[Schedule_End_DateTime])), '0. Cur'[Schedule_End_DateTime])
+			RETURN
+			IF(x2= x1, "Overlapping Shift", "Non Overlapping Shift")
+		lineageTag: 03734d96-3871-49e9-89af-883ac02f5174
+		summarizeBy: none
+
+		annotation SummarizationSetBy = Automatic
+
+	column 'Team Rolled up' = RELATED('team_rollups'[Team Roll Up (KS)])
+		lineageTag: 1bff38f2-19f0-4d1c-acbf-7a9068e3a052
+		summarizeBy: none
+
+		annotation SummarizationSetBy = Automatic
+
+	column Local =
+			
+			SWITCH(
+			    TRUE(),
+			    '0. Cur'[Team] IN {"ESR", "LFI", "Jefferson", "GLI", "RAI", "RP Cascade","JR","DRSRP","RP East Florida","RP North Florida", "RP Palm Beach","PRA","ESRMH Garnet","ESRMH Hackensack","ESRMH Legacy","ESR Long Island","ESR Metro Hudson","SEAL Team", "SEAL Legacy","Spec Ops Reserve", "Lakefront Imaging", "DRSRP", "ESRMH NY Metro", "ESRMH Westchester", "vRad"}, "Spec Ops",
+			    '0. Cur'[Team] IN {"ADI", "ADR", "CRC Central", "CRC NW", "CRC SW", "Midstate", "NEOH", "Rad Alliance", "RP Kentucky", "RP Bluegrass","RAC","RACSW","RPKY","RPBG","RA","ADR Legacy","CRC","Rad Alliance Legacy", "Rad Alliance NorthCrest","RP Bluegrass Legacy", "ADR South Tennessee", "RAA"}, "Apex",
+			    '0. Cur'[Team]  IN {"Coastal", "Greensboro", "MBB", "Northside", "Greensboro Canopy", "RAF", "RP Florida", "RP Sandhills", "RP South Carolina", "SOAR","BOCA","GR","NRA","RASF","MBB Legacy","MBB Phoebe Putney","Northside Radiology","RAF East Coast", "RAF Panhandle", "RAF Sarasota", "RAF Tampa", "RAF Tele","RASF Miami", "RASF Naples","RP Florida Legacy", "Bethesda", "RP Florida West"}, "Genesis",
+			     '0. Cur'[Team]  IN {"Advanced Radiology", "Alaska", "CIR", "Desert", "GIMA", "RP SoCal", "IAM", "IAMSE", "MIA", "Mountain", "NIR", "MXC", "Red Rock", "RIMA", "RP Sol", "RP Sun City", "RP Chicago", "RP Forest City", "Saline Valley", "RP Valley Radiologists", "SVDI", "Western Colorado","WIR","RP IOWA","GSIA","SVL","MR","DR","NWIR","ARSC","DR Legacy","DR DRS","IAMSE Hurley", "IAM Marquette", "IAM Midlands","Mountain Legacy", "Mountain Yampa","RP NWIR", "RP SMIL", "RP SoCal Lakewood", "RP SoCal Legacy", "RP SoCal Palmdale", "RP Valley","SVDI Legacy", "SVDI San Ramon","SMI","RIMA", "RIMA California", "RP Crossroads", "Mountain", "RP SoCal", "RP Phoenix", "RP NWIR Legacy"}, "Maverick",
+			    '0. Cur'[Team] IN {"Access Alexandria", "ARA", "BR Academic", "BR Community", "CIRPA", "Community", "RP Eagle", "EBI", "GIA", "Lake Charles", "RP Borderlands", "RP Brazosport", "RP Corpus Christi", "RP Dallas", "RP El Paso", "RP Gulf Coast", "RP Houston", "RP Laredo", "RP Victoria","BR","Slidell","ACC","RPNM","EAG","RPEP","RPGC","RPH","Other","EXTHMC" ,"RP Singleton Academic" ,"RP Singleton Community", "RP Singleton","Rose","RP North Houston","Synergy", "Access Lake Charles","Community Laredo", "Community Legacy", "Community Victoria","Elite","RP Borderlands Legacy", "RP Borderlands Lovelace","RP Helios", "Rose RIS"}, "Trailblazer",
+			          '0. Cur'[Team] = "Matrix", "Matrix",
+			    "Blank"
+			)
+		lineageTag: 2fc3c504-5025-4268-b221-d3932f2ad20b
+		summarizeBy: none
+
+		annotation SummarizationSetBy = Automatic
+
+	column on_shift_drafting_percentage_status
+		dataType: string
+		lineageTag: 7b5ffd54-dc65-405a-b7b4-edec6d68b20f
+		summarizeBy: none
+		sourceColumn: on_shift_drafting_percentage_status
+
+		annotation SummarizationSetBy = Automatic
+
+	column on_shift_captured_US_in_mosaic_cases
+		dataType: int64
+		formatString: 0
+		lineageTag: eabd4201-32d7-4466-83b3-a9eede0f619a
+		summarizeBy: sum
+		sourceColumn: on_shift_captured_US_in_mosaic_cases
+
+		annotation SummarizationSetBy = Automatic
+
+	column on_shift_captured_US_in_mosaic_cases_per_hour
+		dataType: double
+		lineageTag: b9403f1b-b603-46b8-a9ed-71e0fc6aeec0
+		summarizeBy: sum
+		sourceColumn: on_shift_captured_US_in_mosaic_cases_per_hour
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column on_shift_captured_US_in_mosaic_cases_per_9hours
+		dataType: double
+		lineageTag: 3c0cdb44-79fd-421b-9b4a-386c13927ca7
+		summarizeBy: sum
+		sourceColumn: on_shift_captured_US_in_mosaic_cases_per_9hours
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column on_shift_efficiency_RPWU
+		dataType: double
+		lineageTag: 201dbe3b-c3c9-4e27-821d-d5369c3d4096
+		summarizeBy: sum
+		sourceColumn: on_shift_efficiency_RPWU
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column on_shift_efficiency_RVU
+		dataType: double
+		lineageTag: 3b893c16-0eb5-47f4-8196-142b7f6b2a8e
+		summarizeBy: sum
+		sourceColumn: on_shift_efficiency_RVU
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column on_shift_efficiency_RPWU_per_hour
+		dataType: double
+		lineageTag: 37e90264-b79d-4bc6-8165-eb2e4b355a28
+		summarizeBy: sum
+		sourceColumn: on_shift_efficiency_RPWU_per_hour
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column on_shift_efficiency_RPWU_per_9hours
+		dataType: double
+		lineageTag: 157d5344-128a-4824-96cc-dac1429e62d8
+		summarizeBy: sum
+		sourceColumn: on_shift_efficiency_RPWU_per_9hours
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column on_shift_efficiency_RVU_per_hour
+		dataType: double
+		lineageTag: 16689a97-4148-441f-88cb-e808806cc457
+		summarizeBy: sum
+		sourceColumn: on_shift_efficiency_RVU_per_hour
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column on_shift_efficiency_RVU_per_9hours
+		dataType: double
+		lineageTag: c9e226fa-cb17-479a-8990-b44876e5c698
+		summarizeBy: sum
+		sourceColumn: on_shift_efficiency_RVU_per_9hours
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column on_shift_utilization_RVU_pct
+		dataType: double
+		lineageTag: 4a894082-54a5-4da5-a15d-c86a4055d6db
+		summarizeBy: sum
+		sourceColumn: on_shift_utilization_RVU_pct
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column on_shift_utilization_RPWU_pct
+		dataType: double
+		lineageTag: 7e1851f5-be9f-4f44-802b-204851cc2563
+		summarizeBy: sum
+		sourceColumn: on_shift_utilization_RPWU_pct
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column on_shift_utilization_RVU_per_hour_pct
+		dataType: double
+		lineageTag: 86be5d48-d2b5-4a96-9064-7721b1d6504a
+		summarizeBy: sum
+		sourceColumn: on_shift_utilization_RVU_per_hour_pct
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column on_shift_utilization_RPWU_per_hour_pct
+		dataType: double
+		lineageTag: cc95acbf-5349-463e-8d4a-8b194c6341d3
+		summarizeBy: sum
+		sourceColumn: on_shift_utilization_RPWU_per_hour_pct
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column on_shift_utilization_RVU_per_9hours_pct
+		dataType: double
+		lineageTag: 18829f7a-e1de-468d-bf60-0da9609ab0fe
+		summarizeBy: sum
+		sourceColumn: on_shift_utilization_RVU_per_9hours_pct
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column on_shift_utilization_RPWU_per_9hours_pct
+		dataType: double
+		lineageTag: f8fd3d51-aa69-4bf7-9545-dbfe77de7e49
+		summarizeBy: sum
+		sourceColumn: on_shift_utilization_RPWU_per_9hours_pct
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column on_shift_efficiency_numerator_RPWU
+		dataType: double
+		lineageTag: 9bfdd205-d80d-4f67-b73e-84145d1f5a90
+		summarizeBy: sum
+		sourceColumn: on_shift_efficiency_numerator_RPWU
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column on_shift_efficiency_numerator_RVU
+		dataType: double
+		lineageTag: 03a2194d-8856-4478-ab54-c36f89d06084
+		summarizeBy: sum
+		sourceColumn: on_shift_efficiency_numerator_RVU
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column on_shift_efficiency_denominator_minutes
+		dataType: double
+		formatString: 0
+		lineageTag: b09cf9a4-f805-417a-8263-3db646ed798d
+		summarizeBy: sum
+		sourceColumn: on_shift_efficiency_denominator_minutes
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isDecimal":true}
+
+	column 'Shift Week Start' =
+			
+			VAR WeekdayNum = WEEKDAY('0. Cur'[ShiftDate], 2)  -- Monday = 1
+			RETURN '0. Cur'[ShiftDate] - WeekdayNum + 1
+		formatString: Short Date
+		lineageTag: 95e1df3e-289b-484f-aa89-fb8fa2f06425
+		summarizeBy: none
+
+		variation Variation
+			isDefault
+			relationship: c565b89d-2a47-45a4-81d0-b8927fc7be7c
+			defaultHierarchy: LocalDateTable_064f8f36-7c41-4eb8-a097-f2d49a1cce7e.'Date Hierarchy'
+
+		changedProperty = DataType
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation UnderlyingDateTimeDataType = Date
+
+	column shift_baseline_RPWU25
+		dataType: double
+		lineageTag: aa5f25e5-e5d0-43d6-b78b-21a943843997
+		summarizeBy: sum
+		sourceColumn: shift_baseline_RPWU25
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column shift_baseline_per_hour_RPWU25
+		dataType: double
+		lineageTag: 1a11309e-4c5b-4b9b-877a-57814223ff55
+		summarizeBy: sum
+		sourceColumn: shift_baseline_per_hour_RPWU25
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column shift_baseline_per_9hours_RPWU25
+		dataType: double
+		lineageTag: b54a0d85-f886-461b-b1b0-340d15204f91
+		summarizeBy: sum
+		sourceColumn: shift_baseline_per_9hours_RPWU25
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column on_shift_capacity_RPWU25
+		dataType: double
+		lineageTag: e385d8b8-6d3d-4377-8c94-f640536fe3f8
+		summarizeBy: sum
+		sourceColumn: on_shift_capacity_RPWU25
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column on_shift_capacity_RPWU25_per_hour
+		dataType: double
+		lineageTag: afae3156-2be4-4151-a7ca-ed07c1e137e9
+		summarizeBy: sum
+		sourceColumn: on_shift_capacity_RPWU25_per_hour
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column on_shift_capacity_RPWU25_per_9hours
+		dataType: double
+		lineageTag: 1c8dfda7-8808-4557-ab67-8cb87b8100e3
+		summarizeBy: sum
+		sourceColumn: on_shift_capacity_RPWU25_per_9hours
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column on_shift_efficiency_RPWU25
+		dataType: double
+		lineageTag: d281c62e-f58a-4849-802f-ffe9e3b1db27
+		summarizeBy: sum
+		sourceColumn: on_shift_efficiency_RPWU25
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column on_shift_efficiency_RPWU25_per_hour
+		dataType: double
+		lineageTag: c2b92c17-566a-4478-932d-3496044534ed
+		summarizeBy: sum
+		sourceColumn: on_shift_efficiency_RPWU25_per_hour
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column on_shift_efficiency_RPWU25_per_9hours
+		dataType: double
+		lineageTag: d5b399b8-d04a-45f0-bed5-2acd31d1e75a
+		summarizeBy: sum
+		sourceColumn: on_shift_efficiency_RPWU25_per_9hours
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column on_shift_efficiency_numerator_RPWU25
+		dataType: double
+		lineageTag: bf335d5f-0bfe-40b5-9afa-6d610afc1d1e
+		summarizeBy: sum
+		sourceColumn: on_shift_efficiency_numerator_RPWU25
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column on_shift_utilization_RPWU25_pct
+		dataType: double
+		lineageTag: 3de2e0cd-8e6a-4f5b-b282-8e408c980992
+		summarizeBy: sum
+		sourceColumn: on_shift_utilization_RPWU25_pct
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column on_shift_utilization_RPWU25_per_hour_pct
+		dataType: double
+		lineageTag: 57bcfd8b-1cbd-4981-bf3b-2b6d116172aa
+		summarizeBy: sum
+		sourceColumn: on_shift_utilization_RPWU25_per_hour_pct
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column on_shift_utilization_RPWU25_per_9hours_pct
+		dataType: double
+		lineageTag: 2444b45e-35ba-4314-bc3a-c9134512c188
+		summarizeBy: sum
+		sourceColumn: on_shift_utilization_RPWU25_per_9hours_pct
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column on_shift_capacity_vs_baseline_RPWU25
+		dataType: double
+		lineageTag: 535775a3-36ff-48ef-8cc1-9ae987372e87
+		summarizeBy: sum
+		sourceColumn: on_shift_capacity_vs_baseline_RPWU25
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column on_shift_capacity_vs_baseline_RPWU25_per_hour
+		dataType: double
+		lineageTag: 44510978-0b78-4363-95c0-e30b4382fa69
+		summarizeBy: sum
+		sourceColumn: on_shift_capacity_vs_baseline_RPWU25_per_hour
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column on_shift_capacity_vs_baseline_RPWU25_per_9hours
+		dataType: double
+		lineageTag: 07459ea6-ccba-45d4-be1d-c0fb76d8839e
+		summarizeBy: sum
+		sourceColumn: on_shift_capacity_vs_baseline_RPWU25_per_9hours
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column OnShiftuptoBL_RPWU25
+		dataType: double
+		lineageTag: afd155ec-5492-4a30-b54b-e73fbd93df02
+		summarizeBy: sum
+		sourceColumn: OnShiftuptoBL_RPWU25
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column OnShiftuptoBL_RPWU25_per_hour
+		dataType: double
+		lineageTag: ee3690f7-0821-48b8-9925-0c97711a9830
+		summarizeBy: sum
+		sourceColumn: OnShiftuptoBL_RPWU25_per_hour
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column OnshiftuptoBL_RPWU25_per_9hours
+		dataType: double
+		lineageTag: f9b864cb-b202-4b0e-9375-999db425e19c
+		summarizeBy: sum
+		sourceColumn: OnshiftuptoBL_RPWU25_per_9hours
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column OnShiftaboveBL_RPWU25
+		dataType: double
+		lineageTag: d9c5094a-aa18-49b9-aef3-cdba240d3dd4
+		summarizeBy: sum
+		sourceColumn: OnShiftaboveBL_RPWU25
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column OnShiftaboveBL_RPWU25_per_hour
+		dataType: double
+		lineageTag: f239f1a1-7da3-416d-a95f-ed645a088e2a
+		summarizeBy: sum
+		sourceColumn: OnShiftaboveBL_RPWU25_per_hour
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column OnshiftaboveBL_RPWU25_per_9hours
+		dataType: double
+		lineageTag: e412f967-a8e2-4d71-a553-eef21d943962
+		summarizeBy: sum
+		sourceColumn: OnshiftaboveBL_RPWU25_per_9hours
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column off_shift_assisted_Capacity_rpwu25
+		dataType: double
+		lineageTag: 6e29c39d-4a58-4525-9b77-92449bb6e959
+		summarizeBy: sum
+		sourceColumn: off_shift_assisted_Capacity_rpwu25
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column Baseline_type
+		dataType: string
+		lineageTag: 1e208233-73ff-4045-b45b-447d0d4c9281
+		summarizeBy: none
+		sourceColumn: Baseline_type
+
+		annotation SummarizationSetBy = Automatic
+
+	column on_shift_ER_cases
+		dataType: int64
+		formatString: 0
+		lineageTag: 52c54754-0caf-4861-9f05-9dc11f4d6568
+		summarizeBy: sum
+		sourceColumn: on_shift_ER_cases
+
+		annotation SummarizationSetBy = Automatic
+
+	column on_shift_ER_cases_per_hour
+		dataType: double
+		lineageTag: 3e1de413-83c4-47a1-8f62-d07c2fef34c4
+		summarizeBy: sum
+		sourceColumn: on_shift_ER_cases_per_hour
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column on_shift_ER_cases_per_9hours
+		dataType: double
+		lineageTag: 8dbde6d2-d61b-4328-99e4-3e7d0c243dd9
+		summarizeBy: sum
+		sourceColumn: on_shift_ER_cases_per_9hours
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column on_shift_Inpatient_cases
+		dataType: int64
+		formatString: 0
+		lineageTag: 075b3494-a420-47b3-b85a-214884d05763
+		summarizeBy: sum
+		sourceColumn: on_shift_Inpatient_cases
+
+		annotation SummarizationSetBy = Automatic
+
+	column on_shift_Inpatient_cases_per_hour
+		dataType: double
+		lineageTag: ff7a75d6-c0cf-47ae-9e94-3ea1f01de416
+		summarizeBy: sum
+		sourceColumn: on_shift_Inpatient_cases_per_hour
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column on_shift_Inpatient_cases_per_9hours
+		dataType: double
+		lineageTag: 35982bbf-958b-4ebf-938d-e177bfb56162
+		summarizeBy: sum
+		sourceColumn: on_shift_Inpatient_cases_per_9hours
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column on_shift_Outpatient_cases
+		dataType: int64
+		formatString: 0
+		lineageTag: 99cbae4b-a0f7-4b51-8755-a91cd93c6d9a
+		summarizeBy: sum
+		sourceColumn: on_shift_Outpatient_cases
+
+		annotation SummarizationSetBy = Automatic
+
+	column on_shift_Outpatient_cases_per_hour
+		dataType: double
+		lineageTag: eef08327-d707-4afd-b38e-f2b54fe97a4a
+		summarizeBy: sum
+		sourceColumn: on_shift_Outpatient_cases_per_hour
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column on_shift_Outpatient_cases_per_9hours
+		dataType: double
+		lineageTag: 5247b143-4c3d-468f-a155-c36e0622b30b
+		summarizeBy: sum
+		sourceColumn: on_shift_Outpatient_cases_per_9hours
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column Area = ```
+			
+			SWITCH(
+			    TRUE(),
+			    '0. Cur'[Team] IN {"Bethesda", "Boca", "Coastal", "Greensboro", "MBB", "MBB Legacy", "MBB Phoebe Putney", "Northside Radiology", "RAF","RAF East Coast", "RAF Panhandle", "RAF Sarasota", "RAF Tampa", "RAF Tele",
+			    "RASF", "RASF Miami", "RASF Naples", "RP Florida", "RP Florida Legacy", "RP Palmetto","RP South Carolina", "SOAR", "RP West Georgia", "RP Georgia", "RP Atlantic Coast", "RP Sandhills", "RP Florida West"}, "East",
+			    '0. Cur'[Team] IN {"ARSC", "GIMA", "IAM","IAMSE Hurley", "MXC", "CIR", "RP Chicago", "RP Crossroads", "RP Iowa", "RP NWIR", "Saline Valley", "SMI", "IAM Marquette", "RP Forest City", "GIA", "RP NWIR Legacy"}, "Great Lakes",
+			    '0. Cur'[Team]  IN {"ADI", "ADR", "ADR Legacy","ADR South Tennessee", "CRC", "CRC Central", "CRC NW", "CRC SW", "Midstate", "NEOH", "Rad Alliance", "Rad Alliance Legacy", "Rad Alliance NorthCrest", "RAC", "RACSW", "RP Bluegrass", "RP Bluegrass Legacy", "RP Bluegrass Baptist", "RP Kentucky", "RAA"}, "Midwest",
+			     '0. Cur'[Team]  IN {"DRSRP", "RP East Florida", "RP North Florida", "RP Palm Beach", "PRA", "RP RAH", "Spec Ops Reserve"}, "Envision",
+			       '0. Cur'[Team]  IN {"GLI", "SEAL Team", "SEAL Legacy", "RP Cascade", "GLI", "Lakefront Imaging", "LFI"}, "Integration & SEAL",
+			       '0. Cur'[Team]  IN {"Matrix"}, "Matrix",
+			       
+			    '0. Cur'[Team] IN {"ESR Long Island","ESR Metro Hudson", "ESRMH Garnet", "ESRMH Hackensack", "ESRMH Legacy", "Jefferson", "RAI", "ESRMH NY Metro", "ESRMH Westchester"}, "Northeast",
+			    '0. Cur'[Team]  IN {"Access Alexandria", "Access Lake Charles", "ARA", "Community", "Community Laredo", "Community Legacy", "Community Victoria", "CIRPA", "Elite", "RP Borderlands", "RP Borderlands Legacy", "RP Borderlands Lovelace", "RP Brazosport", "RP Corpus Christi", "RP Dallas", "RP Eagle", "RP El Paso", "RP Gulf Coast", "RP Helios", "RP Houston", "RP North Houston", "RP Singleton", "RP Singleton Academic", "RP Singleton Community", "Rose", "Rose RIS", "Synergy", "Access Louisiana", "Access Slidell"}, "Southwest",
+			     '0. Cur'[Team]  IN {"Alaska", "DR", "DR Legacy", "DR DRS", "MIA", "Mountain", "Mountain Legacy", "Mountain Yampa", "RP Phoenix", "RP SMIL", "RP Sol", "RP SoCal", "RP SoCal Lakewood", "RP SoCal Legacy", "RP SoCal Palmdale", "RP Sun City", "RP Valley", "Red Rock", "RIMA", "SVDI", "SVDI Legacy", "SVDI San Ramon", "Western Colorado", "Western Colorado Yampa", "Western Colorado Legacy", "RIMA Maui", "RIMA California", "RP Tucson"}, "West",
+			     '0. Cur'[Team]  IN {"vRad"}, "VRad",
+			     "Blank"
+			   
+			)
+			```
+		lineageTag: 34109c73-7450-44ff-9196-976259a8ec38
+		summarizeBy: none
+
+		annotation SummarizationSetBy = Automatic
+
+	column pct_exams_available_for_utilization
+		dataType: double
+		formatString: 0
+		lineageTag: 9ae0302f-53d9-41ee-a7a0-1d683098e198
+		summarizeBy: sum
+		sourceColumn: pct_exams_available_for_utilization
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isDecimal":true}
+
+	column Shift_Data_Quality_Status
+		dataType: string
+		lineageTag: 76921a02-a1da-416f-beb9-81dcabc451b1
+		summarizeBy: none
+		sourceColumn: Shift_Data_Quality_Status
+
+		annotation SummarizationSetBy = Automatic
+
+	column ShiftRecencyRank
+		dataType: int64
+		formatString: 0
+		lineageTag: 817910b6-a6eb-4693-b7d0-8429a97b4bc0
+		summarizeBy: sum
+		sourceColumn: ShiftRecencyRank
+
+		annotation SummarizationSetBy = Automatic
+
+	column Has_RVU_Baseline
+		dataType: boolean
+		formatString: """TRUE"";""TRUE"";""FALSE"""
+		lineageTag: 3e24953b-b6b3-4520-b4d1-9d9862d5c905
+		summarizeBy: none
+		sourceColumn: Has_RVU_Baseline
+
+		annotation SummarizationSetBy = Automatic
+
+	column Has_TBWU25_Baseline
+		dataType: boolean
+		formatString: """TRUE"";""TRUE"";""FALSE"""
+		lineageTag: b524fbb8-cf0b-406f-88fb-c3b6b3014ad8
+		summarizeBy: none
+		sourceColumn: Has_TBWU25_Baseline
+
+		annotation SummarizationSetBy = Automatic
+
+	column Has_TBWU26_Baseline
+		dataType: boolean
+		formatString: """TRUE"";""TRUE"";""FALSE"""
+		lineageTag: e45d64e1-dcde-4e94-8308-88cc184fd330
+		summarizeBy: none
+		sourceColumn: Has_TBWU26_Baseline
+
+		annotation SummarizationSetBy = Automatic
+
+	column 'Shift Date (Year Quarter)' = STARTOFQUARTER('0. Cur'[ShiftDate])
+		dataType: dateTime
+		formatString: "Q"q yyyy
+		lineageTag: fa8ddfe9-e7d7-43a2-b394-358151dba55b
+
+	partition '0. Cur' = m
+		mode: import
+		source =
+				let
+				    Source = Value.NativeQuery(Databricks.Catalogs("adb-7306149455716415.15.azuredatabricks.net", "/sql/1.0/warehouses/fe0ad987563c672a", [Catalog="edw_dev", Database=null, EnableAutomaticProxyDiscovery=null, Implementation=null]){[Name="edw_dev",Kind="Database"]}[Data], "select * from edw_dev.bipa_analytics.presentation_rpt_vra_capacity_enhancetest_vw", null, [EnableFolding=true]),
+				    #"Renamed Columns" = Table.RenameColumns(Source,{{"ShiftNo", "ShiftNo"}, {"unit_usage", "Preferred Unit"}, {"Model_type", "Model"}})
+				in
+				    #"Renamed Columns"
+
+	annotation PBI_ResultType = Table
+
+	annotation PBI_NavigationStepName = Navigation
+

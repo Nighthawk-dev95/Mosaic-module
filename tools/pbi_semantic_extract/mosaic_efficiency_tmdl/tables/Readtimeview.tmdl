@@ -1,0 +1,2226 @@
+table Readtimeview
+	lineageTag: 3b9ff7ad-b032-4307-bc16-4ccd848f758b
+
+	measure Mosaic_Exams_AllTime_NB = ```
+			
+			VAR _mode = SELECTEDVALUE('Mosaic Mode Selector'[Mode], "Full Mosaic")
+			VAR _outlierView = SELECTEDVALUE('Outlier Selector'[Outlier View], "Excluded")
+			
+			VAR IsParentExamLevel = ISINSCOPE('radiologist_metrics(1)'[Parent_Procedure_name])
+			VAR IsRadiologistLevel = ISINSCOPE('radiologist_summary(1)'[Radiologist]) && NOT IsParentExamLevel
+			
+			VAR _procAllTime = 
+			    CALCULATE(
+			        SUM('radiologist_metrics(1)'[ExamCount]),
+			        REMOVEFILTERS('Mosaic_Calendar'),
+			        SWITCH(
+			            _mode,
+			            "Drafting Only",
+			                'radiologist_metrics(1)'[Period_Type] = "Drafting"
+			                    && 'radiologist_metrics(1)'[Modality_Code] IN {"CR","CT"},
+			            "Reporting Only",
+			                'radiologist_metrics(1)'[Period_Type] = "Reporting",
+			            "Drafting + Capture",
+			                (
+			                    ('radiologist_metrics(1)'[Period_Type] = "Drafting"
+			                        && 'radiologist_metrics(1)'[Modality_Code] IN {"CR","CT"})
+			                    || ('radiologist_metrics(1)'[Period_Type] = "Drafting"
+			                        && 'radiologist_metrics(1)'[Modality_Code] IN {"US","BD"})
+			                ),
+			            "Both",
+			                'radiologist_metrics(1)'[Period_Type] IN {"Drafting","Reporting","Baseline"},
+			            'radiologist_metrics(1)'[Period_Type] IN {"Drafting","Reporting"}
+			        ),
+			        IF(_outlierView = "Excluded", 'radiologist_metrics(1)'[Outliers] = "Excluded", TRUE())
+			    )
+			
+			VAR _radAllTime = 
+			    SWITCH(
+			        TRUE(),
+			        _mode = "Drafting Only" && _outlierView = "Excluded",
+			            SUM('radiologist_summary(1)'[rad_total_drafting_excloutliers]),
+			        _mode = "Drafting Only" && _outlierView = "Included",
+			            SUM('radiologist_summary(1)'[rad_total_drafting_Incloutliers]),
+			        _mode = "Reporting Only" && _outlierView = "Excluded",
+			            SUM('radiologist_summary(1)'[rad_total_reporting_excloutliers]),
+			        _mode = "Reporting Only" && _outlierView = "Included",
+			            SUM('radiologist_summary(1)'[rad_total_reporting_incloutliers]),
+			        _mode = "Full Mosaic" && _outlierView = "Excluded",
+			            SUM('radiologist_summary(1)'[rad_total_fullmosaic_excloutliers]),
+			        _mode = "Full Mosaic" && _outlierView = "Included",
+			            SUM('radiologist_summary(1)'[rad_total_fullmosaic_Incloutliers]),
+			        _mode = "Drafting + Capture",           -- ← new, use fact table
+			            CALCULATE(
+			                SUM('radiologist_metrics(1)'[ExamCount]),
+			                REMOVEFILTERS('Mosaic_Calendar'),
+			                (
+			                    ('radiologist_metrics(1)'[Period_Type] = "Drafting"
+			                        && 'radiologist_metrics(1)'[Modality_Code] IN {"CR","CT"})
+			                    || ('radiologist_metrics(1)'[Period_Type] = "Drafting"
+			                        && 'radiologist_metrics(1)'[Modality_Code] IN {"US","BD"})
+			                ),
+			                IF(_outlierView = "Excluded", 'radiologist_metrics(1)'[Outliers] = "Excluded", TRUE())
+			            ),
+			        _mode = "Both",
+			            CALCULATE(
+			                SUM('radiologist_metrics(1)'[ExamCount]),
+			                REMOVEFILTERS('Mosaic_Calendar'),
+			                'radiologist_metrics(1)'[Period_Type] IN {"Drafting","Reporting","Baseline"},
+			                IF(_outlierView = "Excluded", 'radiologist_metrics(1)'[Outliers] = "Excluded", TRUE())
+			            ),
+			        SUM('radiologist_summary(1)'[rad_total_fullmosaic_excloutliers])
+			    )
+			
+			RETURN
+			IF(IsParentExamLevel, _procAllTime, _radAllTime)
+			```
+		formatString: 0
+		lineageTag: 0038eba0-90fb-490b-b257-80ff2f536e43
+
+	measure Mosaic_Exams_Period_NB = ```
+			
+			VAR _mode = SELECTEDVALUE('Mosaic Mode Selector'[Mode], "Full Mosaic")
+			VAR _outlierView = SELECTEDVALUE('Outlier Selector'[Outlier View], "Excluded")
+			
+			VAR _exams = 
+			    CALCULATE(
+			        SUM('radiologist_metrics(1)'[ExamCount]),
+			        'radiologist_metrics(1)'[Exam_Date] IN VALUES('Mosaic_Calendar'[Date]),
+			        SWITCH(
+			            _mode,
+			            "Drafting Only",
+			                'radiologist_metrics(1)'[Period_Type] = "Drafting"
+			                    && 'radiologist_metrics(1)'[Modality_Code] IN {"CR","CT"},
+			            "Reporting Only",
+			                'radiologist_metrics(1)'[Period_Type] = "Reporting",
+			            "Drafting + Capture",
+			                (
+			                    ('radiologist_metrics(1)'[Period_Type] = "Drafting"
+			                        && 'radiologist_metrics(1)'[Modality_Code] IN {"CR","CT"})
+			                    || ('radiologist_metrics(1)'[Period_Type] = "Drafting"
+			                        && 'radiologist_metrics(1)'[Modality_Code] IN {"US","BD"})
+			                ),
+			            "Both",
+			                'radiologist_metrics(1)'[Period_Type] IN {"Drafting","Reporting","Baseline"},
+			            'radiologist_metrics(1)'[Period_Type] IN {"Drafting","Reporting"}
+			        ),
+			        IF(_outlierView = "Excluded", 'radiologist_metrics(1)'[Outliers] = "Excluded", TRUE())
+			    )
+			
+			RETURN IF(_exams > 0, _exams, BLANK())
+			```
+		formatString: 0
+		lineageTag: d461a144-8a37-4058-831d-dd8832443d11
+
+	measure Rad_Qualifies_NB =
+			
+			VAR _minExams = SELECTEDVALUE('Mosaic Min Exams'[MinExams], 0)
+			VAR _mode = SELECTEDVALUE('Mosaic Mode Selector'[Mode], "Full Mosaic")
+			VAR _outlierView = SELECTEDVALUE('Outlier Selector'[Outlier View], "Excluded")
+			VAR _rtView =
+			    IF(
+			        ISFILTERED(Readtimeview[RT View]),
+			        SELECTEDVALUE(Readtimeview[RT View], "All"),
+			        "All"
+			    )
+			
+			VAR IsParentExamLevel = ISINSCOPE('radiologist_metrics(1)'[Parent_Procedure_name])
+			VAR IsRadiologistLevel = ISINSCOPE('radiologist_summary(1)'[Radiologist])
+			VAR IsTeamLevel =
+			    ISINSCOPE('radiologist_summary(1)'[team_rolled_up])
+			        && NOT IsRadiologistLevel
+			        && NOT IsParentExamLevel
+			
+			VAR _rpAvgTBWU =
+			    CALCULATE(
+			        SUM('radiologist_metrics(1)'[TotalTBWU]),
+			        REMOVEFILTERS('radiologist_summary(1)'),
+			        REMOVEFILTERS('radiologist_metrics(1)'[Parent_Procedure_name]),
+			        'radiologist_metrics(1)'[Exam_Date] IN VALUES('Mosaic_Calendar'[Date]),
+			        SWITCH(
+			            _mode,
+			            "Drafting Only",
+			                'radiologist_metrics(1)'[Period_Type] = "Drafting"
+			                    && 'radiologist_metrics(1)'[Modality_Code] IN {"CR","CT"},
+			            "Reporting Only",
+			                'radiologist_metrics(1)'[Period_Type] = "Reporting",
+			            "Capture Only",
+			                'radiologist_metrics(1)'[Period_Type] = "Drafting"
+			                    && 'radiologist_metrics(1)'[Modality_Code] IN {"US","BD"},
+			            "Drafting + Capture",
+			                (
+			                    ('radiologist_metrics(1)'[Period_Type] = "Drafting"
+			                        && 'radiologist_metrics(1)'[Modality_Code] IN {"CR","CT"})
+			                    || ('radiologist_metrics(1)'[Period_Type] = "Drafting"
+			                        && 'radiologist_metrics(1)'[Modality_Code] IN {"US","BD"})
+			                ),
+			            "Both",
+			                'radiologist_metrics(1)'[Period_Type] IN {"Drafting","Reporting","Baseline"},
+			            'radiologist_metrics(1)'[Period_Type] IN {"Drafting","Reporting"}
+			        ),
+			        IF(_outlierView = "Excluded", 'radiologist_metrics(1)'[Outliers] = "Excluded", TRUE())
+			    )
+			
+			VAR _rpAvgTime =
+			    CALCULATE(
+			        SUM('radiologist_metrics(1)'[TotalTime]),
+			        REMOVEFILTERS('radiologist_summary(1)'),
+			        REMOVEFILTERS('radiologist_metrics(1)'[Parent_Procedure_name]),
+			        'radiologist_metrics(1)'[Exam_Date] IN VALUES('Mosaic_Calendar'[Date]),
+			        SWITCH(
+			            _mode,
+			            "Drafting Only",
+			                'radiologist_metrics(1)'[Period_Type] = "Drafting"
+			                    && 'radiologist_metrics(1)'[Modality_Code] IN {"CR","CT"},
+			            "Reporting Only",
+			                'radiologist_metrics(1)'[Period_Type] = "Reporting",
+			            "Capture Only",
+			                'radiologist_metrics(1)'[Period_Type] = "Drafting"
+			                    && 'radiologist_metrics(1)'[Modality_Code] IN {"US","BD"},
+			            "Drafting + Capture",
+			                (
+			                    ('radiologist_metrics(1)'[Period_Type] = "Drafting"
+			                        && 'radiologist_metrics(1)'[Modality_Code] IN {"CR","CT"})
+			                    || ('radiologist_metrics(1)'[Period_Type] = "Drafting"
+			                        && 'radiologist_metrics(1)'[Modality_Code] IN {"US","BD"})
+			                ),
+			            "Both",
+			                'radiologist_metrics(1)'[Period_Type] IN {"Drafting","Reporting","Baseline"},
+			            'radiologist_metrics(1)'[Period_Type] IN {"Drafting","Reporting"}
+			        ),
+			        IF(_outlierView = "Excluded", 'radiologist_metrics(1)'[Outliers] = "Excluded", TRUE())
+			    )
+			
+			VAR _rpAvg = DIVIDE(_rpAvgTBWU, _rpAvgTime / 60)
+			
+			VAR _radExams =
+			    CALCULATE(
+			        SUM('radiologist_metrics(1)'[ExamCount]),
+			        'radiologist_metrics(1)'[Exam_Date] IN VALUES('Mosaic_Calendar'[Date]),
+			        SWITCH(
+			            _mode,
+			            "Drafting Only",
+			                'radiologist_metrics(1)'[Period_Type] = "Drafting"
+			                    && 'radiologist_metrics(1)'[Modality_Code] IN {"CR","CT"},
+			            "Reporting Only",
+			                'radiologist_metrics(1)'[Period_Type] = "Reporting",
+			            "Capture Only",
+			                'radiologist_metrics(1)'[Period_Type] = "Drafting"
+			                    && 'radiologist_metrics(1)'[Modality_Code] IN {"US","BD"},
+			            "Drafting + Capture",
+			                (
+			                    ('radiologist_metrics(1)'[Period_Type] = "Drafting"
+			                        && 'radiologist_metrics(1)'[Modality_Code] IN {"CR","CT"})
+			                    || ('radiologist_metrics(1)'[Period_Type] = "Drafting"
+			                        && 'radiologist_metrics(1)'[Modality_Code] IN {"US","BD"})
+			                ),
+			            "Both",
+			                'radiologist_metrics(1)'[Period_Type] IN {"Drafting","Reporting"},
+			            'radiologist_metrics(1)'[Period_Type] IN {"Drafting","Reporting"}
+			        ),
+			        IF(_outlierView = "Excluded", 'radiologist_metrics(1)'[Outliers] = "Excluded", TRUE()),
+			        REMOVEFILTERS('radiologist_metrics(1)'[Parent_Procedure_name])
+			    )
+			
+			VAR _radTBWU =
+			    CALCULATE(
+			        SUM('radiologist_metrics(1)'[TotalTBWU]),
+			        'radiologist_metrics(1)'[Exam_Date] IN VALUES('Mosaic_Calendar'[Date]),
+			        SWITCH(
+			            _mode,
+			            "Drafting Only",
+			                'radiologist_metrics(1)'[Period_Type] = "Drafting"
+			                    && 'radiologist_metrics(1)'[Modality_Code] IN {"CR","CT"},
+			            "Reporting Only",
+			                'radiologist_metrics(1)'[Period_Type] = "Reporting",
+			            "Capture Only",
+			                'radiologist_metrics(1)'[Period_Type] = "Drafting"
+			                    && 'radiologist_metrics(1)'[Modality_Code] IN {"US","BD"},
+			            "Drafting + Capture",
+			                (
+			                    ('radiologist_metrics(1)'[Period_Type] = "Drafting"
+			                        && 'radiologist_metrics(1)'[Modality_Code] IN {"CR","CT"})
+			                    || ('radiologist_metrics(1)'[Period_Type] = "Drafting"
+			                        && 'radiologist_metrics(1)'[Modality_Code] IN {"US","BD"})
+			                ),
+			            "Both",
+			                'radiologist_metrics(1)'[Period_Type] IN {"Drafting","Reporting","Baseline"},
+			            'radiologist_metrics(1)'[Period_Type] IN {"Drafting","Reporting"}
+			        ),
+			        IF(_outlierView = "Excluded", 'radiologist_metrics(1)'[Outliers] = "Excluded", TRUE()),
+			        REMOVEFILTERS('radiologist_metrics(1)'[Parent_Procedure_name])
+			    )
+			
+			VAR _radTime =
+			    CALCULATE(
+			        SUM('radiologist_metrics(1)'[TotalTime]),
+			        'radiologist_metrics(1)'[Exam_Date] IN VALUES('Mosaic_Calendar'[Date]),
+			        SWITCH(
+			            _mode,
+			            "Drafting Only",
+			                'radiologist_metrics(1)'[Period_Type] = "Drafting"
+			                    && 'radiologist_metrics(1)'[Modality_Code] IN {"CR","CT"},
+			            "Reporting Only",
+			                'radiologist_metrics(1)'[Period_Type] = "Reporting",
+			            "Capture Only",
+			                'radiologist_metrics(1)'[Period_Type] = "Drafting"
+			                    && 'radiologist_metrics(1)'[Modality_Code] IN {"US","BD"},
+			            "Drafting + Capture",
+			                (
+			                    ('radiologist_metrics(1)'[Period_Type] = "Drafting"
+			                        && 'radiologist_metrics(1)'[Modality_Code] IN {"CR","CT"})
+			                    || ('radiologist_metrics(1)'[Period_Type] = "Drafting"
+			                        && 'radiologist_metrics(1)'[Modality_Code] IN {"US","BD"})
+			                ),
+			            "Both",
+			                'radiologist_metrics(1)'[Period_Type] IN {"Drafting","Reporting","Baseline"},
+			            'radiologist_metrics(1)'[Period_Type] IN {"Drafting","Reporting"}
+			        ),
+			        IF(_outlierView = "Excluded", 'radiologist_metrics(1)'[Outliers] = "Excluded", TRUE()),
+			        REMOVEFILTERS('radiologist_metrics(1)'[Parent_Procedure_name])
+			    )
+			
+			VAR _radEfficiency = DIVIDE(_radTBWU, _radTime / 60)
+			VAR _effVsAvg = DIVIDE(_radEfficiency, _rpAvg)
+			VAR _meetsMinExams = _radExams >= _minExams
+			VAR _meetsRTView =
+			    SWITCH(
+			        _rtView,
+			        "Positive", _effVsAvg > 1,
+			        "Negative", _effVsAvg <= 1,
+			        TRUE()
+			    )
+			
+			VAR _radQualifies = _meetsMinExams && _meetsRTView
+			
+			VAR _anyRadQualifies =
+			    COUNTROWS(
+			        FILTER(
+			            VALUES('radiologist_summary(1)'[Radiologist]),
+			            VAR _thisRadExams =
+			                CALCULATE(
+			                    SUM('radiologist_metrics(1)'[ExamCount]),
+			                    'radiologist_metrics(1)'[Exam_Date] IN VALUES('Mosaic_Calendar'[Date]),
+			                    SWITCH(
+			                        _mode,
+			                        "Drafting Only",
+			                            'radiologist_metrics(1)'[Period_Type] = "Drafting"
+			                                && 'radiologist_metrics(1)'[Modality_Code] IN {"CR","CT"},
+			                        "Reporting Only",
+			                            'radiologist_metrics(1)'[Period_Type] = "Reporting",
+			                        "Capture Only",
+			                            'radiologist_metrics(1)'[Period_Type] = "Drafting"
+			                                && 'radiologist_metrics(1)'[Modality_Code] IN {"US","BD"},
+			                        "Drafting + Capture",
+			                            (
+			                                ('radiologist_metrics(1)'[Period_Type] = "Drafting"
+			                                    && 'radiologist_metrics(1)'[Modality_Code] IN {"CR","CT"})
+			                                || ('radiologist_metrics(1)'[Period_Type] = "Drafting"
+			                                    && 'radiologist_metrics(1)'[Modality_Code] IN {"US","BD"})
+			                            ),
+			                        "Both",
+			                            'radiologist_metrics(1)'[Period_Type] IN {"Drafting","Reporting"},
+			                        'radiologist_metrics(1)'[Period_Type] IN {"Drafting","Reporting"}
+			                    ),
+			                    IF(_outlierView = "Excluded", 'radiologist_metrics(1)'[Outliers] = "Excluded", TRUE())
+			                )
+			
+			            VAR _thisRadTBWU =
+			                CALCULATE(
+			                    SUM('radiologist_metrics(1)'[TotalTBWU]),
+			                    'radiologist_metrics(1)'[Exam_Date] IN VALUES('Mosaic_Calendar'[Date]),
+			                    SWITCH(
+			                        _mode,
+			                        "Drafting Only",
+			                            'radiologist_metrics(1)'[Period_Type] = "Drafting"
+			                                && 'radiologist_metrics(1)'[Modality_Code] IN {"CR","CT"},
+			                        "Reporting Only",
+			                            'radiologist_metrics(1)'[Period_Type] = "Reporting",
+			                        "Capture Only",
+			                            'radiologist_metrics(1)'[Period_Type] = "Drafting"
+			                                && 'radiologist_metrics(1)'[Modality_Code] IN {"US","BD"},
+			                        "Drafting + Capture",
+			                            (
+			                                ('radiologist_metrics(1)'[Period_Type] = "Drafting"
+			                                    && 'radiologist_metrics(1)'[Modality_Code] IN {"CR","CT"})
+			                                || ('radiologist_metrics(1)'[Period_Type] = "Drafting"
+			                                    && 'radiologist_metrics(1)'[Modality_Code] IN {"US","BD"})
+			                            ),
+			                        "Both",
+			                            'radiologist_metrics(1)'[Period_Type] IN {"Drafting","Reporting","Baseline"},
+			                        'radiologist_metrics(1)'[Period_Type] IN {"Drafting","Reporting"}
+			                    ),
+			                    IF(_outlierView = "Excluded", 'radiologist_metrics(1)'[Outliers] = "Excluded", TRUE())
+			                )
+			
+			            VAR _thisRadTime =
+			                CALCULATE(
+			                    SUM('radiologist_metrics(1)'[TotalTime]),
+			                    'radiologist_metrics(1)'[Exam_Date] IN VALUES('Mosaic_Calendar'[Date]),
+			                    SWITCH(
+			                        _mode,
+			                        "Drafting Only",
+			                            'radiologist_metrics(1)'[Period_Type] = "Drafting"
+			                                && 'radiologist_metrics(1)'[Modality_Code] IN {"CR","CT"},
+			                        "Reporting Only",
+			                            'radiologist_metrics(1)'[Period_Type] = "Reporting",
+			                        "Capture Only",
+			                            'radiologist_metrics(1)'[Period_Type] = "Drafting"
+			                                && 'radiologist_metrics(1)'[Modality_Code] IN {"US","BD"},
+			                        "Drafting + Capture",
+			                            (
+			                                ('radiologist_metrics(1)'[Period_Type] = "Drafting"
+			                                    && 'radiologist_metrics(1)'[Modality_Code] IN {"CR","CT"})
+			                                || ('radiologist_metrics(1)'[Period_Type] = "Drafting"
+			                                    && 'radiologist_metrics(1)'[Modality_Code] IN {"US","BD"})
+			                            ),
+			                        "Both",
+			                            'radiologist_metrics(1)'[Period_Type] IN {"Drafting","Reporting","Baseline"},
+			                        'radiologist_metrics(1)'[Period_Type] IN {"Drafting","Reporting"}
+			                    ),
+			                    IF(_outlierView = "Excluded", 'radiologist_metrics(1)'[Outliers] = "Excluded", TRUE())
+			                )
+			
+			            VAR _thisRadEff = DIVIDE(_thisRadTBWU, _thisRadTime / 60)
+			            VAR _thisEffVsAvg = DIVIDE(_thisRadEff, _rpAvg)
+			            VAR _thisRadMeetsMinExams = _thisRadExams >= _minExams
+			            VAR _thisRadMeetsRTView =
+			                SWITCH(
+			                    _rtView,
+			                    "Positive", _thisEffVsAvg > 1,
+			                    "Negative", _thisEffVsAvg <= 1,
+			                    TRUE()
+			                )
+			
+			            RETURN _thisRadMeetsMinExams && _thisRadMeetsRTView
+			        )
+			    ) > 0
+			
+			RETURN
+			    SWITCH(
+			        TRUE(),
+			        IsTeamLevel, IF(_anyRadQualifies, 1, 0),
+			        IsRadiologistLevel || IsParentExamLevel, IF(_radQualifies, 1, 0),
+			        1
+			    )
+		formatString: 0
+		lineageTag: 9a5ea5ad-1c2b-4352-a934-5b30fdb6bba7
+
+	measure Mosaic_Efficiency_NB =
+			
+			VAR _mode = SELECTEDVALUE('Mosaic Mode Selector'[Mode], "Full Mosaic")
+			
+			VAR _isTeamRow =
+			    ISINSCOPE('radiologist_summary(1)'[team_rolled_up])
+			        && NOT ISINSCOPE('radiologist_summary(1)'[Radiologist])
+			        && NOT ISINSCOPE('radiologist_metrics(1)'[Parent_Procedure_name])
+			
+			VAR _isRadRow =
+			    ISINSCOPE('radiologist_summary(1)'[Radiologist])
+			        && NOT ISINSCOPE('radiologist_metrics(1)'[Parent_Procedure_name])
+			
+			VAR _isProcedureRow =
+			    ISINSCOPE('radiologist_metrics(1)'[Parent_Procedure_name])
+			
+			VAR _isMatrixDetailRow = _isTeamRow || _isRadRow || _isProcedureRow
+			
+			VAR _singleTeamSelected =
+			    COUNTROWS(ALLSELECTED('radiologist_summary(1)'[team_rolled_up])) = 1
+			
+			VAR _singleRadSelected =
+			    COUNTROWS(ALLSELECTED('radiologist_summary(1)'[Radiologist])) = 1
+			
+			VAR _singleProcedureSelected =
+			    COUNTROWS(ALLSELECTED('radiologist_metrics(1)'[Parent_Procedure_name])) = 1
+			
+			VAR _rowIsSelectedPopulation =
+			    SWITCH(
+			        TRUE(),
+			        _isTeamRow && _singleTeamSelected, TRUE(),
+			        _isRadRow && _singleRadSelected, TRUE(),
+			        _isProcedureRow && _singleProcedureSelected, TRUE(),
+			        FALSE()
+			    )
+			
+			VAR _populationBenchmark =
+			    SWITCH(
+			        TRUE(),
+			        _mode = "Drafting Only",
+			            CALCULATE(
+			                [Benchmark_Drafting_Only],
+			                ALLSELECTED('radiologist_summary(1)'),
+			                ALLSELECTED('radiologist_metrics(1)'[Parent_Procedure_name])
+			            ),
+			        _mode = "Reporting Only",
+			            CALCULATE(
+			                [Benchmark_Reporting_Only],
+			                ALLSELECTED('radiologist_summary(1)'),
+			                ALLSELECTED('radiologist_metrics(1)'[Parent_Procedure_name])
+			            ),
+			        _mode = "Capture Only",
+			            CALCULATE(
+			                [Benchmark_Capture_Only],
+			                ALLSELECTED('radiologist_summary(1)'),
+			                ALLSELECTED('radiologist_metrics(1)'[Parent_Procedure_name])
+			            ),
+			        _mode = "Drafting + Capture",           -- ← new
+			            CALCULATE(
+			                [Benchmark_DraftingCapture],
+			                ALLSELECTED('radiologist_summary(1)'),
+			                ALLSELECTED('radiologist_metrics(1)'[Parent_Procedure_name])
+			            ),
+			        _mode = "Both",
+			            CALCULATE(
+			                [Benchmark_Both],
+			                ALLSELECTED('radiologist_summary(1)'),
+			                ALLSELECTED('radiologist_metrics(1)'[Parent_Procedure_name])
+			            ),
+			        _mode = "Full Mosaic",
+			            CALCULATE(
+			                [Benchmark_FullMosaic_Only],
+			                ALLSELECTED('radiologist_summary(1)'),
+			                ALLSELECTED('radiologist_metrics(1)'[Parent_Procedure_name])
+			            )
+			    )
+			
+			RETURN
+			    IF(
+			        NOT _isMatrixDetailRow || _rowIsSelectedPopulation,
+			        _populationBenchmark,
+			        [Mosaic_Efficiency_Raw_NB]
+			    )
+		formatString: 0.000
+		lineageTag: 7f026415-18c3-432e-b92d-ed50f2c8bc54
+
+	measure RP_Avg_Efficiency = ```
+			
+			VAR _mode = SELECTEDVALUE('Mosaic Mode Selector'[Mode], "Full Mosaic")
+			VAR _outlierView = SELECTEDVALUE('Outlier Selector'[Outlier View], "Excluded")
+			
+			// Benchmark ignores Team/Rad selection - always overall average
+			VAR _totalTBWU = 
+			    CALCULATE(
+			        SUM('radiologist_metrics(1)'[TotalTBWU]),
+			        ALL('radiologist_summary(1)'),  // Ignore all Team/Rad filters
+			        ALLSELECTED('radiologist_metrics(1)'[Parent_Procedure_name]),
+			        'radiologist_metrics(1)'[Exam_Date] IN VALUES('Mosaic_Calendar'[Date]),
+			        SWITCH(
+			            _mode,
+			            "Drafting Only", 'radiologist_metrics(1)'[Period_Type] = "Drafting",
+			            "Reporting Only", 'radiologist_metrics(1)'[Period_Type] = "Reporting",
+			            "Capture Only", 'radiologist_metrics(1)'[Period_Type] = "Drafting" && 'radiologist_metrics(1)'[Modality_Code] IN {"US", "BD"},
+			            'radiologist_metrics(1)'[Period_Type] IN {"Drafting", "Reporting"}
+			        ),
+			        IF(_outlierView = "Excluded", 'radiologist_metrics(1)'[Outliers] = "Excluded", TRUE())
+			    )
+			
+			VAR _totalTime = 
+			    CALCULATE(
+			        SUM('radiologist_metrics(1)'[TotalTime]),
+			        ALL('radiologist_summary(1)'),  // Ignore all Team/Rad filters
+			        ALLSELECTED('radiologist_metrics(1)'[Parent_Procedure_name]),
+			        'radiologist_metrics(1)'[Exam_Date] IN VALUES('Mosaic_Calendar'[Date]),
+			        SWITCH(
+			            _mode,
+			            "Drafting Only", 'radiologist_metrics(1)'[Period_Type] = "Drafting",
+			            "Reporting Only", 'radiologist_metrics(1)'[Period_Type] = "Reporting",
+			            "Capture Only", 'radiologist_metrics(1)'[Period_Type] = "Drafting" && 'radiologist_metrics(1)'[Modality_Code] IN {"US", "BD"},
+			            'radiologist_metrics(1)'[Period_Type] IN {"Drafting", "Reporting"}
+			        ),
+			        IF(_outlierView = "Excluded", 'radiologist_metrics(1)'[Outliers] = "Excluded", TRUE())
+			    )
+			
+			RETURN
+			DIVIDE(_totalTBWU, _totalTime / 60)
+			```
+		lineageTag: 0e865c67-b4b9-4a6b-99b5-080715e11d2a
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	measure Efficiency_vs_RP_Avg_NB =
+			
+			VAR _mode = SELECTEDVALUE('Mosaic Mode Selector'[Mode], "Full Mosaic")
+			VAR _mosaicEff = [Mosaic_Efficiency_NB]
+			
+			VAR _populationAvg_Strict =
+			    SWITCH(
+			        TRUE(),
+			        _mode = "Drafting Only",
+			            CALCULATE(
+			                [Benchmark_Drafting_Only],
+			                ALLSELECTED('radiologist_summary(1)'),
+			                ALLSELECTED('radiologist_metrics(1)'[Parent_Procedure_name])
+			            ),
+			        _mode = "Reporting Only",
+			            CALCULATE(
+			                [Benchmark_Reporting_Only],
+			                ALLSELECTED('radiologist_summary(1)'),
+			                ALLSELECTED('radiologist_metrics(1)'[Parent_Procedure_name])
+			            ),
+			        _mode = "Capture Only",
+			            CALCULATE(
+			                [Benchmark_Capture_Only],
+			                ALLSELECTED('radiologist_summary(1)'),
+			                ALLSELECTED('radiologist_metrics(1)'[Parent_Procedure_name])
+			            ),
+			        _mode = "Drafting + Capture",           -- ← new
+			            CALCULATE(
+			                [Benchmark_DraftingCapture],
+			                ALLSELECTED('radiologist_summary(1)'),
+			                ALLSELECTED('radiologist_metrics(1)'[Parent_Procedure_name])
+			            ),
+			        _mode = "Both",
+			            CALCULATE(
+			                [Benchmark_Both],
+			                ALLSELECTED('radiologist_summary(1)'),
+			                ALLSELECTED('radiologist_metrics(1)'[Parent_Procedure_name])
+			            ),
+			        _mode = "Full Mosaic",
+			            CALCULATE(
+			                [Benchmark_FullMosaic_Only],
+			                ALLSELECTED('radiologist_summary(1)'),
+			                ALLSELECTED('radiologist_metrics(1)'[Parent_Procedure_name])
+			            )
+			    )
+			
+			RETURN DIVIDE(_mosaicEff, _populationAvg_Strict)
+		formatString: 0%;-0%;0%
+		lineageTag: 573c0c84-0d45-4665-b411-857eef5da2fc
+
+	measure Efficiency_vs_RP_Avg_Display_NB =
+			
+			VAR _qualifies = [Rad_Qualifies_NB]
+			VAR _pctDiff = [Efficiency_vs_RP_Avg_NB]
+			
+			RETURN
+			IF(_qualifies = 1, _pctDiff, BLANK())
+		lineageTag: 5d81b198-ff13-4a03-b54d-bfc15bf7da65
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	measure Has_Data_NB = ```
+			
+			VAR _exams = [Mosaic_Exams_Period_NB]
+			VAR _efficiency = [Mosaic_Efficiency_NB]
+			
+			RETURN
+			IF(
+			    NOT ISBLANK(_exams) && _exams > 0 &&
+			    NOT ISBLANK(_efficiency),
+			    1, 
+			    0
+			)
+			```
+		formatString: 0
+		lineageTag: ab66acbf-f27c-4260-bf6b-88c08b30a642
+
+	measure Radiologist_Count_NB = ```
+			
+			VAR IsParentExamLevel = ISINSCOPE('radiologist_metrics(1)'[Parent_Procedure_name])
+			VAR IsRadiologistLevel = ISINSCOPE('radiologist_summary(1)'[Radiologist])
+			VAR TeamCount = COUNTROWS(VALUES('radiologist_summary(1)'[team_rolled_up]))
+			VAR IsTeamLevel = NOT IsRadiologistLevel && NOT IsParentExamLevel && TeamCount = 1
+			VAR IsTotalLevel = NOT IsRadiologistLevel && NOT IsParentExamLevel && TeamCount > 1
+			
+			VAR _qualifiedRads = 
+			    FILTER(
+			        VALUES('radiologist_summary(1)'[Radiologist]),
+			        CALCULATE([Rad_Qualifies_NB]) = 1 &&
+			        CALCULATE([Has_Data_NB]) = 1
+			    )
+			
+			VAR _count = COUNTROWS(_qualifiedRads)
+			
+			RETURN
+			SWITCH(
+			    TRUE(),
+			    IsParentExamLevel, BLANK(),
+			    IsRadiologistLevel, BLANK(),
+			    IsTeamLevel, _count,
+			    IsTotalLevel, _count,
+			    _count
+			)
+			```
+		formatString: 0
+		lineageTag: 18506512-e5a2-4f18-8379-feeb840a2b04
+
+	measure Rad_Subspecialty_NB =
+			
+			VAR IsRadiologistLevel = ISINSCOPE('radiologist_summary(1)'[Radiologist])
+			VAR IsParentExamLevel = ISINSCOPE('radiologist_metrics(1)'[Parent_Procedure_name])
+			
+			RETURN
+			IF(
+			    IsRadiologistLevel || IsParentExamLevel,
+			    MAX('radiologist_summary(1)'[Subspecialty]),
+			    BLANK()
+			)
+		lineageTag: e312814f-d265-4278-8b5f-6fab109b96c4
+
+	measure RP_Avg_Dynamic = ```
+			
+			VAR _mode = SELECTEDVALUE('Mosaic Mode Selector'[Mode], "Full Mosaic")
+			VAR _outlierView = SELECTEDVALUE('Outlier Selector'[Outlier View], "Excluded")
+			
+			// Get all qualifying rads in current filter context
+			VAR _qualifiedRads = 
+			    FILTER(
+			        ALL('radiologist_summary(1)'[Radiologist]),
+			        CALCULATE([Rad_Qualifies_NB]) = 1
+			    )
+			
+			// Sum TBWU and Time across ALL qualifying rads (ignoring row context)
+			VAR _totalTBWU = 
+			    SUMX(
+			        _qualifiedRads,
+			        CALCULATE(
+			            SUM('radiologist_metrics(1)'[TotalTBWU]),
+			            'radiologist_metrics(1)'[Exam_Date] IN VALUES('Mosaic_Calendar'[Date]),
+			            SWITCH(
+			                _mode,
+			                "Drafting Only", 'radiologist_metrics(1)'[Period_Type] = "Drafting",
+			                "Reporting Only", 'radiologist_metrics(1)'[Period_Type] = "Reporting",
+			                "Capture Only", 'radiologist_metrics(1)'[Period_Type] = "Drafting" && 'radiologist_metrics(1)'[Modality_Code] IN {"US", "BD"},
+			                'radiologist_metrics(1)'[Period_Type] IN {"Drafting", "Reporting"}
+			            ),
+			            IF(_outlierView = "Excluded", 'radiologist_metrics(1)'[Outliers] = "Excluded", TRUE())
+			        )
+			    )
+			
+			VAR _totalTime = 
+			    SUMX(
+			        _qualifiedRads,
+			        CALCULATE(
+			            SUM('radiologist_metrics(1)'[TotalTime]),
+			            'radiologist_metrics(1)'[Exam_Date] IN VALUES('Mosaic_Calendar'[Date]),
+			            SWITCH(
+			                _mode,
+			                "Drafting Only", 'radiologist_metrics(1)'[Period_Type] = "Drafting",
+			                "Reporting Only", 'radiologist_metrics(1)'[Period_Type] = "Reporting",
+			                "Capture Only", 'radiologist_metrics(1)'[Period_Type] = "Drafting" && 'radiologist_metrics(1)'[Modality_Code] IN {"US", "BD"},
+			                'radiologist_metrics(1)'[Period_Type] IN {"Drafting", "Reporting"}
+			            ),
+			            IF(_outlierView = "Excluded", 'radiologist_metrics(1)'[Outliers] = "Excluded", TRUE())
+			        )
+			    )
+			
+			RETURN
+			DIVIDE(_totalTBWU, _totalTime / 60)
+			```
+		lineageTag: 380016fe-7e99-4a94-a065-341abbeea648
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	measure Current_Mode_Benchmark_Display =
+			
+			VAR _mode = SELECTEDVALUE('Mosaic Mode Selector'[Mode], "Full Mosaic")
+			VAR _value = [RP_Avg_Efficiency]
+			
+			RETURN
+			_mode & " Benchmark: " & FORMAT(_value, "0.000")
+		lineageTag: b073d523-a4a9-4b9c-b590-c7b0453adf68
+
+	measure Benchmark_Drafting_Only =
+			
+			VAR _outlierView =
+			    SELECTEDVALUE('Outlier Selector'[Outlier View], "Excluded")
+			
+			VAR _minExams =
+			    SELECTEDVALUE('Mosaic Min Exams'[MinExams], 0)
+			
+			VAR _selectedRads =
+			    ALLSELECTED('radiologist_summary(1)'[Radiologist])
+			
+			VAR _qualifiedRads =
+			    FILTER(
+			        _selectedRads,
+			        VAR _rad = 'radiologist_summary(1)'[Radiologist]
+			        VAR _radExams =
+			            CALCULATE(
+			                SUM('radiologist_metrics(1)'[ExamCount]),
+			                ALLSELECTED('radiologist_summary(1)'[team_rolled_up]),
+			                ALLSELECTED('radiologist_summary(1)'[Radiologist]),
+			                ALLSELECTED('radiologist_metrics(1)'[Parent_Procedure_name]),
+			                TREATAS({_rad}, 'radiologist_summary(1)'[Radiologist]),
+			                'radiologist_metrics(1)'[Exam_Date] IN VALUES('Mosaic_Calendar'[Date]),
+			                'radiologist_metrics(1)'[Period_Type] = "Drafting",
+			                'radiologist_metrics(1)'[Modality_Code] IN {"CR","CT"},  -- ← added
+			                IF(
+			                    _outlierView = "Excluded",
+			                    'radiologist_metrics(1)'[Outliers] = "Excluded",
+			                    TRUE()
+			                )
+			            )
+			        VAR _radTime =
+			            CALCULATE(
+			                SUM('radiologist_metrics(1)'[TotalTime]),
+			                ALLSELECTED('radiologist_summary(1)'[team_rolled_up]),
+			                ALLSELECTED('radiologist_summary(1)'[Radiologist]),
+			                ALLSELECTED('radiologist_metrics(1)'[Parent_Procedure_name]),
+			                TREATAS({_rad}, 'radiologist_summary(1)'[Radiologist]),
+			                'radiologist_metrics(1)'[Exam_Date] IN VALUES('Mosaic_Calendar'[Date]),
+			                'radiologist_metrics(1)'[Period_Type] = "Drafting",
+			                'radiologist_metrics(1)'[Modality_Code] IN {"CR","CT"},  -- ← added
+			                IF(
+			                    _outlierView = "Excluded",
+			                    'radiologist_metrics(1)'[Outliers] = "Excluded",
+			                    TRUE()
+			                )
+			            )
+			        RETURN _radExams >= _minExams && _radTime > 0
+			    )
+			
+			VAR _tbwu =
+			    SUMX(
+			        _qualifiedRads,
+			        VAR _rad = 'radiologist_summary(1)'[Radiologist]
+			        RETURN
+			            CALCULATE(
+			                SUM('radiologist_metrics(1)'[TotalTBWU]),
+			                ALLSELECTED('radiologist_summary(1)'[team_rolled_up]),
+			                ALLSELECTED('radiologist_summary(1)'[Radiologist]),
+			                ALLSELECTED('radiologist_metrics(1)'[Parent_Procedure_name]),
+			                TREATAS({_rad}, 'radiologist_summary(1)'[Radiologist]),
+			                'radiologist_metrics(1)'[Exam_Date] IN VALUES('Mosaic_Calendar'[Date]),
+			                'radiologist_metrics(1)'[Period_Type] = "Drafting",
+			                'radiologist_metrics(1)'[Modality_Code] IN {"CR","CT"},  -- ← added
+			                IF(
+			                    _outlierView = "Excluded",
+			                    'radiologist_metrics(1)'[Outliers] = "Excluded",
+			                    TRUE()
+			                )
+			            )
+			    )
+			
+			VAR _time =
+			    SUMX(
+			        _qualifiedRads,
+			        VAR _rad = 'radiologist_summary(1)'[Radiologist]
+			        RETURN
+			            CALCULATE(
+			                SUM('radiologist_metrics(1)'[TotalTime]),
+			                ALLSELECTED('radiologist_summary(1)'[team_rolled_up]),
+			                ALLSELECTED('radiologist_summary(1)'[Radiologist]),
+			                ALLSELECTED('radiologist_metrics(1)'[Parent_Procedure_name]),
+			                TREATAS({_rad}, 'radiologist_summary(1)'[Radiologist]),
+			                'radiologist_metrics(1)'[Exam_Date] IN VALUES('Mosaic_Calendar'[Date]),
+			                'radiologist_metrics(1)'[Period_Type] = "Drafting",
+			                'radiologist_metrics(1)'[Modality_Code] IN {"CR","CT"},  -- ← added
+			                IF(
+			                    _outlierView = "Excluded",
+			                    'radiologist_metrics(1)'[Outliers] = "Excluded",
+			                    TRUE()
+			                )
+			            )
+			    )
+			
+			RETURN DIVIDE(_tbwu, _time / 60)
+		formatString: 0.000
+		lineageTag: 02e021c5-1468-4d6e-ad6d-5639c81da891
+
+	measure Benchmark_Reporting_Only =
+			
+			
+			VAR _outlierView =
+			    SELECTEDVALUE('Outlier Selector'[Outlier View], "Excluded")
+			
+			VAR _minExams =
+			    SELECTEDVALUE('Mosaic Min Exams'[MinExams], 0)
+			
+			VAR _selectedRads =
+			    ALLSELECTED('radiologist_summary(1)'[Radiologist])
+			
+			VAR _qualifiedRads =
+			    FILTER(
+			        _selectedRads,
+			        VAR _rad =
+			            'radiologist_summary(1)'[Radiologist]
+			
+			        VAR _radExams =
+			            CALCULATE(
+			                SUM('radiologist_metrics(1)'[ExamCount]),
+			
+			                ALLSELECTED('radiologist_summary(1)'[team_rolled_up]),
+			                ALLSELECTED('radiologist_summary(1)'[Radiologist]),
+			                ALLSELECTED('radiologist_metrics(1)'[Parent_Procedure_name]),
+			
+			                TREATAS({_rad}, 'radiologist_summary(1)'[Radiologist]),
+			
+			                'radiologist_metrics(1)'[Exam_Date] IN VALUES('Mosaic_Calendar'[Date]),
+			                'radiologist_metrics(1)'[Period_Type] = "Reporting",
+			
+			                IF(
+			                    _outlierView = "Excluded",
+			                    'radiologist_metrics(1)'[Outliers] = "Excluded",
+			                    TRUE()
+			                )
+			            )
+			
+			        VAR _radTime =
+			            CALCULATE(
+			                SUM('radiologist_metrics(1)'[TotalTime]),
+			
+			                ALLSELECTED('radiologist_summary(1)'[team_rolled_up]),
+			                ALLSELECTED('radiologist_summary(1)'[Radiologist]),
+			                ALLSELECTED('radiologist_metrics(1)'[Parent_Procedure_name]),
+			
+			                TREATAS({_rad}, 'radiologist_summary(1)'[Radiologist]),
+			
+			                'radiologist_metrics(1)'[Exam_Date] IN VALUES('Mosaic_Calendar'[Date]),
+			                'radiologist_metrics(1)'[Period_Type] = "Reporting",
+			
+			                IF(
+			                    _outlierView = "Excluded",
+			                    'radiologist_metrics(1)'[Outliers] = "Excluded",
+			                    TRUE()
+			                )
+			            )
+			
+			        RETURN
+			            _radExams >= _minExams
+			                && _radTime > 0
+			    )
+			
+			VAR _tbwu =
+			    SUMX(
+			        _qualifiedRads,
+			        VAR _rad =
+			            'radiologist_summary(1)'[Radiologist]
+			        RETURN
+			            CALCULATE(
+			                SUM('radiologist_metrics(1)'[TotalTBWU]),
+			
+			                ALLSELECTED('radiologist_summary(1)'[team_rolled_up]),
+			                ALLSELECTED('radiologist_summary(1)'[Radiologist]),
+			                ALLSELECTED('radiologist_metrics(1)'[Parent_Procedure_name]),
+			
+			                TREATAS({_rad}, 'radiologist_summary(1)'[Radiologist]),
+			
+			                'radiologist_metrics(1)'[Exam_Date] IN VALUES('Mosaic_Calendar'[Date]),
+			                'radiologist_metrics(1)'[Period_Type] = "Reporting",
+			
+			                IF(
+			                    _outlierView = "Excluded",
+			                    'radiologist_metrics(1)'[Outliers] = "Excluded",
+			                    TRUE()
+			                )
+			            )
+			    )
+			
+			VAR _time =
+			    SUMX(
+			        _qualifiedRads,
+			        VAR _rad =
+			            'radiologist_summary(1)'[Radiologist]
+			        RETURN
+			            CALCULATE(
+			                SUM('radiologist_metrics(1)'[TotalTime]),
+			
+			                ALLSELECTED('radiologist_summary(1)'[team_rolled_up]),
+			                ALLSELECTED('radiologist_summary(1)'[Radiologist]),
+			                ALLSELECTED('radiologist_metrics(1)'[Parent_Procedure_name]),
+			
+			                TREATAS({_rad}, 'radiologist_summary(1)'[Radiologist]),
+			
+			                'radiologist_metrics(1)'[Exam_Date] IN VALUES('Mosaic_Calendar'[Date]),
+			                'radiologist_metrics(1)'[Period_Type] = "Reporting",
+			
+			                IF(
+			                    _outlierView = "Excluded",
+			                    'radiologist_metrics(1)'[Outliers] = "Excluded",
+			                    TRUE()
+			                )
+			            )
+			    )
+			
+			RETURN
+			    DIVIDE(_tbwu, _time / 60)
+		formatString: 0.000
+		lineageTag: c30393db-739b-437f-8eaa-f01fb068ec03
+
+	measure Population_Avg_Full_Mosaic = ```
+			
+			VAR _outlierView = SELECTEDVALUE('Outlier Selector'[Outlier View], "Excluded")
+			VAR _hasTeamFilter = ISFILTERED('radiologist_summary(1)'[team_rolled_up])
+			VAR _hasRadFilter = ISFILTERED('radiologist_summary(1)'[Radiologist])
+			VAR _hasProcFilter = ISFILTERED('radiologist_metrics(1)'[Parent_Procedure_name])
+			VAR _hasAnyFilter = _hasTeamFilter || _hasRadFilter || _hasProcFilter
+			
+			// Base calculation using ALL (same as RP Avg)
+			VAR _baseTBWU = 
+			    CALCULATE(
+			        SUM('radiologist_metrics(1)'[TotalTBWU]),
+			        ALL('radiologist_summary(1)'),
+			        ALL('radiologist_metrics(1)'),
+			        'radiologist_metrics(1)'[Exam_Date] IN VALUES('Mosaic_Calendar'[Date]),
+			        'radiologist_metrics(1)'[Period_Type] IN {"Drafting", "Reporting"},
+			        IF(_outlierView = "Excluded", 'radiologist_metrics(1)'[Outliers] = "Excluded", TRUE())
+			    )
+			
+			VAR _baseTime = 
+			    CALCULATE(
+			        SUM('radiologist_metrics(1)'[TotalTime]),
+			        ALL('radiologist_summary(1)'),
+			        ALL('radiologist_metrics(1)'),
+			        'radiologist_metrics(1)'[Exam_Date] IN VALUES('Mosaic_Calendar'[Date]),
+			        'radiologist_metrics(1)'[Period_Type] IN {"Drafting", "Reporting"},
+			        IF(_outlierView = "Excluded", 'radiologist_metrics(1)'[Outliers] = "Excluded", TRUE())
+			    )
+			
+			// Filtered calculation (when slicers are selected)
+			VAR _filteredTBWU = 
+			    CALCULATE(
+			        SUM('radiologist_metrics(1)'[TotalTBWU]),
+			        ALL('radiologist_summary(1)'),
+			        ALL('radiologist_metrics(1)'),
+			        'radiologist_metrics(1)'[Exam_Date] IN VALUES('Mosaic_Calendar'[Date]),
+			        'radiologist_metrics(1)'[Period_Type] IN {"Drafting", "Reporting"},
+			        IF(_outlierView = "Excluded", 'radiologist_metrics(1)'[Outliers] = "Excluded", TRUE()),
+			        'radiologist_summary(1)'[team_rolled_up] IN VALUES('radiologist_summary(1)'[team_rolled_up]),
+			        'radiologist_summary(1)'[Radiologist] IN VALUES('radiologist_summary(1)'[Radiologist])
+			    )
+			
+			VAR _filteredTime = 
+			    CALCULATE(
+			        SUM('radiologist_metrics(1)'[TotalTime]),
+			        ALL('radiologist_summary(1)'),
+			        ALL('radiologist_metrics(1)'),
+			        'radiologist_metrics(1)'[Exam_Date] IN VALUES('Mosaic_Calendar'[Date]),
+			        'radiologist_metrics(1)'[Period_Type] IN {"Drafting", "Reporting"},
+			        IF(_outlierView = "Excluded", 'radiologist_metrics(1)'[Outliers] = "Excluded", TRUE()),
+			        'radiologist_summary(1)'[team_rolled_up] IN VALUES('radiologist_summary(1)'[team_rolled_up]),
+			        'radiologist_summary(1)'[Radiologist] IN VALUES('radiologist_summary(1)'[Radiologist])
+			    )
+			
+			VAR _finalTBWU = IF(_hasAnyFilter, _filteredTBWU, _baseTBWU)
+			VAR _finalTime = IF(_hasAnyFilter, _filteredTime, _baseTime)
+			
+			RETURN
+			DIVIDE(_finalTBWU, _finalTime / 60)
+			```
+		formatString: 0.000
+		lineageTag: 815a30ba-b6eb-4cf6-9d09-a00d0a697a03
+
+	measure Benchmark_Capture_Only =
+			
+			
+			VAR _outlierView =
+			    SELECTEDVALUE('Outlier Selector'[Outlier View], "Excluded")
+			
+			VAR _minExams =
+			    SELECTEDVALUE('Mosaic Min Exams'[MinExams], 0)
+			
+			VAR _selectedRads =
+			    ALLSELECTED('radiologist_summary(1)'[Radiologist])
+			
+			VAR _qualifiedRads =
+			    FILTER(
+			        _selectedRads,
+			        VAR _rad =
+			            'radiologist_summary(1)'[Radiologist]
+			
+			        VAR _radExams =
+			            CALCULATE(
+			                SUM('radiologist_metrics(1)'[ExamCount]),
+			
+			                ALLSELECTED('radiologist_summary(1)'[team_rolled_up]),
+			                ALLSELECTED('radiologist_summary(1)'[Radiologist]),
+			                ALLSELECTED('radiologist_metrics(1)'[Parent_Procedure_name]),
+			
+			                TREATAS({_rad}, 'radiologist_summary(1)'[Radiologist]),
+			
+			                'radiologist_metrics(1)'[Exam_Date] IN VALUES('Mosaic_Calendar'[Date]),
+			                'radiologist_metrics(1)'[Period_Type] = "Drafting",
+			                'radiologist_metrics(1)'[Modality_Code] IN {"US", "BD"},
+			
+			                IF(
+			                    _outlierView = "Excluded",
+			                    'radiologist_metrics(1)'[Outliers] = "Excluded",
+			                    TRUE()
+			                )
+			            )
+			
+			        VAR _radTime =
+			            CALCULATE(
+			                SUM('radiologist_metrics(1)'[TotalTime]),
+			
+			                ALLSELECTED('radiologist_summary(1)'[team_rolled_up]),
+			                ALLSELECTED('radiologist_summary(1)'[Radiologist]),
+			                ALLSELECTED('radiologist_metrics(1)'[Parent_Procedure_name]),
+			
+			                TREATAS({_rad}, 'radiologist_summary(1)'[Radiologist]),
+			
+			                'radiologist_metrics(1)'[Exam_Date] IN VALUES('Mosaic_Calendar'[Date]),
+			                'radiologist_metrics(1)'[Period_Type] = "Drafting",
+			                'radiologist_metrics(1)'[Modality_Code] IN {"US", "BD"},
+			
+			                IF(
+			                    _outlierView = "Excluded",
+			                    'radiologist_metrics(1)'[Outliers] = "Excluded",
+			                    TRUE()
+			                )
+			            )
+			
+			        RETURN
+			            _radExams >= _minExams
+			                && _radTime > 0
+			    )
+			
+			VAR _tbwu =
+			    SUMX(
+			        _qualifiedRads,
+			        VAR _rad =
+			            'radiologist_summary(1)'[Radiologist]
+			        RETURN
+			            CALCULATE(
+			                SUM('radiologist_metrics(1)'[TotalTBWU]),
+			
+			                ALLSELECTED('radiologist_summary(1)'[team_rolled_up]),
+			                ALLSELECTED('radiologist_summary(1)'[Radiologist]),
+			                ALLSELECTED('radiologist_metrics(1)'[Parent_Procedure_name]),
+			
+			                TREATAS({_rad}, 'radiologist_summary(1)'[Radiologist]),
+			
+			                'radiologist_metrics(1)'[Exam_Date] IN VALUES('Mosaic_Calendar'[Date]),
+			                'radiologist_metrics(1)'[Period_Type] = "Drafting",
+			                'radiologist_metrics(1)'[Modality_Code] IN {"US", "BD"},
+			
+			                IF(
+			                    _outlierView = "Excluded",
+			                    'radiologist_metrics(1)'[Outliers] = "Excluded",
+			                    TRUE()
+			                )
+			            )
+			    )
+			
+			VAR _time =
+			    SUMX(
+			        _qualifiedRads,
+			        VAR _rad =
+			            'radiologist_summary(1)'[Radiologist]
+			        RETURN
+			            CALCULATE(
+			                SUM('radiologist_metrics(1)'[TotalTime]),
+			
+			                ALLSELECTED('radiologist_summary(1)'[team_rolled_up]),
+			                ALLSELECTED('radiologist_summary(1)'[Radiologist]),
+			                ALLSELECTED('radiologist_metrics(1)'[Parent_Procedure_name]),
+			
+			                TREATAS({_rad}, 'radiologist_summary(1)'[Radiologist]),
+			
+			                'radiologist_metrics(1)'[Exam_Date] IN VALUES('Mosaic_Calendar'[Date]),
+			                'radiologist_metrics(1)'[Period_Type] = "Drafting",
+			                'radiologist_metrics(1)'[Modality_Code] IN {"US", "BD"},
+			
+			                IF(
+			                    _outlierView = "Excluded",
+			                    'radiologist_metrics(1)'[Outliers] = "Excluded",
+			                    TRUE()
+			                )
+			            )
+			    )
+			
+			RETURN
+			    DIVIDE(_tbwu, _time / 60)
+		formatString: 0.000
+		lineageTag: 4ec23717-6ea1-469a-a224-11b43833d18b
+
+	measure Is_Drafting_Selected =
+			
+			IF(SELECTEDVALUE('Mosaic Mode Selector'[Mode], "Full Mosaic") = "Drafting Only", 1, 0)
+		formatString: 0
+		lineageTag: 39090fdc-3cdc-42f4-9fb4-b8129835ec19
+
+	measure Is_Reporting_Selected =
+			
+			IF(SELECTEDVALUE('Mosaic Mode Selector'[Mode], "Full Mosaic") = "Reporting Only", 1, 0)
+		formatString: 0
+		lineageTag: d041423a-6b6d-4da4-9bcb-28f99ad0d542
+
+	measure Is_FullMosaic_Selected =
+			
+			IF(SELECTEDVALUE('Mosaic Mode Selector'[Mode], "Full Mosaic") = "Full Mosaic", 1, 0)
+		formatString: 0
+		lineageTag: 32d46130-60f2-4288-8d1b-c06848953e0e
+
+	measure Is_CaptureOnly_Selected =
+			
+			IF(SELECTEDVALUE('Mosaic Mode Selector'[Mode], "Full Mosaic") = "Capture Only", 1, 0)
+		formatString: 0
+		lineageTag: ff8c714c-f3a2-4b43-a040-0c93777e7789
+
+	measure RP_Avg_Efficiency_Overall = ```
+			
+			VAR _mode = SELECTEDVALUE('Mosaic Mode Selector'[Mode], "Full Mosaic")
+			VAR _outlierView = SELECTEDVALUE('Outlier Selector'[Outlier View], "Excluded")
+			VAR _minExams = SELECTEDVALUE('Mosaic Min Exams'[MinExams], 0)
+			
+			// Get ALL qualifying rads (ignores team/rad/modality slicers)
+			VAR _qualifiedRads = 
+			    FILTER(
+			        CALCULATETABLE(
+			            VALUES('radiologist_summary(1)'[Radiologist]),
+			            ALL('radiologist_summary(1)'),
+			            ALL('radiologist_metrics(1)')
+			        ),
+			        VAR _radExams = 
+			            CALCULATE(
+			                SUM('radiologist_metrics(1)'[ExamCount]),
+			                ALL('radiologist_summary(1)'),
+			                ALL('radiologist_metrics(1)'),
+			                'radiologist_metrics(1)'[Exam_Date] IN VALUES('Mosaic_Calendar'[Date]),
+			                SWITCH(
+			                    _mode,
+			                    "Drafting Only", 'radiologist_metrics(1)'[Period_Type] = "Drafting",
+			                    "Reporting Only", 'radiologist_metrics(1)'[Period_Type] = "Reporting",
+			                    "Capture Only", 'radiologist_metrics(1)'[Period_Type] = "Drafting" && 'radiologist_metrics(1)'[Modality_Code] IN {"US", "BD"},
+			                    'radiologist_metrics(1)'[Period_Type] IN {"Drafting", "Reporting"}
+			                ),
+			                IF(_outlierView = "Excluded", 'radiologist_metrics(1)'[Outliers] = "Excluded", TRUE())
+			            )
+			        RETURN _radExams >= _minExams
+			    )
+			
+			VAR _totalTBWU = 
+			    CALCULATE(
+			        SUM('radiologist_metrics(1)'[TotalTBWU]),
+			        ALL('radiologist_summary(1)'),
+			        ALL('radiologist_metrics(1)'),
+			        'radiologist_metrics(1)'[Exam_Date] IN VALUES('Mosaic_Calendar'[Date]),
+			        SWITCH(
+			            _mode,
+			            "Drafting Only", 'radiologist_metrics(1)'[Period_Type] = "Drafting",
+			            "Reporting Only", 'radiologist_metrics(1)'[Period_Type] = "Reporting",
+			            "Capture Only", 'radiologist_metrics(1)'[Period_Type] = "Drafting" && 'radiologist_metrics(1)'[Modality_Code] IN {"US", "BD"},
+			            'radiologist_metrics(1)'[Period_Type] IN {"Drafting", "Reporting"}
+			        ),
+			        IF(_outlierView = "Excluded", 'radiologist_metrics(1)'[Outliers] = "Excluded", TRUE())
+			    )
+			
+			VAR _totalTime = 
+			    CALCULATE(
+			        SUM('radiologist_metrics(1)'[TotalTime]),
+			        ALL('radiologist_summary(1)'),
+			        ALL('radiologist_metrics(1)'),
+			        'radiologist_metrics(1)'[Exam_Date] IN VALUES('Mosaic_Calendar'[Date]),
+			        SWITCH(
+			            _mode,
+			            "Drafting Only", 'radiologist_metrics(1)'[Period_Type] = "Drafting",
+			            "Reporting Only", 'radiologist_metrics(1)'[Period_Type] = "Reporting",
+			            "Capture Only", 'radiologist_metrics(1)'[Period_Type] = "Drafting" && 'radiologist_metrics(1)'[Modality_Code] IN {"US", "BD"},
+			            'radiologist_metrics(1)'[Period_Type] IN {"Drafting", "Reporting"}
+			        ),
+			        IF(_outlierView = "Excluded", 'radiologist_metrics(1)'[Outliers] = "Excluded", TRUE())
+			    )
+			
+			RETURN
+			DIVIDE(_totalTBWU, _totalTime / 60)
+			```
+		lineageTag: 347577e4-352d-41af-9c1a-1677d8f26073
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	measure Efficiency_vs_RP_Avg_Overall = ```
+			
+			VAR _mosaicEff = [Mosaic_Efficiency_NB]
+			VAR _mode = SELECTEDVALUE('Mosaic Mode Selector'[Mode], "Full Mosaic")
+			
+			VAR _rpAvgOverall = 
+			    SWITCH(
+			        _mode,
+			        "Drafting Only",       [Benchmark_Drafting_Only_Overall],
+			        "Reporting Only",      [Benchmark_Reporting_Only_Overall],
+			        "Capture Only",        [Benchmark_Capture_Only_Overall],
+			        "Drafting + Capture",  [Benchmark_DraftingCapture_Overall],  -- ← new
+			        "Both",                [Benchmark_Both_Overall],
+			        [Benchmark_Full_Mosaic_Overall]
+			    )
+			
+			RETURN DIVIDE(_mosaicEff, _rpAvgOverall)
+			```
+		formatString: 0%;-0%;0%
+		lineageTag: 354d4e30-c0c2-40ce-b98f-3cdfa856ba30
+
+	measure Benchmark_Drafting_Only_Overall =
+			
+			VAR _outlierView =
+			    SELECTEDVALUE('Outlier Selector'[Outlier View], "Excluded")
+			
+			VAR _minExams =
+			    SELECTEDVALUE('Mosaic Min Exams'[MinExams], 0)
+			
+			VAR _qualifiedRads =
+			    FILTER(
+			        ALL('radiologist_summary(1)'[Radiologist]),
+			        VAR _rad = 'radiologist_summary(1)'[Radiologist]
+			        VAR _radExams =
+			            CALCULATE(
+			                SUM('radiologist_metrics(1)'[ExamCount]),
+			                REMOVEFILTERS('radiologist_summary(1)'),
+			                REMOVEFILTERS('radiologist_metrics(1)'[Parent_Procedure_name]),
+			                'radiologist_metrics(1)'[Exam_Date] IN VALUES('Mosaic_Calendar'[Date]),
+			                'radiologist_metrics(1)'[Period_Type] = "Drafting",
+			                'radiologist_metrics(1)'[Modality_Code] IN {"CR","CT"},  -- ← added
+			                TREATAS({_rad}, 'radiologist_summary(1)'[Radiologist]),
+			                IF(
+			                    _outlierView = "Excluded",
+			                    'radiologist_metrics(1)'[Outliers] = "Excluded",
+			                    TRUE()
+			                )
+			            )
+			        RETURN _radExams >= _minExams
+			    )
+			
+			VAR _tbwu =
+			    SUMX(
+			        _qualifiedRads,
+			        VAR _rad = 'radiologist_summary(1)'[Radiologist]
+			        RETURN
+			            CALCULATE(
+			                SUM('radiologist_metrics(1)'[TotalTBWU]),
+			                REMOVEFILTERS('radiologist_summary(1)'),
+			                REMOVEFILTERS('radiologist_metrics(1)'[Parent_Procedure_name]),
+			                'radiologist_metrics(1)'[Exam_Date] IN VALUES('Mosaic_Calendar'[Date]),
+			                'radiologist_metrics(1)'[Period_Type] = "Drafting",
+			                'radiologist_metrics(1)'[Modality_Code] IN {"CR","CT"},  -- ← added
+			                TREATAS({_rad}, 'radiologist_summary(1)'[Radiologist]),
+			                IF(
+			                    _outlierView = "Excluded",
+			                    'radiologist_metrics(1)'[Outliers] = "Excluded",
+			                    TRUE()
+			                )
+			            )
+			    )
+			
+			VAR _time =
+			    SUMX(
+			        _qualifiedRads,
+			        VAR _rad = 'radiologist_summary(1)'[Radiologist]
+			        RETURN
+			            CALCULATE(
+			                SUM('radiologist_metrics(1)'[TotalTime]),
+			                REMOVEFILTERS('radiologist_summary(1)'),
+			                REMOVEFILTERS('radiologist_metrics(1)'[Parent_Procedure_name]),
+			                'radiologist_metrics(1)'[Exam_Date] IN VALUES('Mosaic_Calendar'[Date]),
+			                'radiologist_metrics(1)'[Period_Type] = "Drafting",
+			                'radiologist_metrics(1)'[Modality_Code] IN {"CR","CT"},  -- ← added
+			                TREATAS({_rad}, 'radiologist_summary(1)'[Radiologist]),
+			                IF(
+			                    _outlierView = "Excluded",
+			                    'radiologist_metrics(1)'[Outliers] = "Excluded",
+			                    TRUE()
+			                )
+			            )
+			    )
+			
+			RETURN DIVIDE(_tbwu, _time / 60)
+		formatString: 0.000
+		lineageTag: ae1b3e36-56a7-4c48-81bf-d9ec5789a1cf
+
+	measure Benchmark_Reporting_Only_Overall =
+			
+			
+			
+			VAR _outlierView =
+			    SELECTEDVALUE('Outlier Selector'[Outlier View], "Excluded")
+			
+			VAR _minExams =
+			    SELECTEDVALUE('Mosaic Min Exams'[MinExams], 0)
+			
+			VAR _qualifiedRads =
+			    FILTER(
+			        ALL('radiologist_summary(1)'[Radiologist]),
+			        VAR _rad = 'radiologist_summary(1)'[Radiologist]
+			
+			        VAR _radExams =
+			            CALCULATE(
+			                SUM('radiologist_metrics(1)'[ExamCount]),
+			
+			                REMOVEFILTERS('radiologist_summary(1)'),
+			                REMOVEFILTERS('radiologist_metrics(1)'[Parent_Procedure_name]),
+			
+			                'radiologist_metrics(1)'[Exam_Date]
+			                    IN VALUES('Mosaic_Calendar'[Date]),
+			
+			                'radiologist_metrics(1)'[Period_Type] = "Reporting",
+			
+			                TREATAS({_rad}, 'radiologist_summary(1)'[Radiologist]),
+			
+			                IF(
+			                    _outlierView = "Excluded",
+			                    'radiologist_metrics(1)'[Outliers] = "Excluded",
+			                    TRUE()
+			                )
+			            )
+			
+			        RETURN _radExams >= _minExams
+			    )
+			
+			VAR _tbwu =
+			    SUMX(
+			        _qualifiedRads,
+			        VAR _rad = 'radiologist_summary(1)'[Radiologist]
+			        RETURN
+			            CALCULATE(
+			                SUM('radiologist_metrics(1)'[TotalTBWU]),
+			
+			                REMOVEFILTERS('radiologist_summary(1)'),
+			                REMOVEFILTERS('radiologist_metrics(1)'[Parent_Procedure_name]),
+			
+			                'radiologist_metrics(1)'[Exam_Date]
+			                    IN VALUES('Mosaic_Calendar'[Date]),
+			
+			                'radiologist_metrics(1)'[Period_Type] = "Reporting",
+			
+			                TREATAS({_rad}, 'radiologist_summary(1)'[Radiologist]),
+			
+			                IF(
+			                    _outlierView = "Excluded",
+			                    'radiologist_metrics(1)'[Outliers] = "Excluded",
+			                    TRUE()
+			                )
+			            )
+			    )
+			
+			VAR _time =
+			    SUMX(
+			        _qualifiedRads,
+			        VAR _rad = 'radiologist_summary(1)'[Radiologist]
+			        RETURN
+			            CALCULATE(
+			                SUM('radiologist_metrics(1)'[TotalTime]),
+			
+			                REMOVEFILTERS('radiologist_summary(1)'),
+			                REMOVEFILTERS('radiologist_metrics(1)'[Parent_Procedure_name]),
+			
+			                'radiologist_metrics(1)'[Exam_Date]
+			                    IN VALUES('Mosaic_Calendar'[Date]),
+			
+			                'radiologist_metrics(1)'[Period_Type] = "Reporting",
+			
+			                TREATAS({_rad}, 'radiologist_summary(1)'[Radiologist]),
+			
+			                IF(
+			                    _outlierView = "Excluded",
+			                    'radiologist_metrics(1)'[Outliers] = "Excluded",
+			                    TRUE()
+			                )
+			            )
+			    )
+			
+			RETURN
+			    DIVIDE(_tbwu, _time / 60)
+		formatString: 0.000
+		lineageTag: a6b2bfdb-cd59-4b3a-a091-3e3e8a408221
+
+	measure Benchmark_Full_Mosaic_Overall =
+			
+			
+			VAR _outlierView =
+			    SELECTEDVALUE('Outlier Selector'[Outlier View], "Excluded")
+			
+			VAR _minExams =
+			    SELECTEDVALUE('Mosaic Min Exams'[MinExams], 0)
+			
+			VAR _qualifiedRads =
+			    FILTER(
+			        ALL('radiologist_summary(1)'[Radiologist]),
+			        VAR _rad = 'radiologist_summary(1)'[Radiologist]
+			
+			        VAR _radExams =
+			            CALCULATE(
+			                SUM('radiologist_metrics(1)'[ExamCount]),
+			
+			                REMOVEFILTERS('radiologist_summary(1)'),
+			                REMOVEFILTERS('radiologist_metrics(1)'[Parent_Procedure_name]),
+			
+			                'radiologist_metrics(1)'[Exam_Date]
+			                    IN VALUES('Mosaic_Calendar'[Date]),
+			
+			                'radiologist_metrics(1)'[Period_Type]
+			                    IN {"Drafting", "Reporting"},
+			
+			                TREATAS({_rad}, 'radiologist_summary(1)'[Radiologist]),
+			
+			                IF(
+			                    _outlierView = "Excluded",
+			                    'radiologist_metrics(1)'[Outliers] = "Excluded",
+			                    TRUE()
+			                )
+			            )
+			
+			        RETURN _radExams >= _minExams
+			    )
+			
+			VAR _tbwu =
+			    SUMX(
+			        _qualifiedRads,
+			        VAR _rad = 'radiologist_summary(1)'[Radiologist]
+			        RETURN
+			            CALCULATE(
+			                SUM('radiologist_metrics(1)'[TotalTBWU]),
+			
+			                REMOVEFILTERS('radiologist_summary(1)'),
+			                REMOVEFILTERS('radiologist_metrics(1)'[Parent_Procedure_name]),
+			
+			                'radiologist_metrics(1)'[Exam_Date]
+			                    IN VALUES('Mosaic_Calendar'[Date]),
+			
+			                'radiologist_metrics(1)'[Period_Type]
+			                    IN {"Drafting", "Reporting"},
+			
+			                TREATAS({_rad}, 'radiologist_summary(1)'[Radiologist]),
+			
+			                IF(
+			                    _outlierView = "Excluded",
+			                    'radiologist_metrics(1)'[Outliers] = "Excluded",
+			                    TRUE()
+			                )
+			            )
+			    )
+			
+			VAR _time =
+			    SUMX(
+			        _qualifiedRads,
+			        VAR _rad = 'radiologist_summary(1)'[Radiologist]
+			        RETURN
+			            CALCULATE(
+			                SUM('radiologist_metrics(1)'[TotalTime]),
+			
+			                REMOVEFILTERS('radiologist_summary(1)'),
+			                REMOVEFILTERS('radiologist_metrics(1)'[Parent_Procedure_name]),
+			
+			                'radiologist_metrics(1)'[Exam_Date]
+			                    IN VALUES('Mosaic_Calendar'[Date]),
+			
+			                'radiologist_metrics(1)'[Period_Type]
+			                    IN {"Drafting", "Reporting"},
+			
+			                TREATAS({_rad}, 'radiologist_summary(1)'[Radiologist]),
+			
+			                IF(
+			                    _outlierView = "Excluded",
+			                    'radiologist_metrics(1)'[Outliers] = "Excluded",
+			                    TRUE()
+			                )
+			            )
+			    )
+			
+			RETURN
+			    DIVIDE(_tbwu, _time / 60)
+		formatString: 0.000
+		lineageTag: 1a4de0d1-0596-4b62-8e94-fde1470675de
+
+	measure Benchmark_Capture_Only_Overall =
+			
+			
+			VAR _outlierView =
+			    SELECTEDVALUE('Outlier Selector'[Outlier View], "Excluded")
+			
+			VAR _minExams =
+			    SELECTEDVALUE('Mosaic Min Exams'[MinExams], 0)
+			
+			VAR _qualifiedRads =
+			    FILTER(
+			        ALL('radiologist_summary(1)'[Radiologist]),
+			        VAR _rad = 'radiologist_summary(1)'[Radiologist]
+			
+			        VAR _radExams =
+			            CALCULATE(
+			                SUM('radiologist_metrics(1)'[ExamCount]),
+			
+			                REMOVEFILTERS('radiologist_summary(1)'),
+			                REMOVEFILTERS('radiologist_metrics(1)'[Parent_Procedure_name]),
+			
+			                'radiologist_metrics(1)'[Exam_Date]
+			                    IN VALUES('Mosaic_Calendar'[Date]),
+			
+			                'radiologist_metrics(1)'[Period_Type] = "Drafting",
+			                'radiologist_metrics(1)'[Modality_Code] IN {"US", "BD"},
+			
+			                TREATAS({_rad}, 'radiologist_summary(1)'[Radiologist]),
+			
+			                IF(
+			                    _outlierView = "Excluded",
+			                    'radiologist_metrics(1)'[Outliers] = "Excluded",
+			                    TRUE()
+			                )
+			            )
+			
+			        RETURN _radExams >= _minExams
+			    )
+			
+			VAR _tbwu =
+			    SUMX(
+			        _qualifiedRads,
+			        VAR _rad = 'radiologist_summary(1)'[Radiologist]
+			        RETURN
+			            CALCULATE(
+			                SUM('radiologist_metrics(1)'[TotalTBWU]),
+			
+			                REMOVEFILTERS('radiologist_summary(1)'),
+			                REMOVEFILTERS('radiologist_metrics(1)'[Parent_Procedure_name]),
+			
+			                'radiologist_metrics(1)'[Exam_Date]
+			                    IN VALUES('Mosaic_Calendar'[Date]),
+			
+			                'radiologist_metrics(1)'[Period_Type] = "Drafting",
+			                'radiologist_metrics(1)'[Modality_Code] IN {"US", "BD"},
+			
+			                TREATAS({_rad}, 'radiologist_summary(1)'[Radiologist]),
+			
+			                IF(
+			                    _outlierView = "Excluded",
+			                    'radiologist_metrics(1)'[Outliers] = "Excluded",
+			                    TRUE()
+			                )
+			            )
+			    )
+			
+			VAR _time =
+			    SUMX(
+			        _qualifiedRads,
+			        VAR _rad = 'radiologist_summary(1)'[Radiologist]
+			        RETURN
+			            CALCULATE(
+			                SUM('radiologist_metrics(1)'[TotalTime]),
+			
+			                REMOVEFILTERS('radiologist_summary(1)'),
+			                REMOVEFILTERS('radiologist_metrics(1)'[Parent_Procedure_name]),
+			
+			                'radiologist_metrics(1)'[Exam_Date]
+			                    IN VALUES('Mosaic_Calendar'[Date]),
+			
+			                'radiologist_metrics(1)'[Period_Type] = "Drafting",
+			                'radiologist_metrics(1)'[Modality_Code] IN {"US", "BD"},
+			
+			                TREATAS({_rad}, 'radiologist_summary(1)'[Radiologist]),
+			
+			                IF(
+			                    _outlierView = "Excluded",
+			                    'radiologist_metrics(1)'[Outliers] = "Excluded",
+			                    TRUE()
+			                )
+			            )
+			    )
+			
+			RETURN
+			    DIVIDE(_tbwu, _time / 60)
+		formatString: 0.000
+		lineageTag: 372e07d1-b1ff-4ff6-a069-00546493cde2
+
+	measure Debug_RP_TBWU =
+			
+			CALCULATE(
+			    SUM('radiologist_metrics(1)'[TotalTBWU]),
+			    ALL('radiologist_summary(1)'),
+			    ALL('radiologist_metrics(1)'),
+			    'radiologist_metrics(1)'[Exam_Date] IN VALUES('Mosaic_Calendar'[Date]),
+			    'radiologist_metrics(1)'[Period_Type] IN {"Drafting", "Reporting"},
+			    'radiologist_metrics(1)'[Outliers] = "Excluded"
+			)
+		lineageTag: bffab94e-06dd-42ac-9d79-a4922fe5ae09
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	measure Debug_RP_Time =
+			
+			CALCULATE(
+			    SUM('radiologist_metrics(1)'[TotalTime]),
+			    ALL('radiologist_summary(1)'),
+			    ALL('radiologist_metrics(1)'),
+			    'radiologist_metrics(1)'[Exam_Date] IN VALUES('Mosaic_Calendar'[Date]),
+			    'radiologist_metrics(1)'[Period_Type] IN {"Drafting", "Reporting"},
+			    'radiologist_metrics(1)'[Outliers] = "Excluded"
+			)
+		formatString: 0
+		lineageTag: cf8ace26-6cce-415b-8bc6-3e9d76fc008f
+
+	measure Debug_Pop_TBWU =
+			
+			CALCULATE(
+			    SUM('radiologist_metrics(1)'[TotalTBWU]),
+			    ALLSELECTED('radiologist_summary(1)'),
+			    ALLSELECTED('radiologist_metrics(1)'),
+			    'radiologist_metrics(1)'[Exam_Date] IN VALUES('Mosaic_Calendar'[Date]),
+			    'radiologist_metrics(1)'[Period_Type] IN {"Drafting", "Reporting"},
+			    'radiologist_metrics(1)'[Outliers] = "Excluded"
+			)
+		lineageTag: 9b951995-13cb-4d54-bb51-63f153a45686
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	measure Debug_Pop_Time =
+			
+			CALCULATE(
+			    SUM('radiologist_metrics(1)'[TotalTime]),
+			    ALLSELECTED('radiologist_summary(1)'),
+			    ALLSELECTED('radiologist_metrics(1)'),
+			    'radiologist_metrics(1)'[Exam_Date] IN VALUES('Mosaic_Calendar'[Date]),
+			    'radiologist_metrics(1)'[Period_Type] IN {"Drafting", "Reporting"},
+			    'radiologist_metrics(1)'[Outliers] = "Excluded"
+			)
+		formatString: 0
+		lineageTag: dd7640cf-2e8a-4ca5-af4e-8b23bd69c90d
+
+	measure Debug_Difference = [Debug_RP_TBWU] - [Debug_Pop_TBWU]
+		lineageTag: afe60971-2c8d-4c61-8268-ac19f5942d77
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	measure Benchmark_FullMosaic_Only =
+			
+			
+			
+			VAR _outlierView =
+			    SELECTEDVALUE('Outlier Selector'[Outlier View], "Excluded")
+			
+			VAR _minExams =
+			    SELECTEDVALUE('Mosaic Min Exams'[MinExams], 0)
+			
+			VAR _selectedRads =
+			    ALLSELECTED('radiologist_summary(1)'[Radiologist])
+			
+			VAR _qualifiedRads =
+			    FILTER(
+			        _selectedRads,
+			        VAR _rad =
+			            'radiologist_summary(1)'[Radiologist]
+			
+			        VAR _radExams =
+			            CALCULATE(
+			                SUM('radiologist_metrics(1)'[ExamCount]),
+			
+			                ALLSELECTED('radiologist_summary(1)'[team_rolled_up]),
+			                ALLSELECTED('radiologist_summary(1)'[Radiologist]),
+			                ALLSELECTED('radiologist_metrics(1)'[Parent_Procedure_name]),
+			
+			                TREATAS({_rad}, 'radiologist_summary(1)'[Radiologist]),
+			
+			                'radiologist_metrics(1)'[Exam_Date] IN VALUES('Mosaic_Calendar'[Date]),
+			                'radiologist_metrics(1)'[Period_Type] IN {"Drafting", "Reporting"},
+			
+			                IF(
+			                    _outlierView = "Excluded",
+			                    'radiologist_metrics(1)'[Outliers] = "Excluded",
+			                    TRUE()
+			                )
+			            )
+			
+			        VAR _radTime =
+			            CALCULATE(
+			                SUM('radiologist_metrics(1)'[TotalTime]),
+			
+			                ALLSELECTED('radiologist_summary(1)'[team_rolled_up]),
+			                ALLSELECTED('radiologist_summary(1)'[Radiologist]),
+			                ALLSELECTED('radiologist_metrics(1)'[Parent_Procedure_name]),
+			
+			                TREATAS({_rad}, 'radiologist_summary(1)'[Radiologist]),
+			
+			                'radiologist_metrics(1)'[Exam_Date] IN VALUES('Mosaic_Calendar'[Date]),
+			                'radiologist_metrics(1)'[Period_Type] IN {"Drafting", "Reporting"},
+			
+			                IF(
+			                    _outlierView = "Excluded",
+			                    'radiologist_metrics(1)'[Outliers] = "Excluded",
+			                    TRUE()
+			                )
+			            )
+			
+			        RETURN
+			            _radExams >= _minExams
+			                && _radTime > 0
+			    )
+			
+			VAR _tbwu =
+			    SUMX(
+			        _qualifiedRads,
+			        VAR _rad =
+			            'radiologist_summary(1)'[Radiologist]
+			        RETURN
+			            CALCULATE(
+			                SUM('radiologist_metrics(1)'[TotalTBWU]),
+			
+			                ALLSELECTED('radiologist_summary(1)'[team_rolled_up]),
+			                ALLSELECTED('radiologist_summary(1)'[Radiologist]),
+			                ALLSELECTED('radiologist_metrics(1)'[Parent_Procedure_name]),
+			
+			                TREATAS({_rad}, 'radiologist_summary(1)'[Radiologist]),
+			
+			                'radiologist_metrics(1)'[Exam_Date] IN VALUES('Mosaic_Calendar'[Date]),
+			                'radiologist_metrics(1)'[Period_Type] IN {"Drafting", "Reporting"},
+			
+			                IF(
+			                    _outlierView = "Excluded",
+			                    'radiologist_metrics(1)'[Outliers] = "Excluded",
+			                    TRUE()
+			                )
+			            )
+			    )
+			
+			VAR _time =
+			    SUMX(
+			        _qualifiedRads,
+			        VAR _rad =
+			            'radiologist_summary(1)'[Radiologist]
+			        RETURN
+			            CALCULATE(
+			                SUM('radiologist_metrics(1)'[TotalTime]),
+			
+			                ALLSELECTED('radiologist_summary(1)'[team_rolled_up]),
+			                ALLSELECTED('radiologist_summary(1)'[Radiologist]),
+			                ALLSELECTED('radiologist_metrics(1)'[Parent_Procedure_name]),
+			
+			                TREATAS({_rad}, 'radiologist_summary(1)'[Radiologist]),
+			
+			                'radiologist_metrics(1)'[Exam_Date] IN VALUES('Mosaic_Calendar'[Date]),
+			                'radiologist_metrics(1)'[Period_Type] IN {"Drafting", "Reporting"},
+			
+			                IF(
+			                    _outlierView = "Excluded",
+			                    'radiologist_metrics(1)'[Outliers] = "Excluded",
+			                    TRUE()
+			                )
+			            )
+			    )
+			
+			RETURN
+			    DIVIDE(_tbwu, _time / 60)
+		formatString: 0.000
+		lineageTag: 83d93393-18f9-4b09-afad-7c4fbbed4700
+
+	measure Benchmark_Both_Overall =
+			
+			VAR _outlierView = SELECTEDVALUE('Outlier Selector'[Outlier View], "Excluded")
+			VAR _minExams = SELECTEDVALUE('Mosaic Min Exams'[MinExams], 0)
+			
+			VAR _qualifiedRads =
+			    FILTER(
+			        ALL('radiologist_summary(1)'[Radiologist]),
+			        VAR _rad = 'radiologist_summary(1)'[Radiologist]
+			        VAR _radExams =
+			            CALCULATE(
+			                SUM('radiologist_metrics(1)'[ExamCount]),
+			                REMOVEFILTERS('radiologist_summary(1)'),
+			                REMOVEFILTERS('radiologist_metrics(1)'[Parent_Procedure_name]),
+			                'radiologist_metrics(1)'[Exam_Date] IN VALUES('Mosaic_Calendar'[Date]),
+			                'radiologist_metrics(1)'[Period_Type] IN {"Drafting", "Reporting"},
+			                TREATAS({_rad}, 'radiologist_summary(1)'[Radiologist]),
+			                IF(_outlierView = "Excluded", 'radiologist_metrics(1)'[Outliers] = "Excluded", TRUE())
+			            )
+			        RETURN _radExams >= _minExams
+			    )
+			
+			VAR _tbwu =
+			    CALCULATE(
+			        SUM('radiologist_metrics(1)'[TotalTBWU]),
+			        TREATAS(_qualifiedRads, 'radiologist_summary(1)'[Radiologist]),
+			        REMOVEFILTERS('radiologist_summary(1)'),
+			        REMOVEFILTERS('radiologist_metrics(1)'[Parent_Procedure_name]),
+			        'radiologist_metrics(1)'[Exam_Date] IN VALUES('Mosaic_Calendar'[Date]),
+			        'radiologist_metrics(1)'[Period_Type] IN {"Drafting", "Reporting", "Baseline"},
+			        IF(_outlierView = "Excluded", 'radiologist_metrics(1)'[Outliers] = "Excluded", TRUE())
+			    )
+			
+			VAR _time =
+			    CALCULATE(
+			        SUM('radiologist_metrics(1)'[TotalTime]),
+			        TREATAS(_qualifiedRads, 'radiologist_summary(1)'[Radiologist]),
+			        REMOVEFILTERS('radiologist_summary(1)'),
+			        REMOVEFILTERS('radiologist_metrics(1)'[Parent_Procedure_name]),
+			        'radiologist_metrics(1)'[Exam_Date] IN VALUES('Mosaic_Calendar'[Date]),
+			        'radiologist_metrics(1)'[Period_Type] IN {"Drafting", "Reporting", "Baseline"},
+			        IF(_outlierView = "Excluded", 'radiologist_metrics(1)'[Outliers] = "Excluded", TRUE())
+			    )
+			
+			RETURN DIVIDE(_tbwu, _time / 60)
+		formatString: 0.000
+		lineageTag: 48ccdd83-61ac-4cb7-8081-eb8d98e3775f
+
+	measure Benchmark_Both =
+			
+			VAR _outlierView = SELECTEDVALUE('Outlier Selector'[Outlier View], "Excluded")
+			VAR _minExams = SELECTEDVALUE('Mosaic Min Exams'[MinExams], 0)
+			
+			VAR _qualifiedRads =
+			    FILTER(
+			        ALLSELECTED('radiologist_summary(1)'[Radiologist]),
+			        VAR _rad = 'radiologist_summary(1)'[Radiologist]
+			        VAR _radExams =
+			            CALCULATE(
+			                SUM('radiologist_metrics(1)'[ExamCount]),
+			                ALLSELECTED('radiologist_summary(1)'),
+			                ALLSELECTED('radiologist_metrics(1)'[Parent_Procedure_name]),
+			                'radiologist_metrics(1)'[Exam_Date] IN VALUES('Mosaic_Calendar'[Date]),
+			                'radiologist_metrics(1)'[Period_Type] IN {"Drafting", "Reporting"},
+			                TREATAS({_rad}, 'radiologist_summary(1)'[Radiologist]),
+			                IF(_outlierView = "Excluded", 'radiologist_metrics(1)'[Outliers] = "Excluded", TRUE())
+			            )
+			        RETURN _radExams >= _minExams
+			    )
+			
+			VAR _tbwu =
+			    CALCULATE(
+			        SUM('radiologist_metrics(1)'[TotalTBWU]),
+			        TREATAS(_qualifiedRads, 'radiologist_summary(1)'[Radiologist]),
+			        ALLSELECTED('radiologist_summary(1)'),
+			        ALLSELECTED('radiologist_metrics(1)'[Parent_Procedure_name]),
+			        'radiologist_metrics(1)'[Exam_Date] IN VALUES('Mosaic_Calendar'[Date]),
+			        'radiologist_metrics(1)'[Period_Type] IN {"Drafting", "Reporting", "Baseline"},
+			        IF(_outlierView = "Excluded", 'radiologist_metrics(1)'[Outliers] = "Excluded", TRUE())
+			    )
+			
+			VAR _time =
+			    CALCULATE(
+			        SUM('radiologist_metrics(1)'[TotalTime]),
+			        TREATAS(_qualifiedRads, 'radiologist_summary(1)'[Radiologist]),
+			        ALLSELECTED('radiologist_summary(1)'),
+			        ALLSELECTED('radiologist_metrics(1)'[Parent_Procedure_name]),
+			        'radiologist_metrics(1)'[Exam_Date] IN VALUES('Mosaic_Calendar'[Date]),
+			        'radiologist_metrics(1)'[Period_Type] IN {"Drafting", "Reporting", "Baseline"},
+			        IF(_outlierView = "Excluded", 'radiologist_metrics(1)'[Outliers] = "Excluded", TRUE())
+			    )
+			
+			RETURN DIVIDE(_tbwu, _time / 60)
+		formatString: 0.000
+		lineageTag: a332f4a7-a4a7-4db7-a1f8-b63da0ba253d
+
+	measure Is_Both_Selected =
+			
+			IF(SELECTEDVALUE('Mosaic Mode Selector'[Mode], "Full Mosaic") = "Both", 1, 0)
+		formatString: 0
+		lineageTag: 6777aea6-b630-42e0-9b9e-d4dbe1b58fe0
+
+	measure Mosaic_Efficiency_Raw_NB =
+			
+			VAR _mode =
+			    SELECTEDVALUE('Mosaic Mode Selector'[Mode], "Full Mosaic")
+			
+			VAR _outlierView =
+			    SELECTEDVALUE('Outlier Selector'[Outlier View], "Excluded")
+			
+			VAR _tbwu =
+			    CALCULATE(
+			        SUM('radiologist_metrics(1)'[TotalTBWU]),
+			
+			        'radiologist_metrics(1)'[Exam_Date]
+			            IN VALUES('Mosaic_Calendar'[Date]),
+			
+			        SWITCH(
+			            TRUE(),
+			
+			            _mode = "Drafting Only",
+			                'radiologist_metrics(1)'[Period_Type] = "Drafting",
+			
+			            _mode = "Reporting Only",
+			                'radiologist_metrics(1)'[Period_Type] = "Reporting",
+			
+			            _mode = "Capture Only",
+			                'radiologist_metrics(1)'[Period_Type] = "Drafting"
+			                    && 'radiologist_metrics(1)'[Modality_Code] IN {"US", "BD"},
+			
+			            _mode = "Both",
+			                'radiologist_metrics(1)'[Period_Type] IN {
+			                    "Drafting",
+			                    "Reporting",
+			                    "Baseline"
+			                },
+			
+			            _mode = "Full Mosaic",
+			                'radiologist_metrics(1)'[Period_Type] IN {
+			                    "Drafting",
+			                    "Reporting"
+			                },
+			
+			            'radiologist_metrics(1)'[Period_Type] IN {
+			                "Drafting",
+			                "Reporting"
+			            }
+			        ),
+			
+			        IF(
+			            _outlierView = "Excluded",
+			            'radiologist_metrics(1)'[Outliers] = "Excluded",
+			            TRUE()
+			        )
+			    )
+			
+			VAR _time =
+			    CALCULATE(
+			        SUM('radiologist_metrics(1)'[TotalTime]),
+			
+			        'radiologist_metrics(1)'[Exam_Date]
+			            IN VALUES('Mosaic_Calendar'[Date]),
+			
+			        SWITCH(
+			            TRUE(),
+			
+			            _mode = "Drafting Only",
+			                'radiologist_metrics(1)'[Period_Type] = "Drafting",
+			
+			            _mode = "Reporting Only",
+			                'radiologist_metrics(1)'[Period_Type] = "Reporting",
+			
+			            _mode = "Capture Only",
+			                'radiologist_metrics(1)'[Period_Type] = "Drafting"
+			                    && 'radiologist_metrics(1)'[Modality_Code] IN {"US", "BD"},
+			
+			            _mode = "Both",
+			                'radiologist_metrics(1)'[Period_Type] IN {
+			                    "Drafting",
+			                    "Reporting",
+			                    "Baseline"
+			                },
+			
+			            _mode = "Full Mosaic",
+			                'radiologist_metrics(1)'[Period_Type] IN {
+			                    "Drafting",
+			                    "Reporting"
+			                },
+			
+			            'radiologist_metrics(1)'[Period_Type] IN {
+			                "Drafting",
+			                "Reporting"
+			            }
+			        ),
+			
+			        IF(
+			            _outlierView = "Excluded",
+			            'radiologist_metrics(1)'[Outliers] = "Excluded",
+			            TRUE()
+			        )
+			    )
+			
+			RETURN
+			    IF(
+			        _time > 0,
+			        DIVIDE(_tbwu, _time / 60),
+			        BLANK()
+			    )
+		lineageTag: 201f7b80-cd5f-45c3-b4e1-33be2a418b0f
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	measure Benchmark_DraftingCapture_Overall =
+			
+			VAR _outlierView =
+			    SELECTEDVALUE('Outlier Selector'[Outlier View], "Excluded")
+			
+			VAR _minExams =
+			    SELECTEDVALUE('Mosaic Min Exams'[MinExams], 0)
+			
+			VAR _qualifiedRads =
+			    FILTER(
+			        ALL('radiologist_summary(1)'[Radiologist]),
+			        VAR _rad = 'radiologist_summary(1)'[Radiologist]
+			        VAR _radExams =
+			            CALCULATE(
+			                SUM('radiologist_metrics(1)'[ExamCount]),
+			                REMOVEFILTERS('radiologist_summary(1)'),
+			                REMOVEFILTERS('radiologist_metrics(1)'[Parent_Procedure_name]),
+			                'radiologist_metrics(1)'[Exam_Date] IN VALUES('Mosaic_Calendar'[Date]),
+			                (
+			                    ('radiologist_metrics(1)'[Period_Type] = "Drafting"
+			                        && 'radiologist_metrics(1)'[Modality_Code] IN {"CR","CT"})
+			                    || ('radiologist_metrics(1)'[Period_Type] = "Drafting"
+			                        && 'radiologist_metrics(1)'[Modality_Code] IN {"US","BD"})
+			                ),
+			                TREATAS({_rad}, 'radiologist_summary(1)'[Radiologist]),
+			                IF(
+			                    _outlierView = "Excluded",
+			                    'radiologist_metrics(1)'[Outliers] = "Excluded",
+			                    TRUE()
+			                )
+			            )
+			        RETURN _radExams >= _minExams
+			    )
+			
+			VAR _tbwu =
+			    SUMX(
+			        _qualifiedRads,
+			        VAR _rad = 'radiologist_summary(1)'[Radiologist]
+			        RETURN
+			            CALCULATE(
+			                SUM('radiologist_metrics(1)'[TotalTBWU]),
+			                REMOVEFILTERS('radiologist_summary(1)'),
+			                REMOVEFILTERS('radiologist_metrics(1)'[Parent_Procedure_name]),
+			                'radiologist_metrics(1)'[Exam_Date] IN VALUES('Mosaic_Calendar'[Date]),
+			                (
+			                    ('radiologist_metrics(1)'[Period_Type] = "Drafting"
+			                        && 'radiologist_metrics(1)'[Modality_Code] IN {"CR","CT"})
+			                    || ('radiologist_metrics(1)'[Period_Type] = "Drafting"
+			                        && 'radiologist_metrics(1)'[Modality_Code] IN {"US","BD"})
+			                ),
+			                TREATAS({_rad}, 'radiologist_summary(1)'[Radiologist]),
+			                IF(
+			                    _outlierView = "Excluded",
+			                    'radiologist_metrics(1)'[Outliers] = "Excluded",
+			                    TRUE()
+			                )
+			            )
+			    )
+			
+			VAR _time =
+			    SUMX(
+			        _qualifiedRads,
+			        VAR _rad = 'radiologist_summary(1)'[Radiologist]
+			        RETURN
+			            CALCULATE(
+			                SUM('radiologist_metrics(1)'[TotalTime]),
+			                REMOVEFILTERS('radiologist_summary(1)'),
+			                REMOVEFILTERS('radiologist_metrics(1)'[Parent_Procedure_name]),
+			                'radiologist_metrics(1)'[Exam_Date] IN VALUES('Mosaic_Calendar'[Date]),
+			                (
+			                    ('radiologist_metrics(1)'[Period_Type] = "Drafting"
+			                        && 'radiologist_metrics(1)'[Modality_Code] IN {"CR","CT"})
+			                    || ('radiologist_metrics(1)'[Period_Type] = "Drafting"
+			                        && 'radiologist_metrics(1)'[Modality_Code] IN {"US","BD"})
+			                ),
+			                TREATAS({_rad}, 'radiologist_summary(1)'[Radiologist]),
+			                IF(
+			                    _outlierView = "Excluded",
+			                    'radiologist_metrics(1)'[Outliers] = "Excluded",
+			                    TRUE()
+			                )
+			            )
+			    )
+			
+			RETURN DIVIDE(_tbwu, _time / 60)
+		formatString: 0.000
+		lineageTag: 02e61bb1-6b19-4f12-b734-20da4871b1e4
+
+	measure Benchmark_DraftingCapture =
+			
+			VAR _outlierView =
+			    SELECTEDVALUE('Outlier Selector'[Outlier View], "Excluded")
+			
+			VAR _minExams =
+			    SELECTEDVALUE('Mosaic Min Exams'[MinExams], 0)
+			
+			VAR _selectedRads =
+			    ALLSELECTED('radiologist_summary(1)'[Radiologist])
+			
+			VAR _qualifiedRads =
+			    FILTER(
+			        _selectedRads,
+			        VAR _rad = 'radiologist_summary(1)'[Radiologist]
+			        VAR _radExams =
+			            CALCULATE(
+			                SUM('radiologist_metrics(1)'[ExamCount]),
+			                ALLSELECTED('radiologist_summary(1)'[team_rolled_up]),
+			                ALLSELECTED('radiologist_summary(1)'[Radiologist]),
+			                ALLSELECTED('radiologist_metrics(1)'[Parent_Procedure_name]),
+			                TREATAS({_rad}, 'radiologist_summary(1)'[Radiologist]),
+			                'radiologist_metrics(1)'[Exam_Date] IN VALUES('Mosaic_Calendar'[Date]),
+			                (
+			                    ('radiologist_metrics(1)'[Period_Type] = "Drafting"
+			                        && 'radiologist_metrics(1)'[Modality_Code] IN {"CR","CT"})
+			                    || ('radiologist_metrics(1)'[Period_Type] = "Drafting"
+			                        && 'radiologist_metrics(1)'[Modality_Code] IN {"US","BD"})
+			                ),
+			                IF(
+			                    _outlierView = "Excluded",
+			                    'radiologist_metrics(1)'[Outliers] = "Excluded",
+			                    TRUE()
+			                )
+			            )
+			        VAR _radTime =
+			            CALCULATE(
+			                SUM('radiologist_metrics(1)'[TotalTime]),
+			                ALLSELECTED('radiologist_summary(1)'[team_rolled_up]),
+			                ALLSELECTED('radiologist_summary(1)'[Radiologist]),
+			                ALLSELECTED('radiologist_metrics(1)'[Parent_Procedure_name]),
+			                TREATAS({_rad}, 'radiologist_summary(1)'[Radiologist]),
+			                'radiologist_metrics(1)'[Exam_Date] IN VALUES('Mosaic_Calendar'[Date]),
+			                (
+			                    ('radiologist_metrics(1)'[Period_Type] = "Drafting"
+			                        && 'radiologist_metrics(1)'[Modality_Code] IN {"CR","CT"})
+			                    || ('radiologist_metrics(1)'[Period_Type] = "Drafting"
+			                        && 'radiologist_metrics(1)'[Modality_Code] IN {"US","BD"})
+			                ),
+			                IF(
+			                    _outlierView = "Excluded",
+			                    'radiologist_metrics(1)'[Outliers] = "Excluded",
+			                    TRUE()
+			                )
+			            )
+			        RETURN _radExams >= _minExams && _radTime > 0
+			    )
+			
+			VAR _tbwu =
+			    SUMX(
+			        _qualifiedRads,
+			        VAR _rad = 'radiologist_summary(1)'[Radiologist]
+			        RETURN
+			            CALCULATE(
+			                SUM('radiologist_metrics(1)'[TotalTBWU]),
+			                ALLSELECTED('radiologist_summary(1)'[team_rolled_up]),
+			                ALLSELECTED('radiologist_summary(1)'[Radiologist]),
+			                ALLSELECTED('radiologist_metrics(1)'[Parent_Procedure_name]),
+			                TREATAS({_rad}, 'radiologist_summary(1)'[Radiologist]),
+			                'radiologist_metrics(1)'[Exam_Date] IN VALUES('Mosaic_Calendar'[Date]),
+			                (
+			                    ('radiologist_metrics(1)'[Period_Type] = "Drafting"
+			                        && 'radiologist_metrics(1)'[Modality_Code] IN {"CR","CT"})
+			                    || ('radiologist_metrics(1)'[Period_Type] = "Drafting"
+			                        && 'radiologist_metrics(1)'[Modality_Code] IN {"US","BD"})
+			                ),
+			                IF(
+			                    _outlierView = "Excluded",
+			                    'radiologist_metrics(1)'[Outliers] = "Excluded",
+			                    TRUE()
+			                )
+			            )
+			    )
+			
+			VAR _time =
+			    SUMX(
+			        _qualifiedRads,
+			        VAR _rad = 'radiologist_summary(1)'[Radiologist]
+			        RETURN
+			            CALCULATE(
+			                SUM('radiologist_metrics(1)'[TotalTime]),
+			                ALLSELECTED('radiologist_summary(1)'[team_rolled_up]),
+			                ALLSELECTED('radiologist_summary(1)'[Radiologist]),
+			                ALLSELECTED('radiologist_metrics(1)'[Parent_Procedure_name]),
+			                TREATAS({_rad}, 'radiologist_summary(1)'[Radiologist]),
+			                'radiologist_metrics(1)'[Exam_Date] IN VALUES('Mosaic_Calendar'[Date]),
+			                (
+			                    ('radiologist_metrics(1)'[Period_Type] = "Drafting"
+			                        && 'radiologist_metrics(1)'[Modality_Code] IN {"CR","CT"})
+			                    || ('radiologist_metrics(1)'[Period_Type] = "Drafting"
+			                        && 'radiologist_metrics(1)'[Modality_Code] IN {"US","BD"})
+			                ),
+			                IF(
+			                    _outlierView = "Excluded",
+			                    'radiologist_metrics(1)'[Outliers] = "Excluded",
+			                    TRUE()
+			                )
+			            )
+			    )
+			
+			RETURN DIVIDE(_tbwu, _time / 60)
+		formatString: 0.000
+		lineageTag: 036b4746-fb14-4baf-9b01-5021fc7d7051
+
+	column 'RT View'
+		dataType: string
+		lineageTag: b5da378c-a4fc-4bc2-97fe-954ed5c3df5a
+		summarizeBy: none
+		sourceColumn: RT View
+
+		annotation SummarizationSetBy = Automatic
+
+	partition Readtimeview = m
+		mode: import
+		source =
+				let
+				    Source = Table.FromRows(Json.Document(Binary.Decompress(Binary.FromText("i45WCsgvzizJLEtVitWJVvJLTU+EcGIB", BinaryEncoding.Base64), Compression.Deflate)), let _t = ((type nullable text) meta [Serialized.Text = true]) in type table [#"RT View" = _t]),
+				    #"Changed Type" = Table.TransformColumnTypes(Source,{{"RT View", type text}})
+				in
+				    #"Changed Type"
+
+	annotation PBI_ResultType = Table
+
+	annotation PBI_NavigationStepName = Navigation
+

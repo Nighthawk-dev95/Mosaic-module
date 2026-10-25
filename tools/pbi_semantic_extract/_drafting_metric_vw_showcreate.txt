@@ -1,0 +1,1079 @@
+CREATE VIEW edw_prod.enterprise_analytics.mosaic_drafting_metric_vw (
+  exam_id COMMENT 'Primary key of the base table (Accum_Exam_ID). One row per exam-reading. Present so a consumer can drill from any aggregate back to the exam without leaving the semantic layer.',
+  accession_number COMMENT 'Human-readable exam accession. THE operational correlator across Order, Exam, Report and Charge, and the join key to the Mosaic telemetry view edw_prod.edw_gold.aws_prod_report_signed_events_default_mosaicreporting_vw (join on its accession_number column, NOT its accession column; match rate 97.24%).',
+  provider_local_practice_name COMMENT 'Local Practice the READING RADIOLOGIST is attached to, point-in-time as of the exam\'s read date, from mdm_vw_provider_history_vw. THE CANONICAL PRACTICE COLUMN FOR MOSAIC ADOPTION questions ("how are my rads adopting?"), per the RP column-prefix convention. DISCLOSURE, AND IT IS BINDING (Aura condition C11 on the v2.3.12 sign-off): the level-2 draftability lookup practice_rpid_in_drafting_program_flag keys on managing_local_practice_name, NOT on this column. Rolling up draftable counts by provider practice is therefore a different cut from the one the flag was computed on. That is defensible, because program membership is genuinely a managing-practice property, but two surfaces rolling up one label on different practice columns is drift and is among the most common bug classes in RP tooling. STATE WHICH PRACTICE COLUMN YOU USED on every rollup. The Brain\'s published reference figures use MANAGING.',
+  managing_local_practice_name COMMENT 'Local Practice that MANAGES the site/PSA the exam was performed under. This is the column practice_rpid_in_drafting_program_flag (level 2) actually keys on, and the column the RP Brain\'s published draftable figures are computed on. Exposed alongside provider_local_practice_name so the C11 disclosure can be made rather than assumed. Use this for "is my practice in the drafting program?"; use provider_local_practice_name for "are my rads adopting?". A rad from practice A routinely reads an exam managed by practice B, so the two do not reconcile and must never be silently swapped.',
+  exam_Modality_Code COMMENT 'Modality code from the procedure master. PLAIN FILM IS \'CR\', NEVER \'XR\'; a filter written against \'XR\' matches zero rows. Verified August 2026 Mosaic-read finals: CR 972,649, CT 704,678, US 263,056, MR 147,358, MG 74,147, RF 28,102, BD 27,156, XA 14,508, NM 13,712, PT 8,798, OT 759, UNK 30. MR and MG carry zero drafted volume and are not draftable; do not put them in a drafting denominator.',
+  ai_assistance_type COMMENT 'THE VOCABULARY SPLIT, and it exists because the source system conflates two different things in one flag. AI-Assisted is the umbrella term (Yaro Kobzar, 2026-09-02); Drafted and Captured are its two mutually exclusive members. mosaic_draft_flag alone CANNOT tell them apart, which is what produced the roughly 44,000-row IT ticket about "US exams carrying a draft flag": those are Captured, not a defect. Drafted = CT plus plain film (CR). Captured = US plus BD/DEXA, matching CTT\'s own DAX, which reads Modality_Code IN {"US","BD"}. Unclassified (RF, MR, NM, XA, PT, OT, UNK) is shown as its own bucket and is never folded into either member; it is tiny (29 exams in August 2026) but folding it would hide a source-system change. CAVEAT TO CARRY: Carlton Prickett\'s intent on BD/DEXA is UNCONFIRMED. What is verified is what the DAX does, not what he meant. DISAMBIGUATION: "AI-Assisted" here means AI-assisted EXAMS and is a different object from the TBWU stage named "AI-Assisted TBWU". Never abbreviate to "AI-Assisted" alone next to a TBWU figure.',
+  exam_not_draftable_reason COMMENT 'Which level of the draftability ladder failed FIRST, so the drafting gap stays decomposable into an owner. Exactly five values, first failure wins in this precedence: \'exam_not_read_on_mosaic\' (platform fact, no owner), \'rpid_not_draftable\' (no Mosaic model covers this procedure, owner Mosaic product), \'practice_rpid_not_in_program\' (a model exists but this managing practice is not in the program for this RPID, owner rollout), \'rad_not_in_drafting\' (practice in program, this radiologist is not, owner engagement), \'draftable\' (every level passes). DO NOT COLLAPSE THIS INTO THE BOOLEAN: a rollout problem and an engagement problem need opposite interventions, and an earlier Mosaic adoption analysis that collapsed them inverted its own recommendation. SINCE v2.3.12 THIS COLUMN AND exam_draftable_flag ARE NO LONGER MUTUALLY DERIVABLE: the pair exam_not_draftable_reason = \'rad_not_in_drafting\' AND exam_draftable_flag = TRUE is valid and is the rad-engagement headroom segment (20,509 exams in August 2026), not a contradiction. The other three non-\'draftable\' values still imply exam_draftable_flag = FALSE. Never null.',
+  exam_draftable_flag COMMENT 'TRUE = this exam COULD have been drafted by Mosaic, whether or not it was. THE CORRECT DENOMINATOR for any drafting-adoption or drafting-headroom metric; using COUNT(*) instead conflates eligibility with adoption and understates adoption materially. AS SHIPPED IN tbl_exam_inventory v2.3.12 (prod 2026-09-04) the composite is COALESCE(mosaic_read_flag, FALSE) AND rpid_draftable_flag AND practice_rpid_in_drafting_program_flag. Note what is NOT in that AND: rad_drafting_enabled_flag was REMOVED in v2.3.12, because draftability is a property of the EXAM and not of whichever radiologist happened to read it, and gating on the rad HID the population the drafting program most wants to see. Levels 1 and 2 are BEHAVIORAL, inferred from observed drafting rates because Mosaic configuration has no EDW system of record, and level 2 uses a trailing 7-day window so it LAGS A NEW ROLLOUT BY 2 TO 3 DAYS BY DESIGN. NOT derived from ARTC: the ARTC set is a statistical significance filter, not a coverage filter, and 119,240 July 2026 exams were drafted on zero-ARTC RPIDs. Never null. Definition owner Carlton Prickett; the v2.3.12 change is RECORDED, NOT RATIFIED by him (Codex OQ-180).',
+  mosaic_read_flag COMMENT 'TRUE = the exam was read on the Mosaic platform. STRICT SUPERSET of mosaic_draft_flag, so any funnel where drafted exceeds read is a bug. Since v2.3.11 this is also the platform gate inside exam_draftable_flag, which is why draftable rates are relative to Mosaic-read volume rather than total volume.',
+  mosaic_draft_flag COMMENT 'TRUE = a Mosaic AI model pre-populated this exam. HOLDS BOTH Drafted AND Captured and cannot distinguish them on its own; use the ai_assistance_type dimension for that split. This is the AI-ASSISTED umbrella flag, an OUTCOME, never an eligibility test. A moving number of exams carry this TRUE while exam_draftable_flag is FALSE, roughly 2,600 as of 2026-09-04, measured on finalized exams in the most recent complete Monday-to-Sunday week of final_datetime, 2026-08-24 to 2026-08-30 inclusive (2,626 of 278,594 drafted exams that week). That is the expected 2-to-3 day level-2 rollout lag, not a defect to hide: 2,501 of the 2,626 carry exam_not_draftable_reason = \'practice_rpid_not_in_program\' and the remaining 125 carry \'rpid_not_draftable\'. Re-measure before quoting; the previous figure in this comment was recorded without its window and could not be reproduced.',
+  rpid_draftable_flag COMMENT 'Level 1 of the draftability ladder. TRUE = at least 10% of this RPID\'s MOSAIC-READ volume was drafted across all of RP in the trailing 30 days as of this exam\'s date. Denominator is Mosaic-read volume, not total. The 10% cut is Carlton Prickett\'s judgment call, not a natural break: the drafted-rate distribution descends smoothly rather than cliffing. The exam\'s own day is excluded from its window so an exam cannot influence the decision that classifies it. Roughly 540 RPIDs qualify as of 2026-09-04, being 541 distinct RPID_Procedure_Code values of 3,981 across full history on this view\'s finalized basis (542 of 4,142 without the Study_Status_Code = \'Final\' gate). It moves with every rebuild; re-measure before quoting. Never null.',
+  practice_rpid_in_drafting_program_flag COMMENT 'Level 2 of the draftability ladder. TRUE = at least 10% of this (managing_local_practice_name, RPID) pair\'s Mosaic-read volume was drafted in the trailing 7 days as of this exam\'s date. GRAIN IS PRACTICE x RPID, NOT PRACTICE, and that is the most likely implementation error against this column. A practice is routinely in-program for one RPID and out for another: CT chest drafting rolled out in July 2026 to about 20 practices while roughly 40 others were not yet in the program, so a practice-level penetration score cannot express it. 7 days is deliberate: 30 is too slow to notice a rollout, 1 is too short for rare procedures. CONSEQUENCE: lags a new rollout by 2 to 3 days. Never null.',
+  rad_drafting_enabled_flag COMMENT 'Level 3 of the draftability ladder and the third test behind exam_not_draftable_reason, but NO LONGER A TERM IN exam_draftable_flag (removed in v2.3.12, 2026-09-04). TRUE = the reading radiologist is in the Mosaic drafting program. PHASE 1 IS AN EMPIRICAL PROXY: the rad\'s first-ever drafted exam falls on a strictly earlier calendar day than this exam\'s final_datetime. SOUND IN ONE DIRECTION ONLY: having drafted proves enablement, never having drafted does NOT prove the reverse, so this UNDERSTATES the enabled population and any headroom built on it is a FLOOR. The Dynamics-based phase 2 source arrived 2026-09-04 but is WIRED AND COMMENTED OUT, held by Carlton Prickett pending validation: the two signals disagree on 199,525 August exams proxy-enabled but not IRB-signed and 30,726 IRB-signed but not proxy-enabled. Treat as a floor until that hold lifts. Never null.',
+  reading_provider_npi COMMENT 'NPI of the radiologist who interpreted the exam. The canonical provider key across every RP source system and the join key to dynamics_rad_drafting_consent_vw and dynamics_rad_drafting_enablement_vw (whose npi is decimal(10,0), so CAST both sides to STRING at the boundary). ALWAYS a 10-digit string; never render it as a float. Sentinel NPIs \'-1\' and \'-2\' are not real providers. This view is fleet-level and per-radiologist reading speed is never a performance score.',
+  Exclusion_Reason_Cd COMMENT 'Analysis-exclusion code, sentinel \'N/A\' meaning no exclusion. FILTER THIS WITH ILIKE, NEVER WITH EQUALITY: codes are stored inside multi-code combination strings, verified on August 2026 finals where \'IGNREXMS, UNKNOWNRAD\' carries 113,184 rows, \'IGNREXMS, NONRPRAD\' 97,684, \'INCSITE, NONRPRAD\' 8,937 and \'NONRPRAD, UNMAPLOC\' 503. An equality test against \'NONRPRAD\' silently misses every one of those. The two approved exclusions (CUTOVER, NONRPLOCATION) are already physically removed from the base table at build time and need no filter; the codes above are NOT and still need one where the metric calls for it. For the common case of "no exclusion at all" use the exclusion_free_flag dimension, which tests the sentinel and is ILIKE-safe by construction.',
+  exclusion_free_flag COMMENT 'TRUE = this exam carries no analysis-exclusion code at all. Provided so that consumers never hand-roll an exclusion predicate and never write the equality test that the multi-code combination strings defeat. This is the filter used by the RP Brain\'s published draftable reference figures. TRUE on 3,427,138 of the August 2026 finals.',
+  Source_System_Code COMMENT 'Source system that holds the original clinical data. Values beginning \'rpce\' are Clario, the RP clinical environment, and the RP Brain\'s published draftable reference figures are scoped to Source_System_Code LIKE \'rpce%\'. Non-rpce sources do not carry Mosaic drafting and will deflate any drafting rate computed across them.',
+  final_datetime COMMENT 'Timestamp the report was finalized / signed, LOCAL clock. THE ONLY CORRECT PERIOD ANCHOR FOR THIS DOMAIN: all three draftability levels are evaluated as of this timestamp. Do not anchor drafting metrics on unread_datetime (that is demand) or target_datetime (that is an SLA reference). Never mix clock families in one metric.',
+  final_date COMMENT 'Calendar date of report finalization, LOCAL clock. Day-grain period dimension. Two dates matter when trending: 2026-09-02 (v2.3.11 added the mosaic_read platform gate) and 2026-09-04 (v2.3.12 removed the rad gate). A series crossing either without a break marker is comparing two different definitions.',
+  final_month COMMENT 'Month of report finalization, LOCAL clock, as the first day of the month. The default period grain for fleet reporting. SAME TREND-BREAK WARNING AS final_date, and it bites harder here: September 2026 is the first month containing both definition changes, so a month-over-month drafting series spanning August to September is NOT like-for-like.',
+  rad_drafting_consent COMMENT 'Mosaic drafting consent (IRB) status of the READING radiologist, joined in from edw_prod.enterprise_analytics.dynamics_rad_drafting_consent_vw on CAST(npi AS STRING) = reading_provider_npi. Six observed states, live 2026-09-04 across all 5,486 radiologists in that view: NULL 2,085, \'Signed IRB\' 1,738, \'No Drafting\' 1,403, \'Sent\' 151, \'Declined\' 81, \'Term\' 28. NULL HERE IS TWO DIFFERENT THINGS AND YOU MUST NOT TREAT IT AS ONE: either the radiologist has a Dynamics row with no outreach recorded, or there is no Dynamics row for that NPI at all. Use rad_consent_record_exists to tell them apart, or use the rad_enrollment_state dimension which already does. NULL IS NEVER REFUSAL: \'Declined\' and \'No Drafting\' are explicit separate values and reading NULL as declined overstates refusal by roughly 20x against \'Declined\' (RP Brain fields/mosaic-drafting-consent.yaml, status DRAFT v0.1.0). ONE IRB COVERS ALL DRAFTING MODELS PLUS TRIAGE, so consent is never model-specific. NO SIGNING DATE EXISTS in Dynamics (Codex OQ-174), so consent cannot be effective-dated and no as-of-date consent question is answerable: this dimension is the CURRENT state stamped onto historical exams. \'Term\' is an employment state living in a consent column; a consent denominator that does not handle it counts departed radiologists. COVERAGE LIMIT, see THE DYNAMICS CONSENT JOIN in the table comment for the current figure and its date: the consent view matches only about half the reading fleet, so this dimension is NULL for roughly half of it for join reasons alone. The value set is hand-maintained in Dynamics and can gain a value without notice.',
+  rad_consent_record_exists COMMENT 'TRUE = the reading radiologist\'s NPI was found in dynamics_rad_drafting_consent_vw. FALSE = no Dynamics row at all. EXISTS ONLY TO SPLIT THE TWO KINDS OF NULL in rad_drafting_consent, which are different facts about different things: "we asked and recorded nothing" is a process state, "this radiologist is not in the CRM" is a coverage gap in our own data. Neither is a refusal and neither is a finding about the radiologist. FALSE on roughly half of trailing-90-day readers, so it is a bulk property of the join, not an exception. Coverage limit and its current dated figure: see THE DYNAMICS CONSENT JOIN in the table comment.',
+  rad_enrollment_state COMMENT 'THE ENROLLMENT VOCABULARY, expressed once here so that the five "Rad not enabled - ..." measures and any ad-hoc GROUP BY use the same mapping instead of each hand-rolling a CASE. Five values, and they are exhaustive and mutually exclusive by construction. SOURCE: mosaic_drafting_consent on dynamics_rad_drafting_consent_vw, joined on NPI. LABELS ARE CARLTON PRICKETT\'S, so that RP has one shared vocabulary; the SQL behind them is RP Data Strategy\'s and the two have not been reconciled field by field. *** THE \'Ops declined\' AND \'Rad declined\' ASSIGNMENTS ARE UNCONFIRMED. *** \'No Drafting\' is mapped to Ops declined and \'Declined\' to Rad declined. The Unity Catalog comment glosses \'No Drafting\' only as "opted out", which does not say WHO opted out, and RP Brain fields/mosaic-drafting-consent.yaml (DRAFT v0.1.0, 2026-09-03) explicitly records that the difference between the two values IS NOT ESTABLISHED and instructs that neither be asserted until the Clinical Transformation deployment team confirms. An open Aura consultation on that entry asks exactly this. Treat both labels as provisional. \'Incomplete process\' deliberately holds TWO different populations, \'Sent\' (asked, not signed) and \'Signed IRB\' (signed, not yet drafting); they have different owners and are separately measurable, see the two child measures. \'No enrollment record\' is NEUTRAL and is never an accusation. \'Unmapped consent state\' is an ALARM BUCKET, not a category: \'Term\' and any value the hand-maintained Dynamics list gains without notice land here rather than being silently defaulted into a real bucket. It reads ZERO on the August 2026 enrollment segment; if it stops reading zero, the vocabulary needs revisiting before the numbers are published. COVERAGE LIMIT, see THE DYNAMICS CONSENT JOIN in the table comment for the current figure and its date: only about half of trailing-90-day readers match the consent view, so \'No enrollment record\' is inflated by our own join gap and is not a measure of outreach failure.',
+  Final Exam Count COMMENT 'DENOMINATOR, IN WORDS: not a rate, this IS a denominator. Count of all FINALIZED exam-readings in scope (the view\'s source already restricts to Study_Status_Code = \'Final\'). This is the denominator of Platform Read Rate. Expose it next to any rate built on it: a rate rendered without its denominator and its absolute count cannot be read. Acceptance figure: see the VALIDATION BLOCK in the table comment.',
+  Mosaic Read Exam Count COMMENT 'DENOMINATOR, IN WORDS: count of finalized exams READ ON THE MOSAIC PLATFORM. This is the denominator of Drafting Coverage, and it is the population every draftable-basis measure in this view lives inside, because exam_draftable_flag gates on mosaic_read_flag. Also a numerator in its own right (Platform Read Rate). Strict superset of every AI-assisted count here. Acceptance figure: see the VALIDATION BLOCK in the table comment.',
+  Platform Read Rate COMMENT 'NUMERATOR, IN WORDS: finalized exams read on the Mosaic platform. DENOMINATOR, IN WORDS: all finalized exams in scope, on any platform. Answers "how much of what we read happens on Mosaic?", which is the PLATFORM adoption question and is a different question with a different denominator from the DRAFTING adoption question (see Drafting Adoption Rate). Never merge the two into one funnel. Returns a RAW FRACTION between 0 and 1; the percentage format applies the 100x. Acceptance figure: see the VALIDATION BLOCK in the table comment.',
+  Draftable Exam Count COMMENT 'DENOMINATOR, IN WORDS: not a rate, this IS the canonical denominator for the drafting domain. Count of finalized exams that COULD have been drafted, whether or not they were: read on Mosaic, on an RPID with model coverage, at a managing practice in the program for that RPID. Since v2.3.12 it does NOT require the reading radiologist to be enrolled, so it now includes the rad-engagement segment that the old composite hid. Use this, never COUNT(*), as the denominator of any drafting-adoption or headroom figure. Acceptance figure: see the VALIDATION BLOCK in the table comment.',
+  Drafting Coverage COMMENT 'NUMERATOR, IN WORDS: finalized exams that could have been drafted. DENOMINATOR, IN WORDS: finalized exams read on the Mosaic platform. Answers "how much of what I read on Mosaic is in the drafting program?", which is a PROGRAM COVERAGE question owned by rollout, not an adoption question owned by the radiologist. THIS LABEL AND "Drafting Adoption Rate" ARE ONE CARELESS SWAP FROM COLLIDING and the naming is binding (Aura condition C9): coverage is draftable / mosaic-read, adoption is drafted / draftable. Never publish drafted / mosaic-read finals under either label without saying so; that confusion is exactly what produced the 28.93% against 34.93% discrepancy in the older UC measures. Returns a RAW FRACTION between 0 and 1. Acceptance figure: see the VALIDATION BLOCK in the table comment.',
+  AI-Assisted Exam Count COMMENT 'NUMERATOR, IN WORDS: finalized exams a Mosaic AI model pre-populated, of ANY type. THE UMBRELLA COUNT: it is Drafted plus Captured plus Unclassified, and those three sum to it exactly by construction. Use this only when you mean both members together; if the audience will read it as "drafted", use Drafted Exam Count instead, because reporting Captured ultrasound volume as "drafted" is precisely the confusion that produced the roughly 44,000-row IT ticket. DISAMBIGUATION: this counts AI-assisted EXAMS and has nothing to do with the TBWU stage named "AI-Assisted TBWU". Acceptance figure: see the VALIDATION BLOCK in the table comment. The Drafted plus Captured plus Unclassified identity is asserted and checked there.',
+  Drafted Exam Count COMMENT 'NUMERATOR, IN WORDS: finalized CT and plain-film exams that a Mosaic AI model pre-drafted. DRAFTED is one of the two members of AI-Assisted; Captured is the other, and they are mutually exclusive. Plain film is modality code \'CR\', NEVER \'XR\' (an \'XR\' filter matches zero rows). This measure exists because mosaic_draft_flag alone cannot separate Drafted from Captured. Acceptance figure: see the VALIDATION BLOCK in the table comment.',
+  Captured Exam Count COMMENT 'NUMERATOR, IN WORDS: finalized ultrasound and bone-density/DEXA exams that a Mosaic AI model pre-populated. CAPTURED is the second member of AI-Assisted and is NOT drafting; reporting it as "drafted" is a vocabulary error, not a rounding one. The modality set matches CTT\'s own DAX, verified as Modality_Code IN {"US","BD"}. CAVEAT TO CARRY FORWARD: Carlton Prickett\'s intent on including BD/DEXA is UNCONFIRMED; what is verified is what the DAX does, not what he meant. Acceptance figure: see the VALIDATION BLOCK in the table comment.',
+  AI-Assisted Unclassified Count COMMENT 'NUMERATOR, IN WORDS: finalized AI-assisted exams whose modality is neither in the Drafted set (CT, CR) nor the Captured set (US, BD). Shown as its own bucket and NEVER folded into either member. It is deliberately tiny (29 exams in August 2026, on RF and XA) and its job is to be an alarm: if it grows, the source system has started pre-populating a modality the vocabulary does not yet cover, and the Drafted/Captured split needs revisiting rather than quietly absorbing it. Tracked as OQ-145.',
+  AI-Assisted Rate COMMENT 'NUMERATOR, IN WORDS: finalized exams a Mosaic AI model pre-populated, of any type (Drafted plus Captured plus Unclassified). DENOMINATOR, IN WORDS: finalized exams read on the Mosaic platform. Answers "of what we read on Mosaic, how much got any AI assistance?", the middle rung of the ONE DENOMINATOR CHAIN this view speaks end to end: Platform Read Rate (of all finals), then AI-Assisted Rate (of Mosaic-read), then Drafting Coverage (draftable of Mosaic-read), then Drafting Adoption Rate (drafted of draftable). Added 2026-09-05 (Yaro Kobzar: every surface points at the same denominator; Practice Command\'s Mosaic Today page headlines this chain and the view and the page must agree). NOT the adoption headline: adoption stays Drafting Adoption Rate on the draftable basis. Returns a RAW FRACTION between 0 and 1; the percentage format applies the 100x. Verified 2026-09-05 on final_date 2026-09-04, enterprise: 41,119 of 79,747 = 51.56%.',
+  Drafting Adoption Rate COMMENT 'THE AI-ASSISTED RATE ON THE DRAFTABLE BASIS, and the headline adoption number for this domain. NUMERATOR, IN WORDS: finalized exams that were both draftable and actually AI-assisted. DENOMINATOR, IN WORDS: finalized exams that were draftable, i.e. read on Mosaic, on a covered RPID, at a practice in the program for that RPID. Answers "of what is in the drafting program, how much got drafted?". THE DENOMINATOR IS DRAFTABLE VOLUME, NOT TOTAL VOLUME AND NOT MOSAIC-READ VOLUME: because exam_draftable_flag gates on mosaic_read_flag, this rate is computed strictly inside Mosaic-read volume. USE THIS INSTEAD OF THE OLDER UC MEASURE "Mosaic Draft %" on tbl_exam_inventory_metric_view, which divides by COUNT(*) and is not consumable for an adoption headline. Naming is binding (Aura C9): this is ADOPTION (drafted / draftable); COVERAGE is draftable / mosaic-read. Returns a RAW FRACTION between 0 and 1. Acceptance figure: see the VALIDATION BLOCK in the table comment.',
+  Drafting Opportunity (Workflow) COMMENT 'NUMERATOR, IN WORDS: finalized exams that were draftable, whose reading radiologist WAS enrolled in the drafting program, and which were not drafted anyway. DENOMINATOR, IN WORDS: none, this is an absolute count of missed opportunity. THE OWNER IS WORKFLOW: the fix is training, UI and habit. PUBLISH THIS ONLY ALONGSIDE Drafting Opportunity (Enrollment) (Aura condition C2 is binding): the total is reportable but never without its split, because a consumer who sees one number cannot tell which lever to pull and the two levers belong to different people. NAMING DECISION, 2026-09-04: Carlton Prickett\'s own wording for this quantity is "Drafting Workflow Opportunity", and it is carried HERE AS A SYNONYM rather than as the display name. The display name stays "Drafting Opportunity (Workflow)" on purpose, because Aura condition C2 binds this measure to "Drafting Opportunity (Enrollment)" as a pair, and the pairing is self-enforcing only while both halves share a stem and differ by a parenthetical. Renaming one half to a different shape would leave "Drafting Workflow Opportunity" beside "Drafting Opportunity (Enrollment)", which no longer reads as a split and makes it easy to publish one without the other. His phrase still resolves to this measure in Genie and in any synonym-aware consumer, so the shared vocabulary works without breaking C2. Acceptance figure: see the VALIDATION BLOCK in the table comment.',
+  Drafting Opportunity (Enrollment) COMMENT 'NUMERATOR, IN WORDS: finalized exams that were draftable but whose reading radiologist was NOT enrolled in the drafting program, and which were not drafted. DENOMINATOR, IN WORDS: none, this is an absolute count. THE OWNER IS ENROLMENT, a different lever and a different person from the workflow segment. THIS SEGMENT ONLY BECAME VISIBLE IN v2.3.12: the old four-term composite scored these exams not-draftable, so they never entered any denominator and never appeared as opportunity at all. That was the defect the composite change fixed. It is a FLOOR, because rad_drafting_enabled_flag is an empirical proxy that is sound in one direction only and understates the enabled population. Publish only alongside Drafting Opportunity (Workflow), per Aura C2.
+IT NOW DECOMPOSES INTO FIVE NAMED PARTS, added 2026-09-04, carrying Carlton Prickett\'s category labels so RP has one shared vocabulary: "Rad not enabled - Ops declined", "Rad not enabled - Rad declined", "Rad not enabled - Incomplete process", "Rad not enabled - No enrollment record" and the alarm bucket "Rad not enabled - Unmapped consent state". The five are mutually exclusive and exhaustive and sum to this measure EXACTLY on both the scoped and the unscoped basis; the arithmetic is asserted and checked in the VALIDATION BLOCK in the table comment, on both bases. THE SPLIT DEPENDS ON A DYNAMICS JOIN THAT COVERS ONLY ABOUT HALF OF TRAILING-90-DAY READERS, see THE DYNAMICS CONSENT JOIN in the table comment for the current figure and its date, AND ON A CONSENT-TO-CATEGORY MAPPING THAT IS UNCONFIRMED, so the parts are far weaker evidence than this total. Read each part\'s own comment before quoting it, and note in particular that "Rad not enabled - Rad declined" is a protected choice and is NOT a remediation target. Acceptance figure: see the VALIDATION BLOCK in the table comment.',
+  Credited Capacity TBWU COMMENT 'NUMERATOR, IN WORDS: total Unassisted TBWU minus total Empirical TBWU across the finalized exams in scope. DENOMINATOR, IN WORDS: none, this is an absolute quantity in TBWU, never a rate. WHAT IT MEANS: the work the AI took off the radiologist, expressed as TBWU, which is capacity from the COMPENSATION perspective. Empirical equals Unassisted on any exam that was not AI-assisted, so non-assisted exams contribute exactly zero and the whole quantity is carried by AI-assisted volume.
+THREE HARD RULES, ALL BINDING. (1) THIS IS NOT THE HEADLINE CAPACITY NUMBER AND MUST NEVER BE PRESENTED AS ONE. It is one of two lanes. The other lane is MEASURED capacity, denominated in read-hours and derived by indirect standardization against each radiologist\'s own pre-go-live baseline; that lane is not computable from this view. (2) THE TWO LANES ARE NEVER AVERAGED, SUMMED, OR UNIT-CONVERTED INTO EACH OTHER. The gap between them is a first-class output to be surfaced, not a discrepancy to be closed. (3) Capacity is never headlined from ARTC; ARTC is a per-RPID modeling parameter, not a measurement of capacity created.
+THE _current SUFFIX IS LOAD-BEARING AND IS A TRAP. unassisted_tbwu_current and empirical_tbwu_current are a CURRENT-VALUE RECOMPUTE, not value-at-time: they apply today\'s multipliers across all history including exams read before the 2026-07-01 go-live, when AI multipliers did not apply. A Credited trend crossing 2026-07-01 is therefore a RECOMPUTE ARTIFACT, not a change in the world. These are second-engine fields and are AUDIT ONLY: per RP Brain DEC-028 (Jamie Larsen, CFO, 2026-07-23) Clario\'s source_tbwu is the system of record for all TBWU reporting and for payroll. Never use this measure as a payout, a comp figure, or a productivity number. Acceptance figure: see the VALIDATION BLOCK in the table comment.',
+  Rad not enabled - Rad declined COMMENT 'NUMERATOR, IN WORDS: finalized exams that were draftable, were not drafted, whose reading radiologist was not enrolled in the drafting program, and whose radiologist has consent status \'Declined\' in Dynamics. DENOMINATOR, IN WORDS: none, this is an absolute count and one of the five parts of Drafting Opportunity (Enrollment).
+*** THIS IS NOT A REMEDIATION TARGET AND MUST NEVER BE WORKED AS ONE. *** Declining is a PROTECTED CHOICE in a consented study. A radiologist who declined has exercised a right, has not failed at anything, and is not behind on a task. This measure exists so that declined volume can be EXCLUDED from opportunity totals and outreach lists, not so it can be chased. Any surface that puts this count in a "to do", a gap-closure target, a practice ranking, or a named follow-up list is misusing it. If you are building a remediation number, subtract this measure; do not add it.
+OWNER: nobody, deliberately. There is no owner for a valid refusal. Consent itself is administered by the Clinical Transformation deployment team.
+SOURCE: mosaic_drafting_consent on edw_prod.enterprise_analytics.dynamics_rad_drafting_consent_vw, joined on CAST(npi AS STRING) = reading_provider_npi, in combination with exam_not_draftable_reason and mosaic_draft_flag on tbl_exam_inventory.
+MAPPING CAVEAT: assigning \'Declined\' to "Rad declined" is UNCONFIRMED. RP Brain fields/mosaic-drafting-consent.yaml (DRAFT v0.1.0, 2026-09-03) records that the difference between \'Declined\' and \'No Drafting\' is NOT ESTABLISHED and instructs that neither be asserted until the deployment team confirms. If the two turn out to be assigned the other way round, this measure and "Rad not enabled - Ops declined" swap, and the protected-choice instruction above swaps with them.
+COVERAGE CAVEAT: the Dynamics join matches only about half of trailing-90-day readers, see THE DYNAMICS CONSENT JOIN in the table comment for the current figure and its date, so this is a FLOOR on declined volume; a radiologist who declined but is not in the CRM lands in "No enrollment record" instead. It is also the most concentrated of the five parts, 6 radiologists on the August 2026 unscoped finalized basis, so it moves on one person. Acceptance figure: see the VALIDATION BLOCK in the table comment.',
+  Rad not enabled - Ops declined COMMENT 'NUMERATOR, IN WORDS: finalized exams that were draftable, were not drafted, whose reading radiologist was not enrolled in the drafting program, and whose radiologist carries consent status \'No Drafting\' in Dynamics. DENOMINATOR, IN WORDS: none, this is an absolute count and one of the five parts of Drafting Opportunity (Enrollment). It is the LARGEST of the five.
+*** WHO OPTED OUT IS UNCONFIRMED, AND THE LABEL ASSERTS AN ANSWER THE DATA DOES NOT CARRY. *** The Unity Catalog comment on mosaic_drafting_consent glosses \'No Drafting\' as "opted out" and says nothing about WHO: the radiologist, the practice, or operations on their behalf. This measure is labelled "Ops declined" to match Carlton Prickett\'s category set, and that assignment is an assumption, not a finding. RP Brain fields/mosaic-drafting-consent.yaml (DRAFT v0.1.0, 2026-09-03) states directly that \'No Drafting\' and \'Declined\' are both refusal-shaped, that their difference IS NOT ESTABLISHED, and that neither should be asserted until the Clinical Transformation deployment team confirms; an open Aura consultation on that entry asks precisely this question. DO NOT BUILD AN OUTREACH CAMPAIGN AGAINST THIS COUNT until the question is answered: if \'No Drafting\' turns out to be the radiologist\'s own refusal, this population is protected choice like "Rad not enabled - Rad declined" and must be excluded from opportunity totals rather than chased.
+OWNER: operations / the Clinical Transformation deployment team, CONDITIONAL on the mapping above holding.
+SOURCE: mosaic_drafting_consent on edw_prod.enterprise_analytics.dynamics_rad_drafting_consent_vw, joined on CAST(npi AS STRING) = reading_provider_npi.
+COVERAGE CAVEAT: the Dynamics join matches only about half of trailing-90-day readers, see THE DYNAMICS CONSENT JOIN in the table comment for the current figure and its date, so this is a floor. It rests on 85 radiologists on the August 2026 unscoped finalized basis. Acceptance figure: see the VALIDATION BLOCK in the table comment.',
+  Rad not enabled - Incomplete process COMMENT 'NUMERATOR, IN WORDS: finalized exams that were draftable, were not drafted, whose reading radiologist was not enrolled in the drafting program, and whose radiologist is mid-onboarding, meaning consent was either sent and not yet signed, or signed with drafting not yet observed. DENOMINATOR, IN WORDS: none, this is an absolute count and one of the five parts of Drafting Opportunity (Enrollment). THIS IS THE ONE CATEGORY WHERE THE OPPORTUNITY IS REAL, UNAMBIGUOUS AND ACTIONABLE: nobody has refused anything, the process simply has not finished.
+IT HOLDS TWO DIFFERENT POPULATIONS AND YOU SHOULD USUALLY SPLIT IT. Carlton Prickett\'s category set has one bucket here, so this measure matches his label, but the two halves have different owners and very different confidence, and both are published separately: "Rad not enabled - Consent sent, not signed" (32 radiologists on the August 2026 unscoped finalized basis) and "Rad not enabled - Consented, awaiting enablement" (66 radiologists). The second is the larger half and the weaker signal. The two children sum to this parent exactly, by construction, and the arithmetic is asserted and checked in the VALIDATION BLOCK in the table comment.
+OWNER: the Clinical Transformation deployment team, for both halves, but the action differs: chase a signature for the first, chase AD-group membership and training for the second.
+SOURCE: mosaic_drafting_consent on edw_prod.enterprise_analytics.dynamics_rad_drafting_consent_vw, joined on CAST(npi AS STRING) = reading_provider_npi.
+NOTE ON A REDUNDANT PREDICATE THAT WAS DELIBERATELY NOT ADDED: within this segment the reading radiologist\'s rad_drafting_enabled_flag is ALWAYS FALSE. Verified live on August 2026: zero exams carry exam_not_draftable_reason = \'rad_not_in_drafting\' together with rad_drafting_enabled_flag = TRUE. So "signed the IRB but the exam flag still says not enabled" needs no extra conjunct; the reason value already guarantees it.
+COVERAGE CAVEAT: the Dynamics join matches only about half of trailing-90-day readers, see THE DYNAMICS CONSENT JOIN in the table comment for the current figure and its date. Acceptance figure: see the VALIDATION BLOCK in the table comment.',
+  Rad not enabled - Consent sent, not signed COMMENT 'NUMERATOR, IN WORDS: finalized exams that were draftable, were not drafted, whose reading radiologist was not enrolled, and whose radiologist has been sent the consent request but has not signed it. DENOMINATOR, IN WORDS: none, absolute count. THE FIRST HALF of "Rad not enabled - Incomplete process", published separately because its action is different from the other half. An in-flight state, NEVER a refusal: RP Brain fields/mosaic-drafting-consent.yaml (DRAFT v0.1.0) is explicit that \'Sent\' is "an in-flight state, not a refusal".
+OWNER: the Clinical Transformation deployment team. ACTION: obtain the signature. This is the cleanest actionable population in the whole enrollment decomposition, because no interpretation is required to act on it.
+SOURCE: mosaic_drafting_consent = \'Sent\' on edw_prod.enterprise_analytics.dynamics_rad_drafting_consent_vw, joined on CAST(npi AS STRING) = reading_provider_npi.
+COVERAGE CAVEAT: the Dynamics join matches only about half of trailing-90-day readers, see THE DYNAMICS CONSENT JOIN in the table comment for the current figure and its date. It rests on 32 radiologists on the August 2026 unscoped finalized basis. Acceptance figure: see the VALIDATION BLOCK in the table comment.',
+  Rad not enabled - Consented, awaiting enablement COMMENT 'NUMERATOR, IN WORDS: finalized exams that were draftable, were not drafted, whose reading radiologist has SIGNED the drafting IRB, and who is nevertheless scored not-enrolled by rad_drafting_enabled_flag. DENOMINATOR, IN WORDS: none, absolute count. THE SECOND HALF of "Rad not enabled - Incomplete process", and the larger one.
+*** THIS IS THE ONE CATEGORY THAT IS PARTLY A MEASUREMENT ARTIFACT, NOT A GAP, AND IT IS BIG ENOUGH TO MATTER. *** Two different things produce a row here and the data cannot separate them. (1) A REAL ENABLEMENT LAG: the radiologist consented but has not been added to the model AD group or has not completed model-specific training, so drafting genuinely has not started. That is an ops backlog and is actionable. (2) A PROXY ARTIFACT: rad_drafting_enabled_flag is an EMPIRICAL PROXY that infers enablement from the radiologist\'s first-ever drafted exam. It is sound in ONE DIRECTION ONLY. Having drafted proves enablement; never having drafted does NOT prove the reverse. A consented, fully enabled radiologist who simply has not drafted yet is indistinguishable here from one who was never switched on. Which of the two dominates is NOT ESTABLISHED. Treat this count as an UPPER BOUND on the enablement backlog, and never brief the count as exams blocked by ops.
+OWNER: the Clinical Transformation deployment team for the real half; RP Data Strategy for the proxy half, which is closed only by the Dynamics phase-2 enablement source, currently WIRED AND COMMENTED OUT and held by Carlton Prickett pending validation.
+SOURCE: mosaic_drafting_consent = \'Signed IRB\' on edw_prod.enterprise_analytics.dynamics_rad_drafting_consent_vw, joined on CAST(npi AS STRING) = reading_provider_npi, against exam_not_draftable_reason on tbl_exam_inventory. The two signals are known to disagree at scale: 199,525 August exams read proxy-enabled but not IRB-signed and 30,726 read IRB-signed but not proxy-enabled.
+COVERAGE CAVEAT: the Dynamics join matches only about half of trailing-90-day readers, see THE DYNAMICS CONSENT JOIN in the table comment for the current figure and its date. It rests on 66 radiologists on the August 2026 unscoped finalized basis. Acceptance figure: see the VALIDATION BLOCK in the table comment.',
+  Rad not enabled - No enrollment record COMMENT 'NUMERATOR, IN WORDS: finalized exams that were draftable, were not drafted, whose reading radiologist was not enrolled, and for whom Dynamics holds NO consent state at all, either because there is no row for that NPI or because the row records no outreach. DENOMINATOR, IN WORDS: none, absolute count and the fifth part of Drafting Opportunity (Enrollment).
+*** THIS MEASURE IS NEUTRAL BY DESIGN AND IS NEVER AN ACCUSATION. *** A MISSING RECORD IS NOT A REFUSAL, NOT A FAILURE BY THE RADIOLOGIST, AND NOT A FAILURE BY OPERATIONS. It is an absence of information about our own process, and it is kept OUT of "Ops declined", "Rad declined" and "Incomplete process" for exactly that reason: folding an unknown into any of the three would manufacture a finding out of a data gap. Standing rule of this module.
+IT IS MOSTLY A GAP IN OUR OWN JOIN, NOT IN OUTREACH. The Dynamics consent view matches only about half of trailing-90-day readers, see THE DYNAMICS CONSENT JOIN in the table comment for the current figure and its date, so roughly half the reading fleet could land here for join reasons alone. The count is correspondingly sensitive to scope, several times larger unscoped than on the RP Brain scope, because the unmatched radiologists are concentrated in non-rpce and excluded volume. Both figures are in the VALIDATION BLOCK in the table comment; never quote one of them without saying which basis it is on.
+TWO SUB-POPULATIONS, SPLIT BY THE rad_consent_record_exists DIMENSION: no Dynamics row at all, 675 exams across 8 radiologists; a row with NULL consent, 302 exams across 9 radiologists (August 2026, unscoped).
+OWNER: RP Data Strategy for the join gap; the Clinical Transformation deployment team for genuinely unrecorded outreach. Which one applies per radiologist is not determinable from this view.
+SOURCE: absence of a matching row, or a NULL mosaic_drafting_consent, on edw_prod.enterprise_analytics.dynamics_rad_drafting_consent_vw, joined on CAST(npi AS STRING) = reading_provider_npi. It rests on 17 radiologists on the August 2026 unscoped finalized basis. Acceptance figure: see the VALIDATION BLOCK in the table comment.',
+  Rad not enabled - Unmapped consent state COMMENT 'NUMERATOR, IN WORDS: finalized exams in the rad-not-enabled segment whose radiologist carries a consent value that none of the four named categories covers. DENOMINATOR, IN WORDS: none, absolute count.
+THIS IS AN ALARM, NOT A CATEGORY, and it is the same pattern as AI-Assisted Unclassified Count elsewhere in this view. The Dynamics consent value set is HAND-MAINTAINED by the Clinical Transformation deployment team and is not a governed reference domain, so it can gain a value without notice. RP Brain fields/mosaic-drafting-consent.yaml (DRAFT v0.1.0) instructs that any hard-coded CASE over these states "should fail loudly on an unrecognized value rather than default it into a bucket". A metric view cannot raise, so it counts instead. IF THIS STOPS READING ZERO, STOP AND REVISIT THE VOCABULARY before publishing any enrollment split; do not absorb the new value into whichever bucket looks closest.
+IT CATCHES \'Term\' TODAY. \'Term\' means the radiologist has departed and is an EMPLOYMENT state living inside a consent column. 28 radiologists carry it live (2026-09-04). It is deliberately not folded into any enrollment category, because a departed radiologist is out of scope rather than unconsented, and RP Brain records how to handle it in a denominator as an open question for Aura.
+OWNER: RP Data Strategy, as a data-contract alarm.
+SOURCE: mosaic_drafting_consent on edw_prod.enterprise_analytics.dynamics_rad_drafting_consent_vw, joined on CAST(npi AS STRING) = reading_provider_npi.
+COVERAGE CAVEAT: the Dynamics join matches only about half of trailing-90-day readers, see THE DYNAMICS CONSENT JOIN in the table comment for the current figure and its date, so a new value on an unmatched radiologist will not trip this alarm. It reads zero on both bases today. Acceptance figure: see the VALIDATION BLOCK in the table comment.',
+  Practice not enabled for model COMMENT 'NUMERATOR, IN WORDS: finalized exams that were read on Mosaic, on an RPID a Mosaic model covers, but whose MANAGING local practice is not in the drafting program for that RPID, and which were not drafted. DENOMINATOR, IN WORDS: none, absolute count. Carlton Prickett\'s fourth category, carrying his label.
+*** THIS ONE SITS OUTSIDE THE DRAFTABLE DENOMINATOR, UNLIKE EVERY OTHER OPPORTUNITY MEASURE HERE. *** exam_draftable_flag is FALSE on every row it counts, because level 2 of the ladder is what failed. So it is NOT part of Draftable Exam Count, NOT part of Drafting Adoption Rate\'s denominator, and NOT a component of Drafting Opportunity (Enrollment) or (Workflow). Adding it to either of those totals double-counts nothing but silently changes the population from "in the program and missed" to "not in the program yet", which are different businesses with different owners. Keep it beside them, never inside them.
+OWNER: ROLLOUT, not engagement and not workflow. The fix is a program expansion decision, not training and not outreach to a radiologist.
+GRAIN TRAP: program membership is PRACTICE x RPID, not practice. A practice is routinely in-program for one RPID and out for another, so this count must never be read as "these practices are not on Mosaic drafting". It also LAGS A NEW ROLLOUT BY 2 TO 3 DAYS by design, because level 2 uses a trailing 7-day behavioral window.
+SOURCE: exam_not_draftable_reason and mosaic_draft_flag on edw_prod.enterprise_analytics.tbl_exam_inventory. NO DYNAMICS DEPENDENCY, so the consent-join coverage limit described under THE DYNAMICS CONSENT JOIN in the table comment does NOT apply to this measure. It is the only one of Carlton\'s five categories that is fully observable in the EDW.
+THE ROLLOUT LAG IS VISIBLE IN THE ARITHMETIC: on the August 2026 unscoped finalized basis, 99,529 exams carry this reason and 12,183 of them were drafted anyway during the lag, which is why the measure excludes drafted exams rather than counting the reason alone. Acceptance figure: see the VALIDATION BLOCK in the table comment. SEE ALSO THE ATTRIBUTION RECONCILIATION IN THE TABLE COMMENT: CTT attributes roughly 35,000 exams a month here against our figure, roughly 2.5 times the other way from their rad-not-enabled attribution, and the field-level mapping behind their split is an open question with Bhargav Narasimhan.')
+COMMENT 'MOSAIC DRAFTING SEMANTIC LAYER. The single queryable definition of "draftable", "drafted", "captured" and "AI-assisted" for the Mosaic drafting domain, so that Practice Command, Carlton Prickett\'s CTT reporting and any Genie space answering a Mosaic question resolve the same word to the same SQL instead of each hand-computing it (PC in SQL, CTT in Power BI DAX). Built to REQ-58 of the 2026-09-02 Mosaic Intelligence rebuild requirements.
+PURPOSE. Before this view the only authoritative definition of exam_draftable_flag was a Unity Catalog column comment on tbl_exam_inventory, editable by one person with no codebase aware of the change. This view makes the definition an object that consumers bind to.
+GRAIN. One row per exam-reading, inherited unchanged from edw_prod.enterprise_analytics.tbl_exam_inventory. Every count here is a count of exam-readings. The view carries ONE join (see THE DYNAMICS CONSENT JOIN below) and it is verified fan-out-free, so the grain is unchanged by it.
+MANDATORY FILTER, BAKED IN AND NOT OPTIONAL. The source restricts to Study_Status_Code = \'Final\'. All three draftability levels key on final_datetime, so unfinalized and billing-only exams always read FALSE and would silently deflate every rate. The filter is in the source rather than in each measure so a consumer cannot forget it. Any count from this view is a count of FINALIZED exams.
+THE DYNAMICS CONSENT JOIN, ADDED 2026-09-04, AND ITS COVERAGE LIMIT. The source LEFT JOINs edw_prod.enterprise_analytics.dynamics_rad_drafting_consent_vw on CAST(npi AS STRING) = reading_provider_npi, to expose radiologist enrollment state as a dimension. NO FAN-OUT, VERIFIED TWICE: the consent view is one row per NPI (5,486 rows, 5,486 distinct NPIs, zero NULL NPIs, live 2026-09-04) and the August 2026 finalized row count is identical before and after the join (3,922,923 both ways). Nothing already in this view moved. THE COVERAGE LIMIT IS THE POINT TO CARRY, AND THIS SECTION IS ITS ONE OWNING LOCATION: the consent view matches roughly 51% of the radiologists who finalized an exam in the trailing 90 days, being 3,549 of 6,933 distinct reading NPIs over final_datetime from 2026-06-06 to 2026-09-04, measured 2026-09-04. It moves. The same measure read 3,549 of 6,928 earlier on 2026-09-04, identical numerator with five more readers in the denominator after that day\'s rebuild, which is exactly why the figure is stated once here and referenced, not restated, everywhere else in this view. Every enrollment-state measure and dimension here is therefore blind on roughly half the reading fleet, and an unmatched radiologist is NOT an unconsented one. A missing record is never an accusation.
+ENROLLMENT DECOMPOSITION USES CARLTON PRICKETT\'S CATEGORY LABELS ON PURPOSE (Yaro Kobzar, 2026-09-04). The measures named "Rad not enabled - ...", "Practice not enabled for model" and the Workflow synonym "Drafting Workflow Opportunity" carry the Clinical Transformation Team\'s own wording so that RP has one shared vocabulary for the drafting gap instead of two. THE LABELS ARE HIS; THE SQL BEHIND THEM IS OURS, and the two have not been reconciled field by field (see THE ATTRIBUTION RECONCILIATION below). Matching a label is not evidence of matching a definition.
+*** THE CONSENT-TO-CATEGORY MAPPING IS UNCONFIRMED AND IS THE WEAKEST LINK IN THIS VIEW. *** "Ops declined" is mapped to mosaic_drafting_consent = \'No Drafting\' and "Rad declined" to \'Declined\'. The Unity Catalog comment on that column glosses \'No Drafting\' only as "opted out", which does not say WHO opted out, and RP Brain fields/mosaic-drafting-consent.yaml (status DRAFT, v0.1.0, 2026-09-03) states the opposite of an answer: "\'No Drafting\' AND \'Declined\' ARE BOTH REFUSAL-SHAPED AND THEIR DIFFERENCE IS NOT ESTABLISHED... Do not merge them, and do not assert which one means what, until the deployment team confirms." That entry carries an OPEN consultation to Aura asking exactly this question. This view asserts the mapping because a shared vocabulary needs one, and it flags the assertion here and in both measure comments rather than hiding it. It is the single most likely thing in this view to be wrong, and the fix is a sentence from the Clinical Transformation deployment team, not more SQL.
+*** THE ATTRIBUTION RECONCILIATION, AND IT IS THE MOST CONSEQUENTIAL THING KNOWN ABOUT THIS VIEW. *** RP\'s attribution of the drafting gap and the Clinical Transformation Team\'s differ SHARPLY even though the totals nearly agree. August 2026, this view against CTT\'s figures scaled to a month: rad-not-enabled 21,211 against roughly 165,000; practice-not-enabled 87,346 against roughly 35,000; workflow 339,530 against roughly 148,000; total draftable-not-drafted 448,087 against roughly 400,000, which is agreement within about 12%. READ THAT THE RIGHT WAY ROUND: the two sides agree on HOW BIG the gap is and disagree on WHOSE IT IS, by a factor of roughly 8 on rad-not-enabled and roughly 2.5 the other way on practice-not-enabled. A total that reconciles is therefore NOT evidence that the split reconciles, and the split is the half that decides which lever gets pulled and which team gets the work. Do not present the agreeing total as validation of the disagreeing components. THE FIELD-LEVEL MAPPING BEHIND CTT\'S SPLIT IS AN OPEN QUESTION WITH BHARGAV NARASIMHAN and is unresolved as of 2026-09-04; until it is answered, neither split is established as the right one and this view\'s numbers are RP\'s attribution, correct against the shipped columns, not an adjudication. SCOPE NOTE, LOAD-BEARING FOR ANYONE RE-DERIVING THESE FOUR FIGURES: they are on the UNSCOPED August 2026 finalized basis (no rpce source filter, no exclusion-code filter, no Northside removal), unlike the acceptance figures in the VALIDATION BLOCK below which are stated on the RP Brain scope. The three components sum to the total exactly: 339,530 + 87,346 + 21,211 = 448,087. Note also that "draftable-not-drafted" in this comparison spans THREE not-draftable reasons, two of which carry exam_draftable_flag = FALSE, so 448,087 is a deliberately broader population than Draftable Exam Count and will not reconcile against it.
+WHAT WRITES IT. Nothing writes this view. It is a semantic view over tbl_exam_inventory, which is built by the tbl_exam_inventory_build job owned by Nick Adams (nick.adams@radpartners.com), plus the Dynamics consent view over the Dataverse sync maintained by the Clinical Transformation deployment team. Freshness, row counts and lifecycle are entirely inherited; read DESCRIBE HISTORY on the base table, not on this view, to date any change.
+LIFECYCLE. View, no materialization, no schedule, no state. Recreatable at any time from this DDL. Reversible with a single DROP VIEW.
+KEY RELATIONSHIPS. Base table edw_prod.enterprise_analytics.tbl_exam_inventory (exam_id primary key, accession_number the operational correlator). Sibling semantic object edw_prod.enterprise_analytics.tbl_exam_inventory_metric_view, which covers SLA, TAT, TBWU and backlog for the same base table. Radiologist consent is joined in from edw_prod.enterprise_analytics.dynamics_rad_drafting_consent_vw; per-model readiness lives in dynamics_rad_drafting_enablement_vw and is NOT joined here.
+FORMAT CONVENTION, SAME AS THE SIBLING VIEW. Every percentage measure uses type percentage and its SQL returns a RAW FRACTION between 0 and 1. The display layer applies the 100x and the % sign. NEVER multiply by 100, in a measure or in ad-hoc SQL against this view.
+THIS VIEW REPLACES "Mosaic Draft %" AND "Mosaic Read %" FOR THIS DOMAIN. Those two measures on tbl_exam_inventory_metric_view are NOT consumable for adoption headlines: they divide by COUNT(*), which conflates eligibility with adoption and reads 28.93% against 34.93%, a 6.0 point gap and a 21% relative understatement. Use Drafting Coverage and Drafting Adoption Rate here instead, and never publish drafted / mosaic-read finals under either of those two labels.
+THE DRAFTABLE DENOMINATOR IS MOSAIC-READ VOLUME, NOT TOTAL VOLUME. Since tbl_exam_inventory v2.3.11 (2026-09-02) exam_draftable_flag carries a platform gate on mosaic_read_flag: an exam not read on Mosaic could not have been drafted whatever its RPID, practice or reader state. Every rate on the draftable basis is therefore relative to Mosaic-read volume. Verified live on August 2026: zero exams are draftable while not Mosaic-read.
+TWO TREND BREAKS, NEITHER CROSSABLE WITHOUT A BREAK NOTE. 2026-09-02, v2.3.11 added the mosaic_read platform gate. 2026-09-04, v2.3.12 REMOVED rad_drafting_enabled_flag from the composite, moving 206,713 exams all-history from FALSE to TRUE and zero the other way. Do not trend across either date and do not adjust older figures arithmetically; re-measure.
+*** GOVERNANCE GATE, READ BEFORE PUBLISHING ANY FIGURE FROM THIS VIEW. *** The v2.3.12 composite is RECORDED, NOT RATIFIED. Carlton Prickett owns the draftability definition and has not ratified the change; RP Brain terms/draftable-exam.yaml sits at draft v0.4.0 and Codex OQ-180 blocks on his sign-off. Figures computed here are correct against the shipped column and are not yet cleared for external publication.
+VALIDATION BLOCK, MEASURED 2026-09-04 AGAINST tbl_exam_inventory v2.3.12. This is the one owning location for every measure acceptance figure in this view. The measure comments no longer carry their own, so a figure that appears in a measure comment is a caveat magnitude or an alarm baseline, never an acceptance figure. All values below were re-run against this view on 2026-09-04 rather than copied forward.
+Scope, the RP Brain re-baseline predicate: final_date on or after 2026-08-01 and before 2026-09-01, Source_System_Code LIKE \'rpce%\', exclusion_free_flag = TRUE, managing_local_practice_name other than \'Northside Radiology\'.
+
+  Final Exam Count: 2,884,500
+  Mosaic Read Exam Count: 2,247,348
+  Platform Read Rate: 0.7791 (77.91%)
+  Draftable Exam Count: 1,456,306
+  Drafting Coverage: 0.6480 (64.80%)
+  AI-Assisted Exam Count: 1,114,098
+  Drafted Exam Count: 983,905
+  Captured Exam Count: 130,164
+  AI-Assisted Unclassified Count: 29
+  Drafting Adoption Rate: 0.7532 (75.32%), being 1,096,826 of 1,456,306
+  Drafting Opportunity (Workflow): 339,397
+  Drafting Opportunity (Enrollment): 20,083
+  Rad not enabled - Ops declined: 10,612
+  Rad not enabled - Rad declined: 182
+  Rad not enabled - Incomplete process: 9,019
+  Rad not enabled - Consent sent, not signed: 3,228
+  Rad not enabled - Consented, awaiting enablement: 5,791
+  Rad not enabled - No enrollment record: 270
+  Rad not enabled - Unmapped consent state: 0
+  Practice not enabled for model: 86,963
+  Credited Capacity TBWU: 108,201.8135
+
+IDENTITIES THAT MUST HOLD, AND DID ON THIS RUN. Drafted 983,905 plus Captured 130,164 plus Unclassified 29 equals AI-Assisted 1,114,098. The five enrollment parts sum to Drafting Opportunity (Enrollment): 10,612 + 182 + 9,019 + 270 + 0 = 20,083. The two Incomplete process children sum to their parent: 3,228 + 5,791 = 9,019. If any of the three ever fails, the decomposition is broken and no split from this view should be published until it is explained.
+ENROLLMENT DECOMPOSITION ON THE UNSCOPED FINALIZED BASIS, August 2026 finals with no rpce source filter, no exclusion-code filter and no Northside removal. Kept because this split is scope-sensitive and the difference is the point: Drafting Opportunity (Enrollment) 21,211 = Ops declined 10,665 + Rad declined 182 + Incomplete process 9,387 (Consent sent 3,336 + Awaiting enablement 6,051) + No enrollment record 977 + Unmapped consent state 0. Practice not enabled for model 87,346. Final Exam Count 3,922,923.
+DELTA AGAINST THE FIGURES THIS VIEW SHIPPED WITH: none. Every measure above reproduced its previously recorded value to the unit on the 2026-09-04 re-run.
+RE-STAMP RULE. Any tbl_exam_inventory version bump that touches the draftable family re-runs this block\'s measures and re-stamps its date, in the same change. RP Brain policy unity-catalog-documentation-standard, section 2.6.'
+WITH METRICS
+LANGUAGE YAML
+AS
+$$
+version: 1.1
+
+source: |-
+  SELECT
+    e.*,
+    c.mosaic_drafting_consent                        AS rad_drafting_consent,
+    CASE WHEN c.npi IS NULL THEN FALSE ELSE TRUE END AS rad_consent_record_exists
+  FROM edw_prod.enterprise_analytics.tbl_exam_inventory e
+  LEFT JOIN edw_prod.enterprise_analytics.dynamics_rad_drafting_consent_vw c
+         ON CAST(c.npi AS STRING) = e.reading_provider_npi
+  WHERE e.Study_Status_Code = 'Final'
+
+comment: |-
+  MOSAIC DRAFTING SEMANTIC LAYER. The single queryable definition of "draftable", "drafted", "captured" and "AI-assisted" for the Mosaic drafting domain, so that Practice Command, Carlton Prickett's CTT reporting and any Genie space answering a Mosaic question resolve the same word to the same SQL instead of each hand-computing it (PC in SQL, CTT in Power BI DAX). Built to REQ-58 of the 2026-09-02 Mosaic Intelligence rebuild requirements.
+  PURPOSE. Before this view the only authoritative definition of exam_draftable_flag was a Unity Catalog column comment on tbl_exam_inventory, editable by one person with no codebase aware of the change. This view makes the definition an object that consumers bind to.
+  GRAIN. One row per exam-reading, inherited unchanged from edw_prod.enterprise_analytics.tbl_exam_inventory. Every count here is a count of exam-readings. The view carries ONE join (see THE DYNAMICS CONSENT JOIN below) and it is verified fan-out-free, so the grain is unchanged by it.
+  MANDATORY FILTER, BAKED IN AND NOT OPTIONAL. The source restricts to Study_Status_Code = 'Final'. All three draftability levels key on final_datetime, so unfinalized and billing-only exams always read FALSE and would silently deflate every rate. The filter is in the source rather than in each measure so a consumer cannot forget it. Any count from this view is a count of FINALIZED exams.
+  THE DYNAMICS CONSENT JOIN, ADDED 2026-09-04, AND ITS COVERAGE LIMIT. The source LEFT JOINs edw_prod.enterprise_analytics.dynamics_rad_drafting_consent_vw on CAST(npi AS STRING) = reading_provider_npi, to expose radiologist enrollment state as a dimension. NO FAN-OUT, VERIFIED TWICE: the consent view is one row per NPI (5,486 rows, 5,486 distinct NPIs, zero NULL NPIs, live 2026-09-04) and the August 2026 finalized row count is identical before and after the join (3,922,923 both ways). Nothing already in this view moved. THE COVERAGE LIMIT IS THE POINT TO CARRY, AND THIS SECTION IS ITS ONE OWNING LOCATION: the consent view matches roughly 51% of the radiologists who finalized an exam in the trailing 90 days, being 3,549 of 6,933 distinct reading NPIs over final_datetime from 2026-06-06 to 2026-09-04, measured 2026-09-04. It moves. The same measure read 3,549 of 6,928 earlier on 2026-09-04, identical numerator with five more readers in the denominator after that day's rebuild, which is exactly why the figure is stated once here and referenced, not restated, everywhere else in this view. Every enrollment-state measure and dimension here is therefore blind on roughly half the reading fleet, and an unmatched radiologist is NOT an unconsented one. A missing record is never an accusation.
+  ENROLLMENT DECOMPOSITION USES CARLTON PRICKETT'S CATEGORY LABELS ON PURPOSE (Yaro Kobzar, 2026-09-04). The measures named "Rad not enabled - ...", "Practice not enabled for model" and the Workflow synonym "Drafting Workflow Opportunity" carry the Clinical Transformation Team's own wording so that RP has one shared vocabulary for the drafting gap instead of two. THE LABELS ARE HIS; THE SQL BEHIND THEM IS OURS, and the two have not been reconciled field by field (see THE ATTRIBUTION RECONCILIATION below). Matching a label is not evidence of matching a definition.
+  *** THE CONSENT-TO-CATEGORY MAPPING IS UNCONFIRMED AND IS THE WEAKEST LINK IN THIS VIEW. *** "Ops declined" is mapped to mosaic_drafting_consent = 'No Drafting' and "Rad declined" to 'Declined'. The Unity Catalog comment on that column glosses 'No Drafting' only as "opted out", which does not say WHO opted out, and RP Brain fields/mosaic-drafting-consent.yaml (status DRAFT, v0.1.0, 2026-09-03) states the opposite of an answer: "'No Drafting' AND 'Declined' ARE BOTH REFUSAL-SHAPED AND THEIR DIFFERENCE IS NOT ESTABLISHED... Do not merge them, and do not assert which one means what, until the deployment team confirms." That entry carries an OPEN consultation to Aura asking exactly this question. This view asserts the mapping because a shared vocabulary needs one, and it flags the assertion here and in both measure comments rather than hiding it. It is the single most likely thing in this view to be wrong, and the fix is a sentence from the Clinical Transformation deployment team, not more SQL.
+  *** THE ATTRIBUTION RECONCILIATION, AND IT IS THE MOST CONSEQUENTIAL THING KNOWN ABOUT THIS VIEW. *** RP's attribution of the drafting gap and the Clinical Transformation Team's differ SHARPLY even though the totals nearly agree. August 2026, this view against CTT's figures scaled to a month: rad-not-enabled 21,211 against roughly 165,000; practice-not-enabled 87,346 against roughly 35,000; workflow 339,530 against roughly 148,000; total draftable-not-drafted 448,087 against roughly 400,000, which is agreement within about 12%. READ THAT THE RIGHT WAY ROUND: the two sides agree on HOW BIG the gap is and disagree on WHOSE IT IS, by a factor of roughly 8 on rad-not-enabled and roughly 2.5 the other way on practice-not-enabled. A total that reconciles is therefore NOT evidence that the split reconciles, and the split is the half that decides which lever gets pulled and which team gets the work. Do not present the agreeing total as validation of the disagreeing components. THE FIELD-LEVEL MAPPING BEHIND CTT'S SPLIT IS AN OPEN QUESTION WITH BHARGAV NARASIMHAN and is unresolved as of 2026-09-04; until it is answered, neither split is established as the right one and this view's numbers are RP's attribution, correct against the shipped columns, not an adjudication. SCOPE NOTE, LOAD-BEARING FOR ANYONE RE-DERIVING THESE FOUR FIGURES: they are on the UNSCOPED August 2026 finalized basis (no rpce source filter, no exclusion-code filter, no Northside removal), unlike the acceptance figures in the VALIDATION BLOCK below which are stated on the RP Brain scope. The three components sum to the total exactly: 339,530 + 87,346 + 21,211 = 448,087. Note also that "draftable-not-drafted" in this comparison spans THREE not-draftable reasons, two of which carry exam_draftable_flag = FALSE, so 448,087 is a deliberately broader population than Draftable Exam Count and will not reconcile against it.
+  WHAT WRITES IT. Nothing writes this view. It is a semantic view over tbl_exam_inventory, which is built by the tbl_exam_inventory_build job owned by Nick Adams (nick.adams@radpartners.com), plus the Dynamics consent view over the Dataverse sync maintained by the Clinical Transformation deployment team. Freshness, row counts and lifecycle are entirely inherited; read DESCRIBE HISTORY on the base table, not on this view, to date any change.
+  LIFECYCLE. View, no materialization, no schedule, no state. Recreatable at any time from this DDL. Reversible with a single DROP VIEW.
+  KEY RELATIONSHIPS. Base table edw_prod.enterprise_analytics.tbl_exam_inventory (exam_id primary key, accession_number the operational correlator). Sibling semantic object edw_prod.enterprise_analytics.tbl_exam_inventory_metric_view, which covers SLA, TAT, TBWU and backlog for the same base table. Radiologist consent is joined in from edw_prod.enterprise_analytics.dynamics_rad_drafting_consent_vw; per-model readiness lives in dynamics_rad_drafting_enablement_vw and is NOT joined here.
+  FORMAT CONVENTION, SAME AS THE SIBLING VIEW. Every percentage measure uses type percentage and its SQL returns a RAW FRACTION between 0 and 1. The display layer applies the 100x and the % sign. NEVER multiply by 100, in a measure or in ad-hoc SQL against this view.
+  THIS VIEW REPLACES "Mosaic Draft %" AND "Mosaic Read %" FOR THIS DOMAIN. Those two measures on tbl_exam_inventory_metric_view are NOT consumable for adoption headlines: they divide by COUNT(*), which conflates eligibility with adoption and reads 28.93% against 34.93%, a 6.0 point gap and a 21% relative understatement. Use Drafting Coverage and Drafting Adoption Rate here instead, and never publish drafted / mosaic-read finals under either of those two labels.
+  THE DRAFTABLE DENOMINATOR IS MOSAIC-READ VOLUME, NOT TOTAL VOLUME. Since tbl_exam_inventory v2.3.11 (2026-09-02) exam_draftable_flag carries a platform gate on mosaic_read_flag: an exam not read on Mosaic could not have been drafted whatever its RPID, practice or reader state. Every rate on the draftable basis is therefore relative to Mosaic-read volume. Verified live on August 2026: zero exams are draftable while not Mosaic-read.
+  TWO TREND BREAKS, NEITHER CROSSABLE WITHOUT A BREAK NOTE. 2026-09-02, v2.3.11 added the mosaic_read platform gate. 2026-09-04, v2.3.12 REMOVED rad_drafting_enabled_flag from the composite, moving 206,713 exams all-history from FALSE to TRUE and zero the other way. Do not trend across either date and do not adjust older figures arithmetically; re-measure.
+  *** GOVERNANCE GATE, READ BEFORE PUBLISHING ANY FIGURE FROM THIS VIEW. *** The v2.3.12 composite is RECORDED, NOT RATIFIED. Carlton Prickett owns the draftability definition and has not ratified the change; RP Brain terms/draftable-exam.yaml sits at draft v0.4.0 and Codex OQ-180 blocks on his sign-off. Figures computed here are correct against the shipped column and are not yet cleared for external publication.
+  VALIDATION BLOCK, MEASURED 2026-09-04 AGAINST tbl_exam_inventory v2.3.12. This is the one owning location for every measure acceptance figure in this view. The measure comments no longer carry their own, so a figure that appears in a measure comment is a caveat magnitude or an alarm baseline, never an acceptance figure. All values below were re-run against this view on 2026-09-04 rather than copied forward.
+  Scope, the RP Brain re-baseline predicate: final_date on or after 2026-08-01 and before 2026-09-01, Source_System_Code LIKE 'rpce%', exclusion_free_flag = TRUE, managing_local_practice_name other than 'Northside Radiology'.
+
+    Final Exam Count: 2,884,500
+    Mosaic Read Exam Count: 2,247,348
+    Platform Read Rate: 0.7791 (77.91%)
+    Draftable Exam Count: 1,456,306
+    Drafting Coverage: 0.6480 (64.80%)
+    AI-Assisted Exam Count: 1,114,098
+    Drafted Exam Count: 983,905
+    Captured Exam Count: 130,164
+    AI-Assisted Unclassified Count: 29
+    Drafting Adoption Rate: 0.7532 (75.32%), being 1,096,826 of 1,456,306
+    Drafting Opportunity (Workflow): 339,397
+    Drafting Opportunity (Enrollment): 20,083
+    Rad not enabled - Ops declined: 10,612
+    Rad not enabled - Rad declined: 182
+    Rad not enabled - Incomplete process: 9,019
+    Rad not enabled - Consent sent, not signed: 3,228
+    Rad not enabled - Consented, awaiting enablement: 5,791
+    Rad not enabled - No enrollment record: 270
+    Rad not enabled - Unmapped consent state: 0
+    Practice not enabled for model: 86,963
+    Credited Capacity TBWU: 108,201.8135
+
+  IDENTITIES THAT MUST HOLD, AND DID ON THIS RUN. Drafted 983,905 plus Captured 130,164 plus Unclassified 29 equals AI-Assisted 1,114,098. The five enrollment parts sum to Drafting Opportunity (Enrollment): 10,612 + 182 + 9,019 + 270 + 0 = 20,083. The two Incomplete process children sum to their parent: 3,228 + 5,791 = 9,019. If any of the three ever fails, the decomposition is broken and no split from this view should be published until it is explained.
+  ENROLLMENT DECOMPOSITION ON THE UNSCOPED FINALIZED BASIS, August 2026 finals with no rpce source filter, no exclusion-code filter and no Northside removal. Kept because this split is scope-sensitive and the difference is the point: Drafting Opportunity (Enrollment) 21,211 = Ops declined 10,665 + Rad declined 182 + Incomplete process 9,387 (Consent sent 3,336 + Awaiting enablement 6,051) + No enrollment record 977 + Unmapped consent state 0. Practice not enabled for model 87,346. Final Exam Count 3,922,923.
+  DELTA AGAINST THE FIGURES THIS VIEW SHIPPED WITH: none. Every measure above reproduced its previously recorded value to the unit on the 2026-09-04 re-run.
+  RE-STAMP RULE. Any tbl_exam_inventory version bump that touches the draftable family re-runs this block's measures and re-stamps its date, in the same change. RP Brain policy unity-catalog-documentation-standard, section 2.6.
+
+dimensions:
+  - name: exam_id
+    expr: source.exam_id
+    comment: Primary key of the base table (Accum_Exam_ID). One row per exam-reading.
+      Present so a consumer can drill from any aggregate back to the exam without
+      leaving the semantic layer.
+    display_name: Exam ID
+
+  - name: accession_number
+    expr: source.accession_number
+    comment: "Human-readable exam accession. THE operational correlator across Order,\
+      \ Exam, Report and Charge, and the join key to the Mosaic telemetry view edw_prod.edw_gold.aws_prod_report_signed_events_default_mosaicreporting_vw\
+      \ (join on its accession_number column, NOT its accession column; match rate\
+      \ 97.24%)."
+    display_name: Accession Number
+
+  - name: provider_local_practice_name
+    expr: source.provider_local_practice_name
+    comment: "Local Practice the READING RADIOLOGIST is attached to, point-in-time\
+      \ as of the exam's read date, from mdm_vw_provider_history_vw. THE CANONICAL\
+      \ PRACTICE COLUMN FOR MOSAIC ADOPTION questions (\"how are my rads adopting?\"\
+      ), per the RP column-prefix convention. DISCLOSURE, AND IT IS BINDING (Aura\
+      \ condition C11 on the v2.3.12 sign-off): the level-2 draftability lookup practice_rpid_in_drafting_program_flag\
+      \ keys on managing_local_practice_name, NOT on this column. Rolling up draftable\
+      \ counts by provider practice is therefore a different cut from the one the\
+      \ flag was computed on. That is defensible, because program membership is genuinely\
+      \ a managing-practice property, but two surfaces rolling up one label on different\
+      \ practice columns is drift and is among the most common bug classes in RP tooling.\
+      \ STATE WHICH PRACTICE COLUMN YOU USED on every rollup. The Brain's published\
+      \ reference figures use MANAGING."
+    display_name: Provider Local Practice
+    synonyms:
+      - Practice
+      - Rad Practice
+      - Provider Practice
+
+  - name: managing_local_practice_name
+    expr: source.managing_local_practice_name
+    comment: "Local Practice that MANAGES the site/PSA the exam was performed under.\
+      \ This is the column practice_rpid_in_drafting_program_flag (level 2) actually\
+      \ keys on, and the column the RP Brain's published draftable figures are computed\
+      \ on. Exposed alongside provider_local_practice_name so the C11 disclosure can\
+      \ be made rather than assumed. Use this for \"is my practice in the drafting\
+      \ program?\"; use provider_local_practice_name for \"are my rads adopting?\"\
+      . A rad from practice A routinely reads an exam managed by practice B, so the\
+      \ two do not reconcile and must never be silently swapped."
+    display_name: Managing Local Practice
+    synonyms:
+      - Managing Practice
+
+  - name: exam_Modality_Code
+    expr: source.exam_Modality_Code
+    comment: "Modality code from the procedure master. PLAIN FILM IS 'CR', NEVER 'XR';\
+      \ a filter written against 'XR' matches zero rows. Verified August 2026 Mosaic-read\
+      \ finals: CR 972,649, CT 704,678, US 263,056, MR 147,358, MG 74,147, RF 28,102,\
+      \ BD 27,156, XA 14,508, NM 13,712, PT 8,798, OT 759, UNK 30. MR and MG carry\
+      \ zero drafted volume and are not draftable; do not put them in a drafting denominator."
+    display_name: Modality
+    synonyms:
+      - Modality Code
+
+  - name: ai_assistance_type
+    expr: |-
+      CASE
+        WHEN NOT COALESCE(source.mosaic_draft_flag, FALSE) THEN 'Not AI-Assisted'
+        WHEN source.exam_Modality_Code IN ('CT', 'CR') THEN 'Drafted'
+        WHEN source.exam_Modality_Code IN ('US', 'BD') THEN 'Captured'
+        ELSE 'Unclassified'
+      END
+    comment: "THE VOCABULARY SPLIT, and it exists because the source system conflates\
+      \ two different things in one flag. AI-Assisted is the umbrella term (Yaro Kobzar,\
+      \ 2026-09-02); Drafted and Captured are its two mutually exclusive members.\
+      \ mosaic_draft_flag alone CANNOT tell them apart, which is what produced the\
+      \ roughly 44,000-row IT ticket about \"US exams carrying a draft flag\": those\
+      \ are Captured, not a defect. Drafted = CT plus plain film (CR). Captured =\
+      \ US plus BD/DEXA, matching CTT's own DAX, which reads Modality_Code IN {\"\
+      US\",\"BD\"}. Unclassified (RF, MR, NM, XA, PT, OT, UNK) is shown as its own\
+      \ bucket and is never folded into either member; it is tiny (29 exams in August\
+      \ 2026) but folding it would hide a source-system change. CAVEAT TO CARRY: Carlton\
+      \ Prickett's intent on BD/DEXA is UNCONFIRMED. What is verified is what the\
+      \ DAX does, not what he meant. DISAMBIGUATION: \"AI-Assisted\" here means AI-assisted\
+      \ EXAMS and is a different object from the TBWU stage named \"AI-Assisted TBWU\"\
+      . Never abbreviate to \"AI-Assisted\" alone next to a TBWU figure."
+    display_name: AI Assistance Type
+    synonyms:
+      - Drafted or Captured
+      - AI Assisted Type
+
+  - name: exam_not_draftable_reason
+    expr: source.exam_not_draftable_reason
+    comment: "Which level of the draftability ladder failed FIRST, so the drafting\
+      \ gap stays decomposable into an owner. Exactly five values, first failure wins\
+      \ in this precedence: 'exam_not_read_on_mosaic' (platform fact, no owner), 'rpid_not_draftable'\
+      \ (no Mosaic model covers this procedure, owner Mosaic product), 'practice_rpid_not_in_program'\
+      \ (a model exists but this managing practice is not in the program for this\
+      \ RPID, owner rollout), 'rad_not_in_drafting' (practice in program, this radiologist\
+      \ is not, owner engagement), 'draftable' (every level passes). DO NOT COLLAPSE\
+      \ THIS INTO THE BOOLEAN: a rollout problem and an engagement problem need opposite\
+      \ interventions, and an earlier Mosaic adoption analysis that collapsed them\
+      \ inverted its own recommendation. SINCE v2.3.12 THIS COLUMN AND exam_draftable_flag\
+      \ ARE NO LONGER MUTUALLY DERIVABLE: the pair exam_not_draftable_reason = 'rad_not_in_drafting'\
+      \ AND exam_draftable_flag = TRUE is valid and is the rad-engagement headroom\
+      \ segment (20,509 exams in August 2026), not a contradiction. The other three\
+      \ non-'draftable' values still imply exam_draftable_flag = FALSE. Never null."
+    display_name: Not Draftable Reason
+    synonyms:
+      - Why Not Drafted
+      - Draftable Reason
+
+  - name: exam_draftable_flag
+    expr: source.exam_draftable_flag
+    comment: "TRUE = this exam COULD have been drafted by Mosaic, whether or not it\
+      \ was. THE CORRECT DENOMINATOR for any drafting-adoption or drafting-headroom\
+      \ metric; using COUNT(*) instead conflates eligibility with adoption and understates\
+      \ adoption materially. AS SHIPPED IN tbl_exam_inventory v2.3.12 (prod 2026-09-04)\
+      \ the composite is COALESCE(mosaic_read_flag, FALSE) AND rpid_draftable_flag\
+      \ AND practice_rpid_in_drafting_program_flag. Note what is NOT in that AND:\
+      \ rad_drafting_enabled_flag was REMOVED in v2.3.12, because draftability is\
+      \ a property of the EXAM and not of whichever radiologist happened to read it,\
+      \ and gating on the rad HID the population the drafting program most wants to\
+      \ see. Levels 1 and 2 are BEHAVIORAL, inferred from observed drafting rates\
+      \ because Mosaic configuration has no EDW system of record, and level 2 uses\
+      \ a trailing 7-day window so it LAGS A NEW ROLLOUT BY 2 TO 3 DAYS BY DESIGN.\
+      \ NOT derived from ARTC: the ARTC set is a statistical significance filter,\
+      \ not a coverage filter, and 119,240 July 2026 exams were drafted on zero-ARTC\
+      \ RPIDs. Never null. Definition owner Carlton Prickett; the v2.3.12 change is\
+      \ RECORDED, NOT RATIFIED by him (Codex OQ-180)."
+    display_name: Draftable Flag
+    synonyms:
+      - Draftable
+      - Draft Eligible
+
+  - name: mosaic_read_flag
+    expr: source.mosaic_read_flag
+    comment: "TRUE = the exam was read on the Mosaic platform. STRICT SUPERSET of\
+      \ mosaic_draft_flag, so any funnel where drafted exceeds read is a bug. Since\
+      \ v2.3.11 this is also the platform gate inside exam_draftable_flag, which is\
+      \ why draftable rates are relative to Mosaic-read volume rather than total volume."
+    display_name: Mosaic Read Flag
+    synonyms:
+      - On Mosaic
+      - Read on Mosaic
+
+  - name: mosaic_draft_flag
+    expr: source.mosaic_draft_flag
+    comment: "TRUE = a Mosaic AI model pre-populated this exam. HOLDS BOTH Drafted\
+      \ AND Captured and cannot distinguish them on its own; use the ai_assistance_type\
+      \ dimension for that split. This is the AI-ASSISTED umbrella flag, an OUTCOME,\
+      \ never an eligibility test. A moving number of exams carry this TRUE while\
+      \ exam_draftable_flag is FALSE, roughly 2,600 as of 2026-09-04, measured on\
+      \ finalized exams in the most recent complete Monday-to-Sunday week of final_datetime,\
+      \ 2026-08-24 to 2026-08-30 inclusive (2,626 of 278,594 drafted exams that week).\
+      \ That is the expected 2-to-3 day level-2 rollout lag, not a defect to hide:\
+      \ 2,501 of the 2,626 carry exam_not_draftable_reason = 'practice_rpid_not_in_program'\
+      \ and the remaining 125 carry 'rpid_not_draftable'. Re-measure before quoting;\
+      \ the previous figure in this comment was recorded without its window and could\
+      \ not be reproduced."
+    display_name: AI-Assisted Flag
+    synonyms:
+      - Drafted Flag
+      - Mosaic Draft Flag
+
+  - name: rpid_draftable_flag
+    expr: source.rpid_draftable_flag
+    comment: "Level 1 of the draftability ladder. TRUE = at least 10% of this RPID's\
+      \ MOSAIC-READ volume was drafted across all of RP in the trailing 30 days as\
+      \ of this exam's date. Denominator is Mosaic-read volume, not total. The 10%\
+      \ cut is Carlton Prickett's judgment call, not a natural break: the drafted-rate\
+      \ distribution descends smoothly rather than cliffing. The exam's own day is\
+      \ excluded from its window so an exam cannot influence the decision that classifies\
+      \ it. Roughly 540 RPIDs qualify as of 2026-09-04, being 541 distinct RPID_Procedure_Code\
+      \ values of 3,981 across full history on this view's finalized basis (542 of\
+      \ 4,142 without the Study_Status_Code = 'Final' gate). It moves with every rebuild;\
+      \ re-measure before quoting. Never null."
+    display_name: RPID Draftable Flag
+
+  - name: practice_rpid_in_drafting_program_flag
+    expr: source.practice_rpid_in_drafting_program_flag
+    comment: "Level 2 of the draftability ladder. TRUE = at least 10% of this (managing_local_practice_name,\
+      \ RPID) pair's Mosaic-read volume was drafted in the trailing 7 days as of this\
+      \ exam's date. GRAIN IS PRACTICE x RPID, NOT PRACTICE, and that is the most\
+      \ likely implementation error against this column. A practice is routinely in-program\
+      \ for one RPID and out for another: CT chest drafting rolled out in July 2026\
+      \ to about 20 practices while roughly 40 others were not yet in the program,\
+      \ so a practice-level penetration score cannot express it. 7 days is deliberate:\
+      \ 30 is too slow to notice a rollout, 1 is too short for rare procedures. CONSEQUENCE:\
+      \ lags a new rollout by 2 to 3 days. Never null."
+    display_name: Practice x RPID In Program Flag
+
+  - name: rad_drafting_enabled_flag
+    expr: source.rad_drafting_enabled_flag
+    comment: "Level 3 of the draftability ladder and the third test behind exam_not_draftable_reason,\
+      \ but NO LONGER A TERM IN exam_draftable_flag (removed in v2.3.12, 2026-09-04).\
+      \ TRUE = the reading radiologist is in the Mosaic drafting program. PHASE 1\
+      \ IS AN EMPIRICAL PROXY: the rad's first-ever drafted exam falls on a strictly\
+      \ earlier calendar day than this exam's final_datetime. SOUND IN ONE DIRECTION\
+      \ ONLY: having drafted proves enablement, never having drafted does NOT prove\
+      \ the reverse, so this UNDERSTATES the enabled population and any headroom built\
+      \ on it is a FLOOR. The Dynamics-based phase 2 source arrived 2026-09-04 but\
+      \ is WIRED AND COMMENTED OUT, held by Carlton Prickett pending validation: the\
+      \ two signals disagree on 199,525 August exams proxy-enabled but not IRB-signed\
+      \ and 30,726 IRB-signed but not proxy-enabled. Treat as a floor until that hold\
+      \ lifts. Never null."
+    display_name: Rad Drafting Enabled Flag
+
+  - name: reading_provider_npi
+    expr: source.reading_provider_npi
+    comment: "NPI of the radiologist who interpreted the exam. The canonical provider\
+      \ key across every RP source system and the join key to dynamics_rad_drafting_consent_vw\
+      \ and dynamics_rad_drafting_enablement_vw (whose npi is decimal(10,0), so CAST\
+      \ both sides to STRING at the boundary). ALWAYS a 10-digit string; never render\
+      \ it as a float. Sentinel NPIs '-1' and '-2' are not real providers. This view\
+      \ is fleet-level and per-radiologist reading speed is never a performance score."
+    display_name: Reading Provider NPI
+
+  - name: Exclusion_Reason_Cd
+    expr: source.Exclusion_Reason_Cd
+    comment: "Analysis-exclusion code, sentinel 'N/A' meaning no exclusion. FILTER\
+      \ THIS WITH ILIKE, NEVER WITH EQUALITY: codes are stored inside multi-code combination\
+      \ strings, verified on August 2026 finals where 'IGNREXMS, UNKNOWNRAD' carries\
+      \ 113,184 rows, 'IGNREXMS, NONRPRAD' 97,684, 'INCSITE, NONRPRAD' 8,937 and 'NONRPRAD,\
+      \ UNMAPLOC' 503. An equality test against 'NONRPRAD' silently misses every one\
+      \ of those. The two approved exclusions (CUTOVER, NONRPLOCATION) are already\
+      \ physically removed from the base table at build time and need no filter; the\
+      \ codes above are NOT and still need one where the metric calls for it. For\
+      \ the common case of \"no exclusion at all\" use the exclusion_free_flag dimension,\
+      \ which tests the sentinel and is ILIKE-safe by construction."
+    display_name: Exclusion Reason Code
+
+  - name: exclusion_free_flag
+    expr: "CASE WHEN COALESCE(source.Exclusion_Reason_Cd, 'N/A') = 'N/A' THEN TRUE\
+      \ ELSE FALSE END"
+    comment: "TRUE = this exam carries no analysis-exclusion code at all. Provided\
+      \ so that consumers never hand-roll an exclusion predicate and never write the\
+      \ equality test that the multi-code combination strings defeat. This is the\
+      \ filter used by the RP Brain's published draftable reference figures. TRUE\
+      \ on 3,427,138 of the August 2026 finals."
+    display_name: Exclusion Free Flag
+
+  - name: Source_System_Code
+    expr: source.Source_System_Code
+    comment: "Source system that holds the original clinical data. Values beginning\
+      \ 'rpce' are Clario, the RP clinical environment, and the RP Brain's published\
+      \ draftable reference figures are scoped to Source_System_Code LIKE 'rpce%'.\
+      \ Non-rpce sources do not carry Mosaic drafting and will deflate any drafting\
+      \ rate computed across them."
+    display_name: Source System Code
+
+  - name: final_datetime
+    expr: source.final_datetime
+    comment: "Timestamp the report was finalized / signed, LOCAL clock. THE ONLY CORRECT\
+      \ PERIOD ANCHOR FOR THIS DOMAIN: all three draftability levels are evaluated\
+      \ as of this timestamp. Do not anchor drafting metrics on unread_datetime (that\
+      \ is demand) or target_datetime (that is an SLA reference). Never mix clock\
+      \ families in one metric."
+    display_name: Final Datetime
+
+  - name: final_date
+    expr: CAST(source.final_datetime AS DATE)
+    comment: "Calendar date of report finalization, LOCAL clock. Day-grain period\
+      \ dimension. Two dates matter when trending: 2026-09-02 (v2.3.11 added the mosaic_read\
+      \ platform gate) and 2026-09-04 (v2.3.12 removed the rad gate). A series crossing\
+      \ either without a break marker is comparing two different definitions."
+    display_name: Final Date
+
+  - name: final_month
+    expr: "DATE_TRUNC('MONTH', source.final_datetime)"
+    comment: "Month of report finalization, LOCAL clock, as the first day of the month.\
+      \ The default period grain for fleet reporting. SAME TREND-BREAK WARNING AS\
+      \ final_date, and it bites harder here: September 2026 is the first month containing\
+      \ both definition changes, so a month-over-month drafting series spanning August\
+      \ to September is NOT like-for-like."
+    display_name: Final Month
+
+  - name: rad_drafting_consent
+    expr: source.rad_drafting_consent
+    comment: "Mosaic drafting consent (IRB) status of the READING radiologist, joined\
+      \ in from edw_prod.enterprise_analytics.dynamics_rad_drafting_consent_vw on\
+      \ CAST(npi AS STRING) = reading_provider_npi. Six observed states, live 2026-09-04\
+      \ across all 5,486 radiologists in that view: NULL 2,085, 'Signed IRB' 1,738,\
+      \ 'No Drafting' 1,403, 'Sent' 151, 'Declined' 81, 'Term' 28. NULL HERE IS TWO\
+      \ DIFFERENT THINGS AND YOU MUST NOT TREAT IT AS ONE: either the radiologist\
+      \ has a Dynamics row with no outreach recorded, or there is no Dynamics row\
+      \ for that NPI at all. Use rad_consent_record_exists to tell them apart, or\
+      \ use the rad_enrollment_state dimension which already does. NULL IS NEVER REFUSAL:\
+      \ 'Declined' and 'No Drafting' are explicit separate values and reading NULL\
+      \ as declined overstates refusal by roughly 20x against 'Declined' (RP Brain\
+      \ fields/mosaic-drafting-consent.yaml, status DRAFT v0.1.0). ONE IRB COVERS\
+      \ ALL DRAFTING MODELS PLUS TRIAGE, so consent is never model-specific. NO SIGNING\
+      \ DATE EXISTS in Dynamics (Codex OQ-174), so consent cannot be effective-dated\
+      \ and no as-of-date consent question is answerable: this dimension is the CURRENT\
+      \ state stamped onto historical exams. 'Term' is an employment state living\
+      \ in a consent column; a consent denominator that does not handle it counts\
+      \ departed radiologists. COVERAGE LIMIT, see THE DYNAMICS CONSENT JOIN in the\
+      \ table comment for the current figure and its date: the consent view matches\
+      \ only about half the reading fleet, so this dimension is NULL for roughly half\
+      \ of it for join reasons alone. The value set is hand-maintained in Dynamics\
+      \ and can gain a value without notice."
+    display_name: Rad Drafting Consent
+    synonyms:
+      - IRB Status
+      - Drafting Consent
+      - Consent Status
+
+  - name: rad_consent_record_exists
+    expr: source.rad_consent_record_exists
+    comment: "TRUE = the reading radiologist's NPI was found in dynamics_rad_drafting_consent_vw.\
+      \ FALSE = no Dynamics row at all. EXISTS ONLY TO SPLIT THE TWO KINDS OF NULL\
+      \ in rad_drafting_consent, which are different facts about different things:\
+      \ \"we asked and recorded nothing\" is a process state, \"this radiologist is\
+      \ not in the CRM\" is a coverage gap in our own data. Neither is a refusal and\
+      \ neither is a finding about the radiologist. FALSE on roughly half of trailing-90-day\
+      \ readers, so it is a bulk property of the join, not an exception. Coverage\
+      \ limit and its current dated figure: see THE DYNAMICS CONSENT JOIN in the table\
+      \ comment."
+    display_name: Rad Consent Record Exists
+    synonyms:
+      - Has Dynamics Record
+      - In Consent CRM
+
+  - name: rad_enrollment_state
+    expr: |-
+      CASE
+        WHEN NOT source.rad_consent_record_exists       THEN 'No enrollment record'
+        WHEN source.rad_drafting_consent IS NULL        THEN 'No enrollment record'
+        WHEN source.rad_drafting_consent = 'Declined'   THEN 'Rad declined'
+        WHEN source.rad_drafting_consent = 'No Drafting' THEN 'Ops declined'
+        WHEN source.rad_drafting_consent IN ('Sent', 'Signed IRB')
+                                                        THEN 'Incomplete process'
+        ELSE 'Unmapped consent state'
+      END
+    comment: "THE ENROLLMENT VOCABULARY, expressed once here so that the five \"Rad\
+      \ not enabled - ...\" measures and any ad-hoc GROUP BY use the same mapping\
+      \ instead of each hand-rolling a CASE. Five values, and they are exhaustive\
+      \ and mutually exclusive by construction. SOURCE: mosaic_drafting_consent on\
+      \ dynamics_rad_drafting_consent_vw, joined on NPI. LABELS ARE CARLTON PRICKETT'S,\
+      \ so that RP has one shared vocabulary; the SQL behind them is RP Data Strategy's\
+      \ and the two have not been reconciled field by field. *** THE 'Ops declined'\
+      \ AND 'Rad declined' ASSIGNMENTS ARE UNCONFIRMED. *** 'No Drafting' is mapped\
+      \ to Ops declined and 'Declined' to Rad declined. The Unity Catalog comment\
+      \ glosses 'No Drafting' only as \"opted out\", which does not say WHO opted\
+      \ out, and RP Brain fields/mosaic-drafting-consent.yaml (DRAFT v0.1.0, 2026-09-03)\
+      \ explicitly records that the difference between the two values IS NOT ESTABLISHED\
+      \ and instructs that neither be asserted until the Clinical Transformation deployment\
+      \ team confirms. An open Aura consultation on that entry asks exactly this.\
+      \ Treat both labels as provisional. 'Incomplete process' deliberately holds\
+      \ TWO different populations, 'Sent' (asked, not signed) and 'Signed IRB' (signed,\
+      \ not yet drafting); they have different owners and are separately measurable,\
+      \ see the two child measures. 'No enrollment record' is NEUTRAL and is never\
+      \ an accusation. 'Unmapped consent state' is an ALARM BUCKET, not a category:\
+      \ 'Term' and any value the hand-maintained Dynamics list gains without notice\
+      \ land here rather than being silently defaulted into a real bucket. It reads\
+      \ ZERO on the August 2026 enrollment segment; if it stops reading zero, the\
+      \ vocabulary needs revisiting before the numbers are published. COVERAGE LIMIT,\
+      \ see THE DYNAMICS CONSENT JOIN in the table comment for the current figure\
+      \ and its date: only about half of trailing-90-day readers match the consent\
+      \ view, so 'No enrollment record' is inflated by our own join gap and is not\
+      \ a measure of outreach failure."
+    display_name: Rad Enrollment State
+    synonyms:
+      - Enrollment State
+      - Rad Not Enabled Reason
+      - Enrollment Category
+
+measures:
+  - name: Final Exam Count
+    expr: COUNT(*)
+    comment: "DENOMINATOR, IN WORDS: not a rate, this IS a denominator. Count of all\
+      \ FINALIZED exam-readings in scope (the view's source already restricts to Study_Status_Code\
+      \ = 'Final'). This is the denominator of Platform Read Rate. Expose it next\
+      \ to any rate built on it: a rate rendered without its denominator and its absolute\
+      \ count cannot be read. Acceptance figure: see the VALIDATION BLOCK in the table\
+      \ comment."
+    display_name: Final Exam Count
+    format:
+      type: number
+      decimal_places:
+        type: exact
+        places: 0
+      hide_group_separator: false
+    synonyms:
+      - Finals
+      - Finalized Exams
+      - Total Exams
+
+  - name: Mosaic Read Exam Count
+    expr: COUNT(*) FILTER (WHERE source.mosaic_read_flag = TRUE)
+    comment: "DENOMINATOR, IN WORDS: count of finalized exams READ ON THE MOSAIC PLATFORM.\
+      \ This is the denominator of Drafting Coverage, and it is the population every\
+      \ draftable-basis measure in this view lives inside, because exam_draftable_flag\
+      \ gates on mosaic_read_flag. Also a numerator in its own right (Platform Read\
+      \ Rate). Strict superset of every AI-assisted count here. Acceptance figure:\
+      \ see the VALIDATION BLOCK in the table comment."
+    display_name: Mosaic Read Exam Count
+    format:
+      type: number
+      decimal_places:
+        type: exact
+        places: 0
+      hide_group_separator: false
+    synonyms:
+      - Exams on Mosaic
+      - Mosaic Volume
+
+  - name: Platform Read Rate
+    expr: |-
+      COUNT(*) FILTER (WHERE source.mosaic_read_flag = TRUE)
+      / NULLIF(COUNT(*), 0)
+    comment: "NUMERATOR, IN WORDS: finalized exams read on the Mosaic platform. DENOMINATOR,\
+      \ IN WORDS: all finalized exams in scope, on any platform. Answers \"how much\
+      \ of what we read happens on Mosaic?\", which is the PLATFORM adoption question\
+      \ and is a different question with a different denominator from the DRAFTING\
+      \ adoption question (see Drafting Adoption Rate). Never merge the two into one\
+      \ funnel. Returns a RAW FRACTION between 0 and 1; the percentage format applies\
+      \ the 100x. Acceptance figure: see the VALIDATION BLOCK in the table comment."
+    display_name: Platform Read Rate
+    format:
+      type: percentage
+      decimal_places:
+        type: exact
+        places: 2
+      hide_group_separator: false
+    synonyms:
+      - Mosaic Adoption
+      - Platform Adoption
+
+  - name: Draftable Exam Count
+    expr: COUNT(*) FILTER (WHERE source.exam_draftable_flag = TRUE)
+    comment: "DENOMINATOR, IN WORDS: not a rate, this IS the canonical denominator\
+      \ for the drafting domain. Count of finalized exams that COULD have been drafted,\
+      \ whether or not they were: read on Mosaic, on an RPID with model coverage,\
+      \ at a managing practice in the program for that RPID. Since v2.3.12 it does\
+      \ NOT require the reading radiologist to be enrolled, so it now includes the\
+      \ rad-engagement segment that the old composite hid. Use this, never COUNT(*),\
+      \ as the denominator of any drafting-adoption or headroom figure. Acceptance\
+      \ figure: see the VALIDATION BLOCK in the table comment."
+    display_name: Draftable Exam Count
+    format:
+      type: number
+      decimal_places:
+        type: exact
+        places: 0
+      hide_group_separator: false
+    synonyms:
+      - Draftable Exams
+      - Draft Eligible Exams
+      - Eligible Exams
+
+  - name: Drafting Coverage
+    expr: |-
+      COUNT(*) FILTER (WHERE source.exam_draftable_flag = TRUE)
+      / NULLIF(COUNT(*) FILTER (WHERE source.mosaic_read_flag = TRUE), 0)
+    comment: "NUMERATOR, IN WORDS: finalized exams that could have been drafted. DENOMINATOR,\
+      \ IN WORDS: finalized exams read on the Mosaic platform. Answers \"how much\
+      \ of what I read on Mosaic is in the drafting program?\", which is a PROGRAM\
+      \ COVERAGE question owned by rollout, not an adoption question owned by the\
+      \ radiologist. THIS LABEL AND \"Drafting Adoption Rate\" ARE ONE CARELESS SWAP\
+      \ FROM COLLIDING and the naming is binding (Aura condition C9): coverage is\
+      \ draftable / mosaic-read, adoption is drafted / draftable. Never publish drafted\
+      \ / mosaic-read finals under either label without saying so; that confusion\
+      \ is exactly what produced the 28.93% against 34.93% discrepancy in the older\
+      \ UC measures. Returns a RAW FRACTION between 0 and 1. Acceptance figure: see\
+      \ the VALIDATION BLOCK in the table comment."
+    display_name: Drafting Coverage
+    format:
+      type: percentage
+      decimal_places:
+        type: exact
+        places: 2
+      hide_group_separator: false
+    synonyms:
+      - Program Coverage
+      - Draftable Share
+
+  - name: AI-Assisted Exam Count
+    expr: "COUNT(*) FILTER (WHERE COALESCE(source.mosaic_draft_flag, FALSE) = TRUE)"
+    comment: "NUMERATOR, IN WORDS: finalized exams a Mosaic AI model pre-populated,\
+      \ of ANY type. THE UMBRELLA COUNT: it is Drafted plus Captured plus Unclassified,\
+      \ and those three sum to it exactly by construction. Use this only when you\
+      \ mean both members together; if the audience will read it as \"drafted\", use\
+      \ Drafted Exam Count instead, because reporting Captured ultrasound volume as\
+      \ \"drafted\" is precisely the confusion that produced the roughly 44,000-row\
+      \ IT ticket. DISAMBIGUATION: this counts AI-assisted EXAMS and has nothing to\
+      \ do with the TBWU stage named \"AI-Assisted TBWU\". Acceptance figure: see\
+      \ the VALIDATION BLOCK in the table comment. The Drafted plus Captured plus\
+      \ Unclassified identity is asserted and checked there."
+    display_name: AI-Assisted Exam Count
+    format:
+      type: number
+      decimal_places:
+        type: exact
+        places: 0
+      hide_group_separator: false
+    synonyms:
+      - AI Assisted Exams
+      - Pre-populated Exams
+
+  - name: Drafted Exam Count
+    expr: |-
+      COUNT(*) FILTER (WHERE COALESCE(source.mosaic_draft_flag, FALSE) = TRUE
+                         AND source.exam_Modality_Code IN ('CT', 'CR'))
+    comment: "NUMERATOR, IN WORDS: finalized CT and plain-film exams that a Mosaic\
+      \ AI model pre-drafted. DRAFTED is one of the two members of AI-Assisted; Captured\
+      \ is the other, and they are mutually exclusive. Plain film is modality code\
+      \ 'CR', NEVER 'XR' (an 'XR' filter matches zero rows). This measure exists because\
+      \ mosaic_draft_flag alone cannot separate Drafted from Captured. Acceptance\
+      \ figure: see the VALIDATION BLOCK in the table comment."
+    display_name: Drafted Exam Count
+    format:
+      type: number
+      decimal_places:
+        type: exact
+        places: 0
+      hide_group_separator: false
+    synonyms:
+      - Drafted Exams
+      - CT and XR Drafted
+
+  - name: Captured Exam Count
+    expr: |-
+      COUNT(*) FILTER (WHERE COALESCE(source.mosaic_draft_flag, FALSE) = TRUE
+                         AND source.exam_Modality_Code IN ('US', 'BD'))
+    comment: "NUMERATOR, IN WORDS: finalized ultrasound and bone-density/DEXA exams\
+      \ that a Mosaic AI model pre-populated. CAPTURED is the second member of AI-Assisted\
+      \ and is NOT drafting; reporting it as \"drafted\" is a vocabulary error, not\
+      \ a rounding one. The modality set matches CTT's own DAX, verified as Modality_Code\
+      \ IN {\"US\",\"BD\"}. CAVEAT TO CARRY FORWARD: Carlton Prickett's intent on\
+      \ including BD/DEXA is UNCONFIRMED; what is verified is what the DAX does, not\
+      \ what he meant. Acceptance figure: see the VALIDATION BLOCK in the table comment."
+    display_name: Captured Exam Count
+    format:
+      type: number
+      decimal_places:
+        type: exact
+        places: 0
+      hide_group_separator: false
+    synonyms:
+      - Captured Exams
+      - US Captured
+
+  - name: AI-Assisted Unclassified Count
+    expr: |-
+      COUNT(*) FILTER (WHERE COALESCE(source.mosaic_draft_flag, FALSE) = TRUE
+                         AND source.exam_Modality_Code NOT IN ('CT', 'CR', 'US', 'BD'))
+    comment: "NUMERATOR, IN WORDS: finalized AI-assisted exams whose modality is neither\
+      \ in the Drafted set (CT, CR) nor the Captured set (US, BD). Shown as its own\
+      \ bucket and NEVER folded into either member. It is deliberately tiny (29 exams\
+      \ in August 2026, on RF and XA) and its job is to be an alarm: if it grows,\
+      \ the source system has started pre-populating a modality the vocabulary does\
+      \ not yet cover, and the Drafted/Captured split needs revisiting rather than\
+      \ quietly absorbing it. Tracked as OQ-145."
+    display_name: AI-Assisted Unclassified Count
+    format:
+      type: number
+      decimal_places:
+        type: exact
+        places: 0
+      hide_group_separator: false
+    synonyms:
+      - Unclassified AI Exams
+
+  - name: AI-Assisted Rate
+    expr: |-
+      COUNT(*) FILTER (WHERE COALESCE(source.mosaic_draft_flag, FALSE) = TRUE)
+      / NULLIF(COUNT(*) FILTER (WHERE source.mosaic_read_flag = TRUE), 0)
+    comment: "NUMERATOR, IN WORDS: finalized exams a Mosaic AI model pre-populated,\
+      \ of any type (Drafted plus Captured plus Unclassified). DENOMINATOR, IN WORDS:\
+      \ finalized exams read on the Mosaic platform. Answers \"of what we read on\
+      \ Mosaic, how much got any AI assistance?\", the middle rung of the ONE DENOMINATOR\
+      \ CHAIN this view speaks end to end: Platform Read Rate (of all finals), then\
+      \ AI-Assisted Rate (of Mosaic-read), then Drafting Coverage (draftable of Mosaic-read),\
+      \ then Drafting Adoption Rate (drafted of draftable). Added 2026-09-05 (Yaro\
+      \ Kobzar: every surface points at the same denominator; Practice Command's Mosaic\
+      \ Today page headlines this chain and the view and the page must agree). NOT\
+      \ the adoption headline: adoption stays Drafting Adoption Rate on the draftable\
+      \ basis. Returns a RAW FRACTION between 0 and 1; the percentage format applies\
+      \ the 100x. Verified 2026-09-05 on final_date 2026-09-04, enterprise: 41,119\
+      \ of 79,747 = 51.56%."
+    display_name: AI-Assisted Rate
+    format:
+      type: percentage
+      decimal_places:
+        type: exact
+        places: 2
+      hide_group_separator: false
+    synonyms:
+      - AI Assisted Share
+      - Pre-populated Rate
+      - Percent AI-Assisted
+
+  - name: Drafting Adoption Rate
+    expr: |-
+      COUNT(*) FILTER (WHERE source.exam_draftable_flag = TRUE
+                         AND COALESCE(source.mosaic_draft_flag, FALSE) = TRUE)
+      / NULLIF(COUNT(*) FILTER (WHERE source.exam_draftable_flag = TRUE), 0)
+    comment: "THE AI-ASSISTED RATE ON THE DRAFTABLE BASIS, and the headline adoption\
+      \ number for this domain. NUMERATOR, IN WORDS: finalized exams that were both\
+      \ draftable and actually AI-assisted. DENOMINATOR, IN WORDS: finalized exams\
+      \ that were draftable, i.e. read on Mosaic, on a covered RPID, at a practice\
+      \ in the program for that RPID. Answers \"of what is in the drafting program,\
+      \ how much got drafted?\". THE DENOMINATOR IS DRAFTABLE VOLUME, NOT TOTAL VOLUME\
+      \ AND NOT MOSAIC-READ VOLUME: because exam_draftable_flag gates on mosaic_read_flag,\
+      \ this rate is computed strictly inside Mosaic-read volume. USE THIS INSTEAD\
+      \ OF THE OLDER UC MEASURE \"Mosaic Draft %\" on tbl_exam_inventory_metric_view,\
+      \ which divides by COUNT(*) and is not consumable for an adoption headline.\
+      \ Naming is binding (Aura C9): this is ADOPTION (drafted / draftable); COVERAGE\
+      \ is draftable / mosaic-read. Returns a RAW FRACTION between 0 and 1. Acceptance\
+      \ figure: see the VALIDATION BLOCK in the table comment."
+    display_name: Drafting Adoption Rate
+    format:
+      type: percentage
+      decimal_places:
+        type: exact
+        places: 2
+      hide_group_separator: false
+    synonyms:
+      - AI-Assisted Rate
+      - Drafted of Draftable
+      - Draft Penetration
+
+  - name: Drafting Opportunity (Workflow)
+    expr: |-
+      COUNT(*) FILTER (WHERE source.exam_draftable_flag = TRUE
+                         AND NOT COALESCE(source.mosaic_draft_flag, FALSE)
+                         AND source.exam_not_draftable_reason = 'draftable')
+    comment: "NUMERATOR, IN WORDS: finalized exams that were draftable, whose reading\
+      \ radiologist WAS enrolled in the drafting program, and which were not drafted\
+      \ anyway. DENOMINATOR, IN WORDS: none, this is an absolute count of missed opportunity.\
+      \ THE OWNER IS WORKFLOW: the fix is training, UI and habit. PUBLISH THIS ONLY\
+      \ ALONGSIDE Drafting Opportunity (Enrollment) (Aura condition C2 is binding):\
+      \ the total is reportable but never without its split, because a consumer who\
+      \ sees one number cannot tell which lever to pull and the two levers belong\
+      \ to different people. NAMING DECISION, 2026-09-04: Carlton Prickett's own wording\
+      \ for this quantity is \"Drafting Workflow Opportunity\", and it is carried\
+      \ HERE AS A SYNONYM rather than as the display name. The display name stays\
+      \ \"Drafting Opportunity (Workflow)\" on purpose, because Aura condition C2\
+      \ binds this measure to \"Drafting Opportunity (Enrollment)\" as a pair, and\
+      \ the pairing is self-enforcing only while both halves share a stem and differ\
+      \ by a parenthetical. Renaming one half to a different shape would leave \"\
+      Drafting Workflow Opportunity\" beside \"Drafting Opportunity (Enrollment)\"\
+      , which no longer reads as a split and makes it easy to publish one without\
+      \ the other. His phrase still resolves to this measure in Genie and in any synonym-aware\
+      \ consumer, so the shared vocabulary works without breaking C2. Acceptance figure:\
+      \ see the VALIDATION BLOCK in the table comment."
+    display_name: Drafting Opportunity (Workflow)
+    format:
+      type: number
+      decimal_places:
+        type: exact
+        places: 0
+      hide_group_separator: false
+    synonyms:
+      - Drafting Workflow Opportunity
+      - Workflow Headroom
+      - Drafting Headroom (Workflow)
+
+  - name: Drafting Opportunity (Enrollment)
+    expr: |-
+      COUNT(*) FILTER (WHERE source.exam_draftable_flag = TRUE
+                         AND NOT COALESCE(source.mosaic_draft_flag, FALSE)
+                         AND source.exam_not_draftable_reason = 'rad_not_in_drafting')
+    comment: |-
+      NUMERATOR, IN WORDS: finalized exams that were draftable but whose reading radiologist was NOT enrolled in the drafting program, and which were not drafted. DENOMINATOR, IN WORDS: none, this is an absolute count. THE OWNER IS ENROLMENT, a different lever and a different person from the workflow segment. THIS SEGMENT ONLY BECAME VISIBLE IN v2.3.12: the old four-term composite scored these exams not-draftable, so they never entered any denominator and never appeared as opportunity at all. That was the defect the composite change fixed. It is a FLOOR, because rad_drafting_enabled_flag is an empirical proxy that is sound in one direction only and understates the enabled population. Publish only alongside Drafting Opportunity (Workflow), per Aura C2.
+      IT NOW DECOMPOSES INTO FIVE NAMED PARTS, added 2026-09-04, carrying Carlton Prickett's category labels so RP has one shared vocabulary: "Rad not enabled - Ops declined", "Rad not enabled - Rad declined", "Rad not enabled - Incomplete process", "Rad not enabled - No enrollment record" and the alarm bucket "Rad not enabled - Unmapped consent state". The five are mutually exclusive and exhaustive and sum to this measure EXACTLY on both the scoped and the unscoped basis; the arithmetic is asserted and checked in the VALIDATION BLOCK in the table comment, on both bases. THE SPLIT DEPENDS ON A DYNAMICS JOIN THAT COVERS ONLY ABOUT HALF OF TRAILING-90-DAY READERS, see THE DYNAMICS CONSENT JOIN in the table comment for the current figure and its date, AND ON A CONSENT-TO-CATEGORY MAPPING THAT IS UNCONFIRMED, so the parts are far weaker evidence than this total. Read each part's own comment before quoting it, and note in particular that "Rad not enabled - Rad declined" is a protected choice and is NOT a remediation target. Acceptance figure: see the VALIDATION BLOCK in the table comment.
+    display_name: Drafting Opportunity (Enrollment)
+    format:
+      type: number
+      decimal_places:
+        type: exact
+        places: 0
+      hide_group_separator: false
+    synonyms:
+      - Enrolment Headroom
+      - Rad Engagement Headroom
+      - Drafting Headroom (Rad Engagement)
+
+  - name: Credited Capacity TBWU
+    expr: |-
+      SUM(COALESCE(source.unassisted_tbwu_current, 0))
+      - SUM(COALESCE(source.empirical_tbwu_current, 0))
+    comment: |-
+      NUMERATOR, IN WORDS: total Unassisted TBWU minus total Empirical TBWU across the finalized exams in scope. DENOMINATOR, IN WORDS: none, this is an absolute quantity in TBWU, never a rate. WHAT IT MEANS: the work the AI took off the radiologist, expressed as TBWU, which is capacity from the COMPENSATION perspective. Empirical equals Unassisted on any exam that was not AI-assisted, so non-assisted exams contribute exactly zero and the whole quantity is carried by AI-assisted volume.
+      THREE HARD RULES, ALL BINDING. (1) THIS IS NOT THE HEADLINE CAPACITY NUMBER AND MUST NEVER BE PRESENTED AS ONE. It is one of two lanes. The other lane is MEASURED capacity, denominated in read-hours and derived by indirect standardization against each radiologist's own pre-go-live baseline; that lane is not computable from this view. (2) THE TWO LANES ARE NEVER AVERAGED, SUMMED, OR UNIT-CONVERTED INTO EACH OTHER. The gap between them is a first-class output to be surfaced, not a discrepancy to be closed. (3) Capacity is never headlined from ARTC; ARTC is a per-RPID modeling parameter, not a measurement of capacity created.
+      THE _current SUFFIX IS LOAD-BEARING AND IS A TRAP. unassisted_tbwu_current and empirical_tbwu_current are a CURRENT-VALUE RECOMPUTE, not value-at-time: they apply today's multipliers across all history including exams read before the 2026-07-01 go-live, when AI multipliers did not apply. A Credited trend crossing 2026-07-01 is therefore a RECOMPUTE ARTIFACT, not a change in the world. These are second-engine fields and are AUDIT ONLY: per RP Brain DEC-028 (Jamie Larsen, CFO, 2026-07-23) Clario's source_tbwu is the system of record for all TBWU reporting and for payroll. Never use this measure as a payout, a comp figure, or a productivity number. Acceptance figure: see the VALIDATION BLOCK in the table comment.
+    display_name: Credited Capacity TBWU
+    format:
+      type: number
+      decimal_places:
+        type: exact
+        places: 1
+      hide_group_separator: false
+    synonyms:
+      - Credited Capacity
+      - Capacity Created TBWU
+      - TBWU Saved
+
+  - name: Rad not enabled - Rad declined
+    expr: |-
+      COUNT(*) FILTER (WHERE source.exam_draftable_flag = TRUE
+                         AND NOT COALESCE(source.mosaic_draft_flag, FALSE)
+                         AND source.exam_not_draftable_reason = 'rad_not_in_drafting'
+                         AND source.rad_drafting_consent = 'Declined')
+    comment: |-
+      NUMERATOR, IN WORDS: finalized exams that were draftable, were not drafted, whose reading radiologist was not enrolled in the drafting program, and whose radiologist has consent status 'Declined' in Dynamics. DENOMINATOR, IN WORDS: none, this is an absolute count and one of the five parts of Drafting Opportunity (Enrollment).
+      *** THIS IS NOT A REMEDIATION TARGET AND MUST NEVER BE WORKED AS ONE. *** Declining is a PROTECTED CHOICE in a consented study. A radiologist who declined has exercised a right, has not failed at anything, and is not behind on a task. This measure exists so that declined volume can be EXCLUDED from opportunity totals and outreach lists, not so it can be chased. Any surface that puts this count in a "to do", a gap-closure target, a practice ranking, or a named follow-up list is misusing it. If you are building a remediation number, subtract this measure; do not add it.
+      OWNER: nobody, deliberately. There is no owner for a valid refusal. Consent itself is administered by the Clinical Transformation deployment team.
+      SOURCE: mosaic_drafting_consent on edw_prod.enterprise_analytics.dynamics_rad_drafting_consent_vw, joined on CAST(npi AS STRING) = reading_provider_npi, in combination with exam_not_draftable_reason and mosaic_draft_flag on tbl_exam_inventory.
+      MAPPING CAVEAT: assigning 'Declined' to "Rad declined" is UNCONFIRMED. RP Brain fields/mosaic-drafting-consent.yaml (DRAFT v0.1.0, 2026-09-03) records that the difference between 'Declined' and 'No Drafting' is NOT ESTABLISHED and instructs that neither be asserted until the deployment team confirms. If the two turn out to be assigned the other way round, this measure and "Rad not enabled - Ops declined" swap, and the protected-choice instruction above swaps with them.
+      COVERAGE CAVEAT: the Dynamics join matches only about half of trailing-90-day readers, see THE DYNAMICS CONSENT JOIN in the table comment for the current figure and its date, so this is a FLOOR on declined volume; a radiologist who declined but is not in the CRM lands in "No enrollment record" instead. It is also the most concentrated of the five parts, 6 radiologists on the August 2026 unscoped finalized basis, so it moves on one person. Acceptance figure: see the VALIDATION BLOCK in the table comment.
+    display_name: Rad not enabled - Rad declined
+    format:
+      type: number
+      decimal_places:
+        type: exact
+        places: 0
+      hide_group_separator: false
+    synonyms:
+      - Rad Declined
+      - Declined Drafting
+
+  - name: Rad not enabled - Ops declined
+    expr: |-
+      COUNT(*) FILTER (WHERE source.exam_draftable_flag = TRUE
+                         AND NOT COALESCE(source.mosaic_draft_flag, FALSE)
+                         AND source.exam_not_draftable_reason = 'rad_not_in_drafting'
+                         AND source.rad_drafting_consent = 'No Drafting')
+    comment: |-
+      NUMERATOR, IN WORDS: finalized exams that were draftable, were not drafted, whose reading radiologist was not enrolled in the drafting program, and whose radiologist carries consent status 'No Drafting' in Dynamics. DENOMINATOR, IN WORDS: none, this is an absolute count and one of the five parts of Drafting Opportunity (Enrollment). It is the LARGEST of the five.
+      *** WHO OPTED OUT IS UNCONFIRMED, AND THE LABEL ASSERTS AN ANSWER THE DATA DOES NOT CARRY. *** The Unity Catalog comment on mosaic_drafting_consent glosses 'No Drafting' as "opted out" and says nothing about WHO: the radiologist, the practice, or operations on their behalf. This measure is labelled "Ops declined" to match Carlton Prickett's category set, and that assignment is an assumption, not a finding. RP Brain fields/mosaic-drafting-consent.yaml (DRAFT v0.1.0, 2026-09-03) states directly that 'No Drafting' and 'Declined' are both refusal-shaped, that their difference IS NOT ESTABLISHED, and that neither should be asserted until the Clinical Transformation deployment team confirms; an open Aura consultation on that entry asks precisely this question. DO NOT BUILD AN OUTREACH CAMPAIGN AGAINST THIS COUNT until the question is answered: if 'No Drafting' turns out to be the radiologist's own refusal, this population is protected choice like "Rad not enabled - Rad declined" and must be excluded from opportunity totals rather than chased.
+      OWNER: operations / the Clinical Transformation deployment team, CONDITIONAL on the mapping above holding.
+      SOURCE: mosaic_drafting_consent on edw_prod.enterprise_analytics.dynamics_rad_drafting_consent_vw, joined on CAST(npi AS STRING) = reading_provider_npi.
+      COVERAGE CAVEAT: the Dynamics join matches only about half of trailing-90-day readers, see THE DYNAMICS CONSENT JOIN in the table comment for the current figure and its date, so this is a floor. It rests on 85 radiologists on the August 2026 unscoped finalized basis. Acceptance figure: see the VALIDATION BLOCK in the table comment.
+    display_name: Rad not enabled - Ops declined
+    format:
+      type: number
+      decimal_places:
+        type: exact
+        places: 0
+      hide_group_separator: false
+    synonyms:
+      - Ops Declined
+      - No Drafting Opt Out
+
+  - name: Rad not enabled - Incomplete process
+    expr: |-
+      COUNT(*) FILTER (WHERE source.exam_draftable_flag = TRUE
+                         AND NOT COALESCE(source.mosaic_draft_flag, FALSE)
+                         AND source.exam_not_draftable_reason = 'rad_not_in_drafting'
+                         AND source.rad_drafting_consent IN ('Sent', 'Signed IRB'))
+    comment: |-
+      NUMERATOR, IN WORDS: finalized exams that were draftable, were not drafted, whose reading radiologist was not enrolled in the drafting program, and whose radiologist is mid-onboarding, meaning consent was either sent and not yet signed, or signed with drafting not yet observed. DENOMINATOR, IN WORDS: none, this is an absolute count and one of the five parts of Drafting Opportunity (Enrollment). THIS IS THE ONE CATEGORY WHERE THE OPPORTUNITY IS REAL, UNAMBIGUOUS AND ACTIONABLE: nobody has refused anything, the process simply has not finished.
+      IT HOLDS TWO DIFFERENT POPULATIONS AND YOU SHOULD USUALLY SPLIT IT. Carlton Prickett's category set has one bucket here, so this measure matches his label, but the two halves have different owners and very different confidence, and both are published separately: "Rad not enabled - Consent sent, not signed" (32 radiologists on the August 2026 unscoped finalized basis) and "Rad not enabled - Consented, awaiting enablement" (66 radiologists). The second is the larger half and the weaker signal. The two children sum to this parent exactly, by construction, and the arithmetic is asserted and checked in the VALIDATION BLOCK in the table comment.
+      OWNER: the Clinical Transformation deployment team, for both halves, but the action differs: chase a signature for the first, chase AD-group membership and training for the second.
+      SOURCE: mosaic_drafting_consent on edw_prod.enterprise_analytics.dynamics_rad_drafting_consent_vw, joined on CAST(npi AS STRING) = reading_provider_npi.
+      NOTE ON A REDUNDANT PREDICATE THAT WAS DELIBERATELY NOT ADDED: within this segment the reading radiologist's rad_drafting_enabled_flag is ALWAYS FALSE. Verified live on August 2026: zero exams carry exam_not_draftable_reason = 'rad_not_in_drafting' together with rad_drafting_enabled_flag = TRUE. So "signed the IRB but the exam flag still says not enabled" needs no extra conjunct; the reason value already guarantees it.
+      COVERAGE CAVEAT: the Dynamics join matches only about half of trailing-90-day readers, see THE DYNAMICS CONSENT JOIN in the table comment for the current figure and its date. Acceptance figure: see the VALIDATION BLOCK in the table comment.
+    display_name: Rad not enabled - Incomplete process
+    format:
+      type: number
+      decimal_places:
+        type: exact
+        places: 0
+      hide_group_separator: false
+    synonyms:
+      - Incomplete Process
+      - Onboarding In Flight
+
+  - name: "Rad not enabled - Consent sent, not signed"
+    expr: |-
+      COUNT(*) FILTER (WHERE source.exam_draftable_flag = TRUE
+                         AND NOT COALESCE(source.mosaic_draft_flag, FALSE)
+                         AND source.exam_not_draftable_reason = 'rad_not_in_drafting'
+                         AND source.rad_drafting_consent = 'Sent')
+    comment: |-
+      NUMERATOR, IN WORDS: finalized exams that were draftable, were not drafted, whose reading radiologist was not enrolled, and whose radiologist has been sent the consent request but has not signed it. DENOMINATOR, IN WORDS: none, absolute count. THE FIRST HALF of "Rad not enabled - Incomplete process", published separately because its action is different from the other half. An in-flight state, NEVER a refusal: RP Brain fields/mosaic-drafting-consent.yaml (DRAFT v0.1.0) is explicit that 'Sent' is "an in-flight state, not a refusal".
+      OWNER: the Clinical Transformation deployment team. ACTION: obtain the signature. This is the cleanest actionable population in the whole enrollment decomposition, because no interpretation is required to act on it.
+      SOURCE: mosaic_drafting_consent = 'Sent' on edw_prod.enterprise_analytics.dynamics_rad_drafting_consent_vw, joined on CAST(npi AS STRING) = reading_provider_npi.
+      COVERAGE CAVEAT: the Dynamics join matches only about half of trailing-90-day readers, see THE DYNAMICS CONSENT JOIN in the table comment for the current figure and its date. It rests on 32 radiologists on the August 2026 unscoped finalized basis. Acceptance figure: see the VALIDATION BLOCK in the table comment.
+    display_name: "Rad not enabled - Consent sent, not signed"
+    format:
+      type: number
+      decimal_places:
+        type: exact
+        places: 0
+      hide_group_separator: false
+    synonyms:
+      - Consent Sent Not Signed
+      - Awaiting Signature
+
+  - name: "Rad not enabled - Consented, awaiting enablement"
+    expr: |-
+      COUNT(*) FILTER (WHERE source.exam_draftable_flag = TRUE
+                         AND NOT COALESCE(source.mosaic_draft_flag, FALSE)
+                         AND source.exam_not_draftable_reason = 'rad_not_in_drafting'
+                         AND source.rad_drafting_consent = 'Signed IRB')
+    comment: |-
+      NUMERATOR, IN WORDS: finalized exams that were draftable, were not drafted, whose reading radiologist has SIGNED the drafting IRB, and who is nevertheless scored not-enrolled by rad_drafting_enabled_flag. DENOMINATOR, IN WORDS: none, absolute count. THE SECOND HALF of "Rad not enabled - Incomplete process", and the larger one.
+      *** THIS IS THE ONE CATEGORY THAT IS PARTLY A MEASUREMENT ARTIFACT, NOT A GAP, AND IT IS BIG ENOUGH TO MATTER. *** Two different things produce a row here and the data cannot separate them. (1) A REAL ENABLEMENT LAG: the radiologist consented but has not been added to the model AD group or has not completed model-specific training, so drafting genuinely has not started. That is an ops backlog and is actionable. (2) A PROXY ARTIFACT: rad_drafting_enabled_flag is an EMPIRICAL PROXY that infers enablement from the radiologist's first-ever drafted exam. It is sound in ONE DIRECTION ONLY. Having drafted proves enablement; never having drafted does NOT prove the reverse. A consented, fully enabled radiologist who simply has not drafted yet is indistinguishable here from one who was never switched on. Which of the two dominates is NOT ESTABLISHED. Treat this count as an UPPER BOUND on the enablement backlog, and never brief the count as exams blocked by ops.
+      OWNER: the Clinical Transformation deployment team for the real half; RP Data Strategy for the proxy half, which is closed only by the Dynamics phase-2 enablement source, currently WIRED AND COMMENTED OUT and held by Carlton Prickett pending validation.
+      SOURCE: mosaic_drafting_consent = 'Signed IRB' on edw_prod.enterprise_analytics.dynamics_rad_drafting_consent_vw, joined on CAST(npi AS STRING) = reading_provider_npi, against exam_not_draftable_reason on tbl_exam_inventory. The two signals are known to disagree at scale: 199,525 August exams read proxy-enabled but not IRB-signed and 30,726 read IRB-signed but not proxy-enabled.
+      COVERAGE CAVEAT: the Dynamics join matches only about half of trailing-90-day readers, see THE DYNAMICS CONSENT JOIN in the table comment for the current figure and its date. It rests on 66 radiologists on the August 2026 unscoped finalized basis. Acceptance figure: see the VALIDATION BLOCK in the table comment.
+    display_name: "Rad not enabled - Consented, awaiting enablement"
+    format:
+      type: number
+      decimal_places:
+        type: exact
+        places: 0
+      hide_group_separator: false
+    synonyms:
+      - Consented Awaiting Enablement
+      - Signed IRB Not Drafting
+      - Enablement Lag
+
+  - name: Rad not enabled - No enrollment record
+    expr: |-
+      COUNT(*) FILTER (WHERE source.exam_draftable_flag = TRUE
+                         AND NOT COALESCE(source.mosaic_draft_flag, FALSE)
+                         AND source.exam_not_draftable_reason = 'rad_not_in_drafting'
+                         AND source.rad_drafting_consent IS NULL)
+    comment: |-
+      NUMERATOR, IN WORDS: finalized exams that were draftable, were not drafted, whose reading radiologist was not enrolled, and for whom Dynamics holds NO consent state at all, either because there is no row for that NPI or because the row records no outreach. DENOMINATOR, IN WORDS: none, absolute count and the fifth part of Drafting Opportunity (Enrollment).
+      *** THIS MEASURE IS NEUTRAL BY DESIGN AND IS NEVER AN ACCUSATION. *** A MISSING RECORD IS NOT A REFUSAL, NOT A FAILURE BY THE RADIOLOGIST, AND NOT A FAILURE BY OPERATIONS. It is an absence of information about our own process, and it is kept OUT of "Ops declined", "Rad declined" and "Incomplete process" for exactly that reason: folding an unknown into any of the three would manufacture a finding out of a data gap. Standing rule of this module.
+      IT IS MOSTLY A GAP IN OUR OWN JOIN, NOT IN OUTREACH. The Dynamics consent view matches only about half of trailing-90-day readers, see THE DYNAMICS CONSENT JOIN in the table comment for the current figure and its date, so roughly half the reading fleet could land here for join reasons alone. The count is correspondingly sensitive to scope, several times larger unscoped than on the RP Brain scope, because the unmatched radiologists are concentrated in non-rpce and excluded volume. Both figures are in the VALIDATION BLOCK in the table comment; never quote one of them without saying which basis it is on.
+      TWO SUB-POPULATIONS, SPLIT BY THE rad_consent_record_exists DIMENSION: no Dynamics row at all, 675 exams across 8 radiologists; a row with NULL consent, 302 exams across 9 radiologists (August 2026, unscoped).
+      OWNER: RP Data Strategy for the join gap; the Clinical Transformation deployment team for genuinely unrecorded outreach. Which one applies per radiologist is not determinable from this view.
+      SOURCE: absence of a matching row, or a NULL mosaic_drafting_consent, on edw_prod.enterprise_analytics.dynamics_rad_drafting_consent_vw, joined on CAST(npi AS STRING) = reading_provider_npi. It rests on 17 radiologists on the August 2026 unscoped finalized basis. Acceptance figure: see the VALIDATION BLOCK in the table comment.
+    display_name: Rad not enabled - No enrollment record
+    format:
+      type: number
+      decimal_places:
+        type: exact
+        places: 0
+      hide_group_separator: false
+    synonyms:
+      - No Enrollment Record
+      - Not In Consent CRM
+
+  - name: Rad not enabled - Unmapped consent state
+    expr: |-
+      COUNT(*) FILTER (WHERE source.exam_draftable_flag = TRUE
+                         AND NOT COALESCE(source.mosaic_draft_flag, FALSE)
+                         AND source.exam_not_draftable_reason = 'rad_not_in_drafting'
+                         AND source.rad_drafting_consent IS NOT NULL
+                         AND source.rad_drafting_consent
+                             NOT IN ('Declined', 'No Drafting', 'Sent', 'Signed IRB'))
+    comment: |-
+      NUMERATOR, IN WORDS: finalized exams in the rad-not-enabled segment whose radiologist carries a consent value that none of the four named categories covers. DENOMINATOR, IN WORDS: none, absolute count.
+      THIS IS AN ALARM, NOT A CATEGORY, and it is the same pattern as AI-Assisted Unclassified Count elsewhere in this view. The Dynamics consent value set is HAND-MAINTAINED by the Clinical Transformation deployment team and is not a governed reference domain, so it can gain a value without notice. RP Brain fields/mosaic-drafting-consent.yaml (DRAFT v0.1.0) instructs that any hard-coded CASE over these states "should fail loudly on an unrecognized value rather than default it into a bucket". A metric view cannot raise, so it counts instead. IF THIS STOPS READING ZERO, STOP AND REVISIT THE VOCABULARY before publishing any enrollment split; do not absorb the new value into whichever bucket looks closest.
+      IT CATCHES 'Term' TODAY. 'Term' means the radiologist has departed and is an EMPLOYMENT state living inside a consent column. 28 radiologists carry it live (2026-09-04). It is deliberately not folded into any enrollment category, because a departed radiologist is out of scope rather than unconsented, and RP Brain records how to handle it in a denominator as an open question for Aura.
+      OWNER: RP Data Strategy, as a data-contract alarm.
+      SOURCE: mosaic_drafting_consent on edw_prod.enterprise_analytics.dynamics_rad_drafting_consent_vw, joined on CAST(npi AS STRING) = reading_provider_npi.
+      COVERAGE CAVEAT: the Dynamics join matches only about half of trailing-90-day readers, see THE DYNAMICS CONSENT JOIN in the table comment for the current figure and its date, so a new value on an unmatched radiologist will not trip this alarm. It reads zero on both bases today. Acceptance figure: see the VALIDATION BLOCK in the table comment.
+    display_name: Rad not enabled - Unmapped consent state
+    format:
+      type: number
+      decimal_places:
+        type: exact
+        places: 0
+      hide_group_separator: false
+    synonyms:
+      - Unmapped Consent State
+      - Unknown Enrollment State
+
+  - name: Practice not enabled for model
+    expr: |-
+      COUNT(*) FILTER (WHERE NOT COALESCE(source.mosaic_draft_flag, FALSE)
+                         AND source.exam_not_draftable_reason = 'practice_rpid_not_in_program')
+    comment: |-
+      NUMERATOR, IN WORDS: finalized exams that were read on Mosaic, on an RPID a Mosaic model covers, but whose MANAGING local practice is not in the drafting program for that RPID, and which were not drafted. DENOMINATOR, IN WORDS: none, absolute count. Carlton Prickett's fourth category, carrying his label.
+      *** THIS ONE SITS OUTSIDE THE DRAFTABLE DENOMINATOR, UNLIKE EVERY OTHER OPPORTUNITY MEASURE HERE. *** exam_draftable_flag is FALSE on every row it counts, because level 2 of the ladder is what failed. So it is NOT part of Draftable Exam Count, NOT part of Drafting Adoption Rate's denominator, and NOT a component of Drafting Opportunity (Enrollment) or (Workflow). Adding it to either of those totals double-counts nothing but silently changes the population from "in the program and missed" to "not in the program yet", which are different businesses with different owners. Keep it beside them, never inside them.
+      OWNER: ROLLOUT, not engagement and not workflow. The fix is a program expansion decision, not training and not outreach to a radiologist.
+      GRAIN TRAP: program membership is PRACTICE x RPID, not practice. A practice is routinely in-program for one RPID and out for another, so this count must never be read as "these practices are not on Mosaic drafting". It also LAGS A NEW ROLLOUT BY 2 TO 3 DAYS by design, because level 2 uses a trailing 7-day behavioral window.
+      SOURCE: exam_not_draftable_reason and mosaic_draft_flag on edw_prod.enterprise_analytics.tbl_exam_inventory. NO DYNAMICS DEPENDENCY, so the consent-join coverage limit described under THE DYNAMICS CONSENT JOIN in the table comment does NOT apply to this measure. It is the only one of Carlton's five categories that is fully observable in the EDW.
+      THE ROLLOUT LAG IS VISIBLE IN THE ARITHMETIC: on the August 2026 unscoped finalized basis, 99,529 exams carry this reason and 12,183 of them were drafted anyway during the lag, which is why the measure excludes drafted exams rather than counting the reason alone. Acceptance figure: see the VALIDATION BLOCK in the table comment. SEE ALSO THE ATTRIBUTION RECONCILIATION IN THE TABLE COMMENT: CTT attributes roughly 35,000 exams a month here against our figure, roughly 2.5 times the other way from their rad-not-enabled attribution, and the field-level mapping behind their split is an open question with Bhargav Narasimhan.
+    display_name: Practice not enabled for model
+    format:
+      type: number
+      decimal_places:
+        type: exact
+        places: 0
+      hide_group_separator: false
+    synonyms:
+      - Practice Not Enabled
+      - Practice Not In Program
+      - Rollout Opportunity
+$$

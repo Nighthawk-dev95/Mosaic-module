@@ -1,0 +1,313 @@
+table Metric_Labels
+	lineageTag: dddeee68-fcdb-4f9c-915c-aa3d63c7eb78
+
+	measure Rad_Count_By_Month = ```
+			
+			VAR _outlierView = SELECTEDVALUE('Outlier Selector'[Outlier View], "Excluded")
+			VAR _minExams = SELECTEDVALUE('Mosaic Min Exams'[MinExams], 0)
+			VAR _isYearMonthFiltered = ISFILTERED('radiologist_metrics(1)'[YearMonth])
+			
+			VAR _qualifiedRads = 
+			    FILTER(
+			        CALCULATETABLE(
+			            VALUES('radiologist_summary(1)'[Radiologist]),
+			            REMOVEFILTERS('radiologist_metrics(1)'[Exam_Date]),
+			            REMOVEFILTERS('radiologist_metrics(1)'[YearMonth])
+			        ),
+			        VAR _radExamsAllTime = 
+			            CALCULATE(
+			                SUM('radiologist_metrics(1)'[ExamCount]),
+			                REMOVEFILTERS('radiologist_metrics(1)'[Exam_Date]),
+			                REMOVEFILTERS('radiologist_metrics(1)'[YearMonth]),
+			                'radiologist_metrics(1)'[Period_Type] IN {"Drafting", "Reporting"},
+			                IF(_outlierView = "Excluded", 'radiologist_metrics(1)'[Outliers] = "Excluded", TRUE())
+			            )
+			        RETURN _radExamsAllTime >= _minExams
+			    )
+			
+			VAR _radsWithDataThisMonth = 
+			    COUNTROWS(
+			        FILTER(
+			            _qualifiedRads,
+			            CALCULATE(
+			                SUM('radiologist_metrics(1)'[ExamCount]),
+			                IF(
+			                    _isYearMonthFiltered,
+			                    'radiologist_metrics(1)'[YearMonth] IN VALUES('radiologist_metrics(1)'[YearMonth]),
+			                    'radiologist_metrics(1)'[Exam_Date] IN VALUES('radiologist_metrics(1)'[Exam_Date])
+			                ),
+			                'radiologist_metrics(1)'[Period_Type] IN {"Drafting", "Reporting"},
+			                IF(_outlierView = "Excluded", 'radiologist_metrics(1)'[Outliers] = "Excluded", TRUE())
+			            ) > 0
+			        )
+			    )
+			
+			RETURN _radsWithDataThisMonth
+			```
+		formatString: 0
+		lineageTag: ccb24142-653b-4870-bbed-47aa2b8d2bc1
+
+	measure Exam_Count_By_Month = ```
+			
+			VAR _outlierView = SELECTEDVALUE('Outlier Selector'[Outlier View], "Excluded")
+			VAR _minExams = SELECTEDVALUE('Mosaic Min Exams'[MinExams], 0)
+			VAR _isYearMonthFiltered = ISFILTERED('radiologist_metrics(1)'[YearMonth])
+			
+			VAR _qualifiedRads = 
+			    FILTER(
+			        CALCULATETABLE(
+			            VALUES('radiologist_summary(1)'[Radiologist]),
+			            REMOVEFILTERS('radiologist_metrics(1)'[Exam_Date]),
+			            REMOVEFILTERS('radiologist_metrics(1)'[YearMonth])
+			        ),
+			        VAR _radExamsAllTime = 
+			            CALCULATE(
+			                SUM('radiologist_metrics(1)'[ExamCount]),
+			                REMOVEFILTERS('radiologist_metrics(1)'[Exam_Date]),
+			                REMOVEFILTERS('radiologist_metrics(1)'[YearMonth]),
+			                'radiologist_metrics(1)'[Period_Type] IN {"Drafting", "Reporting"},
+			                IF(_outlierView = "Excluded", 'radiologist_metrics(1)'[Outliers] = "Excluded", TRUE())
+			            )
+			        RETURN _radExamsAllTime >= _minExams
+			    )
+			
+			VAR _examsThisMonth = 
+			    SUMX(
+			        _qualifiedRads,
+			        CALCULATE(
+			            SUM('radiologist_metrics(1)'[ExamCount]),
+			            IF(
+			                _isYearMonthFiltered,
+			                'radiologist_metrics(1)'[YearMonth] IN VALUES('radiologist_metrics(1)'[YearMonth]),
+			                'radiologist_metrics(1)'[Exam_Date] IN VALUES('radiologist_metrics(1)'[Exam_Date])
+			            ),
+			            'radiologist_metrics(1)'[Period_Type] IN {"Drafting", "Reporting"},
+			            IF(_outlierView = "Excluded", 'radiologist_metrics(1)'[Outliers] = "Excluded", TRUE())
+			        )
+			    )
+			
+			RETURN _examsThisMonth
+			```
+		formatString: 0
+		lineageTag: 0fe1293c-ff68-42b6-9b03-4db9167fbd15
+
+	measure Line_Chart_Metric_Value =
+			
+			VAR _metric = SELECTEDVALUE(Metric_Labels[Metric])
+			
+			RETURN
+			SWITCH(
+			    _metric,
+			    "No.Rads", [Rad_Count_By_Month],
+			    "No.Exams", [Exam_Count_By_Month],
+			    BLANK()
+			)
+		formatString: 0
+		lineageTag: 3054e245-3b7b-451c-907e-a52974eb83d1
+
+	measure Line_Drafting_Only = ```
+			
+			VAR _outlierView = SELECTEDVALUE('Outlier Selector'[Outlier View], "Excluded")
+			VAR _minExams = SELECTEDVALUE('Mosaic Min Exams'[MinExams], 0)
+			
+			VAR _qualifiedRads = 
+			    FILTER(
+			        CALCULATETABLE(
+			            VALUES('radiologist_summary(1)'[Radiologist]),
+			            REMOVEFILTERS('radiologist_metrics(1)'[Exam_Date])
+			        ),
+			        VAR _radExamsAllTime = 
+			            CALCULATE(
+			                SUM('radiologist_metrics(1)'[ExamCount]),
+			                REMOVEFILTERS('radiologist_metrics(1)'[Exam_Date]),
+			                'radiologist_metrics(1)'[Period_Type] IN {"Drafting", "Reporting"},
+			                IF(_outlierView = "Excluded", 'radiologist_metrics(1)'[Outliers] = "Excluded", TRUE())
+			            )
+			        RETURN _radExamsAllTime >= _minExams
+			    )
+			
+			VAR _tbwu = 
+			    SUMX(
+			        _qualifiedRads,
+			        CALCULATE(
+			            SUM('radiologist_metrics(1)'[TotalTBWU]),
+			            'radiologist_metrics(1)'[Period_Type] = "Drafting",
+			            IF(_outlierView = "Excluded", 'radiologist_metrics(1)'[Outliers] = "Excluded", TRUE())
+			        )
+			    )
+			
+			VAR _time = 
+			    SUMX(
+			        _qualifiedRads,
+			        CALCULATE(
+			            SUM('radiologist_metrics(1)'[TotalTime]),
+			            'radiologist_metrics(1)'[Period_Type] = "Drafting",
+			            IF(_outlierView = "Excluded", 'radiologist_metrics(1)'[Outliers] = "Excluded", TRUE())
+			        )
+			    )
+			
+			RETURN IF(_time = 0, BLANK(), DIVIDE(_tbwu, _time / 60))
+			```
+		lineageTag: dc1c0206-6ba7-4b4a-b8ab-9cb3fa5b1ac1
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	measure Exam_Count_Drafting = ```
+			
+			VAR _outlierView = SELECTEDVALUE('Outlier Selector'[Outlier View], "Excluded")
+			VAR _minExams = SELECTEDVALUE('Mosaic Min Exams'[MinExams], 0)
+			VAR _isYearMonthFiltered = ISFILTERED('radiologist_metrics(1)'[YearMonth])
+			
+			VAR _qualifiedRads = 
+			    FILTER(
+			        CALCULATETABLE(
+			            VALUES('radiologist_summary(1)'[Radiologist]),
+			            REMOVEFILTERS('radiologist_metrics(1)'[Exam_Date]),
+			            REMOVEFILTERS('radiologist_metrics(1)'[YearMonth])
+			        ),
+			        VAR _radExamsAllTime = 
+			            CALCULATE(
+			                SUM('radiologist_metrics(1)'[ExamCount]),
+			                REMOVEFILTERS('radiologist_metrics(1)'[Exam_Date]),
+			                REMOVEFILTERS('radiologist_metrics(1)'[YearMonth]),
+			                'radiologist_metrics(1)'[Period_Type] IN {"Drafting","Reporting"},
+			                IF(_outlierView = "Excluded", 'radiologist_metrics(1)'[Outliers] = "Excluded", TRUE())
+			            )
+			        RETURN _radExamsAllTime >= _minExams
+			    )
+			
+			RETURN
+			    SUMX(
+			        _qualifiedRads,
+			        CALCULATE(
+			            SUM('radiologist_metrics(1)'[ExamCount]),
+			            IF(
+			                _isYearMonthFiltered,
+			                'radiologist_metrics(1)'[YearMonth] IN VALUES('radiologist_metrics(1)'[YearMonth]),
+			                'radiologist_metrics(1)'[Exam_Date] IN VALUES('radiologist_metrics(1)'[Exam_Date])
+			            ),
+			            'radiologist_metrics(1)'[Period_Type] = "Drafting",
+			            'radiologist_metrics(1)'[Modality_Code] IN {"CR","CT"},  -- ← added
+			            IF(_outlierView = "Excluded", 'radiologist_metrics(1)'[Outliers] = "Excluded", TRUE())
+			        )
+			    )
+			```
+		formatString: 0
+		lineageTag: 04d4126c-b9f1-4992-b670-c3fe37df013c
+
+	measure Exam_Count_Full_Mosaic = ```
+			
+			VAR _outlierView = SELECTEDVALUE('Outlier Selector'[Outlier View], "Excluded")
+			VAR _minExams = SELECTEDVALUE('Mosaic Min Exams'[MinExams], 0)
+			VAR _isYearMonthFiltered = ISFILTERED('radiologist_metrics(1)'[YearMonth])
+			
+			VAR _qualifiedRads = 
+			    FILTER(
+			        CALCULATETABLE(
+			            VALUES('radiologist_summary(1)'[Radiologist]),
+			            REMOVEFILTERS('radiologist_metrics(1)'[Exam_Date]),
+			            REMOVEFILTERS('radiologist_metrics(1)'[YearMonth])
+			        ),
+			        VAR _radExamsAllTime = 
+			            CALCULATE(
+			                SUM('radiologist_metrics(1)'[ExamCount]),
+			                REMOVEFILTERS('radiologist_metrics(1)'[Exam_Date]),
+			                REMOVEFILTERS('radiologist_metrics(1)'[YearMonth]),
+			                'radiologist_metrics(1)'[Period_Type] IN {"Drafting", "Reporting"},
+			                IF(_outlierView = "Excluded", 'radiologist_metrics(1)'[Outliers] = "Excluded", TRUE())
+			            )
+			        RETURN _radExamsAllTime >= _minExams
+			    )
+			
+			RETURN
+			    SUMX(
+			        _qualifiedRads,
+			        CALCULATE(
+			            SUM('radiologist_metrics(1)'[ExamCount]),
+			            IF(
+			                _isYearMonthFiltered,
+			                'radiologist_metrics(1)'[YearMonth] IN VALUES('radiologist_metrics(1)'[YearMonth]),
+			                'radiologist_metrics(1)'[Exam_Date] IN VALUES('radiologist_metrics(1)'[Exam_Date])
+			            ),
+			            'radiologist_metrics(1)'[Period_Type] IN {"Drafting", "Reporting"},
+			            IF(_outlierView = "Excluded", 'radiologist_metrics(1)'[Outliers] = "Excluded", TRUE())
+			        )
+			    )
+			```
+		formatString: 0
+		lineageTag: 7b918b72-8699-4d73-bcce-28af64eef6e5
+
+	measure Exam_Count_Reporting = ```
+			
+			VAR _outlierView = SELECTEDVALUE('Outlier Selector'[Outlier View], "Excluded")
+			VAR _minExams = SELECTEDVALUE('Mosaic Min Exams'[MinExams], 0)
+			VAR _isYearMonthFiltered = ISFILTERED('radiologist_metrics(1)'[YearMonth])
+			
+			VAR _qualifiedRads = 
+			    FILTER(
+			        CALCULATETABLE(
+			            VALUES('radiologist_summary(1)'[Radiologist]),
+			            REMOVEFILTERS('radiologist_metrics(1)'[Exam_Date]),
+			            REMOVEFILTERS('radiologist_metrics(1)'[YearMonth])
+			        ),
+			        VAR _radExamsAllTime = 
+			            CALCULATE(
+			                SUM('radiologist_metrics(1)'[ExamCount]),
+			                REMOVEFILTERS('radiologist_metrics(1)'[Exam_Date]),
+			                REMOVEFILTERS('radiologist_metrics(1)'[YearMonth]),
+			                'radiologist_metrics(1)'[Period_Type] IN {"Drafting", "Reporting"},
+			                IF(_outlierView = "Excluded", 'radiologist_metrics(1)'[Outliers] = "Excluded", TRUE())
+			            )
+			        RETURN _radExamsAllTime >= _minExams
+			    )
+			
+			RETURN
+			    SUMX(
+			        _qualifiedRads,
+			        CALCULATE(
+			            SUM('radiologist_metrics(1)'[ExamCount]),
+			            IF(
+			                _isYearMonthFiltered,
+			                'radiologist_metrics(1)'[YearMonth] IN VALUES('radiologist_metrics(1)'[YearMonth]),
+			                'radiologist_metrics(1)'[Exam_Date] IN VALUES('radiologist_metrics(1)'[Exam_Date])
+			            ),
+			            'radiologist_metrics(1)'[Period_Type] = "Reporting",
+			            IF(_outlierView = "Excluded", 'radiologist_metrics(1)'[Outliers] = "Excluded", TRUE())
+			        )
+			    )
+			```
+		formatString: 0
+		lineageTag: 2607ce95-1a04-46a7-9dc6-240ca234f6a7
+
+	column Metric
+		lineageTag: 4f441053-c16b-49af-a921-84998890a801
+		summarizeBy: none
+		isNameInferred
+		sourceColumn: [Metric]
+		sortByColumn: SortOrder
+
+		annotation SummarizationSetBy = Automatic
+
+	column SortOrder
+		formatString: 0
+		lineageTag: a9642507-a012-4d33-b3a2-87cfcdcf18af
+		summarizeBy: sum
+		isNameInferred
+		sourceColumn: [SortOrder]
+
+		annotation SummarizationSetBy = Automatic
+
+	partition Metric_Labels = calculated
+		mode: import
+		source =
+				DATATABLE(
+				    "Metric", STRING,
+				    "SortOrder", INTEGER,
+				    {
+				        {"No.Rads", 1},
+				        {"No.Exams", 2}
+				    }
+				)
+
+	annotation PBI_Id = bfebbb01a2214be8bb6314d55fd71f59
+

@@ -1,0 +1,322 @@
+table 'Mosaic metric'
+	lineageTag: 2121be21-89a7-4c07-96a0-2e07da2a3919
+
+	measure Volume = ```
+			
+			VAR MosaicSel = SELECTEDVALUE('Mosaic metric'[Mosaic Flag])
+			VAR SelectedOutlierView = SELECTEDVALUE('Outlier Selector'[Outlier View], "Excluded")
+			VAR IncludeAllExams = (SelectedOutlierView = "Included")
+			
+			RETURN
+			SWITCH(
+			    MosaicSel,
+			    "Drafting Only", 
+			        CALCULATE(
+			            SUM(radiologist_metrics[ExamCount]), 
+			            radiologist_metrics[Period_Type] = "Drafting",
+			            IncludeAllExams || radiologist_metrics[Outliers] = "Excluded"
+			        ),
+			    "Reporting Only", 
+			        CALCULATE(
+			            SUM(radiologist_metrics[ExamCount]), 
+			            radiologist_metrics[Period_Type] = "Reporting",
+			            IncludeAllExams || radiologist_metrics[Outliers] = "Excluded"
+			        ),
+			    "Non-Mosaic", 
+			        CALCULATE(
+			            SUM(radiologist_metrics[ExamCount]), 
+			            radiologist_metrics[Period_Type] = "Baseline",
+			            IncludeAllExams || radiologist_metrics[Outliers] = "Excluded"
+			        ),
+			    "Full Mosaic", 
+			        CALCULATE(
+			            SUM(radiologist_metrics[ExamCount]), 
+			            radiologist_metrics[Period_Type] IN {"Drafting", "Reporting"},
+			            IncludeAllExams || radiologist_metrics[Outliers] = "Excluded"
+			        ),
+			    BLANK()
+			)
+			```
+		formatString: 0
+		lineageTag: a17e1f11-ec4f-42d4-8572-90c9c00e285c
+
+	measure 'has volume' =
+			
+			IF(
+			
+			NOT ISBLANK([Volume]) && [Volume] >0 ,1,0)
+		formatString: 0
+		lineageTag: 52f8c69b-f421-4805-9632-a16a7539d29e
+
+	measure 'Mean Dictation (With Vol)' = ```
+			
+			VAR MosaicSel = SELECTEDVALUE('Mosaic metric'[Mosaic Flag])
+			VAR SelectedVRA = SELECTEDVALUE('VRA Slicer'[VRA])
+			VAR SelectedOutlierView = SELECTEDVALUE('Outlier Selector'[Outlier View], "Excluded")
+			VAR IncludeAllExams = (SelectedOutlierView = "Included")
+			
+			VAR TotalTime = 
+			    SWITCH(
+			        MosaicSel,
+			        "Drafting Only", 
+			            CALCULATE(
+			                SUM(radiologist_metrics[TotalTime]), 
+			                radiologist_metrics[Period_Type] = "Drafting",
+			                IncludeAllExams || radiologist_metrics[Outliers] = "Excluded",
+			                ISBLANK(SelectedVRA) || radiologist_metrics[vra_assisted_flag] = SelectedVRA
+			            ),
+			        "Reporting Only", 
+			            CALCULATE(
+			                SUM(radiologist_metrics[TotalTime]), 
+			                radiologist_metrics[Period_Type] = "Reporting",
+			                IncludeAllExams || radiologist_metrics[Outliers] = "Excluded",
+			                ISBLANK(SelectedVRA) || radiologist_metrics[vra_assisted_flag] = SelectedVRA
+			            ),
+			        "Non-Mosaic", 
+			            CALCULATE(
+			                SUM(radiologist_metrics[TotalTime]), 
+			                radiologist_metrics[Period_Type] = "Baseline",
+			                IncludeAllExams || radiologist_metrics[Outliers] = "Excluded",
+			                ISBLANK(SelectedVRA) || radiologist_metrics[vra_assisted_flag] = SelectedVRA
+			            ),
+			        "Full Mosaic", 
+			            CALCULATE(
+			                SUM(radiologist_metrics[TotalTime]), 
+			                radiologist_metrics[Period_Type] IN {"Drafting", "Reporting"},
+			                IncludeAllExams || radiologist_metrics[Outliers] = "Excluded",
+			                ISBLANK(SelectedVRA) || radiologist_metrics[vra_assisted_flag] = SelectedVRA
+			            ),
+			        BLANK()
+			    )
+			
+			VAR ExamCount = 
+			    SWITCH(
+			        MosaicSel,
+			        "Drafting Only", 
+			            CALCULATE(
+			                SUM(radiologist_metrics[ExamCount]), 
+			                radiologist_metrics[Period_Type] = "Drafting",
+			                IncludeAllExams || radiologist_metrics[Outliers] = "Excluded",
+			                ISBLANK(SelectedVRA) || radiologist_metrics[vra_assisted_flag] = SelectedVRA
+			            ),
+			        "Reporting Only", 
+			            CALCULATE(
+			                SUM(radiologist_metrics[ExamCount]), 
+			                radiologist_metrics[Period_Type] = "Reporting",
+			                IncludeAllExams || radiologist_metrics[Outliers] = "Excluded",
+			                ISBLANK(SelectedVRA) || radiologist_metrics[vra_assisted_flag] = SelectedVRA
+			            ),
+			        "Non-Mosaic", 
+			            CALCULATE(
+			                SUM(radiologist_metrics[ExamCount]), 
+			                radiologist_metrics[Period_Type] = "Baseline",
+			                IncludeAllExams || radiologist_metrics[Outliers] = "Excluded",
+			                ISBLANK(SelectedVRA) || radiologist_metrics[vra_assisted_flag] = SelectedVRA
+			            ),
+			        "Full Mosaic", 
+			            CALCULATE(
+			                SUM(radiologist_metrics[ExamCount]), 
+			                radiologist_metrics[Period_Type] IN {"Drafting", "Reporting"},
+			                IncludeAllExams || radiologist_metrics[Outliers] = "Excluded",
+			                ISBLANK(SelectedVRA) || radiologist_metrics[vra_assisted_flag] = SelectedVRA
+			            ),
+			        BLANK()
+			    )
+			
+			VAR Result = DIVIDE(TotalTime, ExamCount)
+			
+			RETURN
+			IF(ExamCount > 0, Result, BLANK())
+			```
+		formatString: 0
+		lineageTag: f6641d8c-e5e0-46c0-aa7c-388bd0eabc14
+
+	measure 'MRVUperMin (With Vol)' = ```
+			
+			VAR MosaicSel = SELECTEDVALUE('Mosaic metric'[Mosaic Flag])
+			VAR SelectedVRA = SELECTEDVALUE('VRA Slicer'[VRA])
+			VAR SelectedOutlierView = SELECTEDVALUE('Outlier Selector'[Outlier View], "Excluded")
+			VAR IncludeAllExams = (SelectedOutlierView = "Included")
+			
+			VAR TotalRVU = 
+			    SWITCH(
+			        MosaicSel,
+			        "Drafting Only", 
+			            CALCULATE(
+			                SUM(radiologist_metrics[TotalRVU]), 
+			                radiologist_metrics[Period_Type] = "Drafting",
+			                IncludeAllExams || radiologist_metrics[Outliers] = "Excluded",
+			                ISBLANK(SelectedVRA) || radiologist_metrics[vra_assisted_flag] = SelectedVRA
+			            ),
+			        "Reporting Only", 
+			            CALCULATE(
+			                SUM(radiologist_metrics[TotalRVU]), 
+			                radiologist_metrics[Period_Type] = "Reporting",
+			                IncludeAllExams || radiologist_metrics[Outliers] = "Excluded",
+			                ISBLANK(SelectedVRA) || radiologist_metrics[vra_assisted_flag] = SelectedVRA
+			            ),
+			        "Non-Mosaic", 
+			            CALCULATE(
+			                SUM(radiologist_metrics[TotalRVU]), 
+			                radiologist_metrics[Period_Type] = "Baseline",
+			                IncludeAllExams || radiologist_metrics[Outliers] = "Excluded",
+			                ISBLANK(SelectedVRA) || radiologist_metrics[vra_assisted_flag] = SelectedVRA
+			            ),
+			        "Full Mosaic", 
+			            CALCULATE(
+			                SUM(radiologist_metrics[TotalRVU]), 
+			                radiologist_metrics[Period_Type] IN {"Drafting", "Reporting"},
+			                IncludeAllExams || radiologist_metrics[Outliers] = "Excluded",
+			                ISBLANK(SelectedVRA) || radiologist_metrics[vra_assisted_flag] = SelectedVRA
+			            ),
+			        BLANK()
+			    )
+			
+			VAR TotalTime = 
+			    SWITCH(
+			        MosaicSel,
+			        "Drafting Only", 
+			            CALCULATE(
+			                SUM(radiologist_metrics[TotalTime]), 
+			                radiologist_metrics[Period_Type] = "Drafting",
+			                IncludeAllExams || radiologist_metrics[Outliers] = "Excluded",
+			                ISBLANK(SelectedVRA) || radiologist_metrics[vra_assisted_flag] = SelectedVRA
+			            ),
+			        "Reporting Only", 
+			            CALCULATE(
+			                SUM(radiologist_metrics[TotalTime]), 
+			                radiologist_metrics[Period_Type] = "Reporting",
+			                IncludeAllExams || radiologist_metrics[Outliers] = "Excluded",
+			                ISBLANK(SelectedVRA) || radiologist_metrics[vra_assisted_flag] = SelectedVRA
+			            ),
+			        "Non-Mosaic", 
+			            CALCULATE(
+			                SUM(radiologist_metrics[TotalTime]), 
+			                radiologist_metrics[Period_Type] = "Baseline",
+			                IncludeAllExams || radiologist_metrics[Outliers] = "Excluded",
+			                ISBLANK(SelectedVRA) || radiologist_metrics[vra_assisted_flag] = SelectedVRA
+			            ),
+			        "Full Mosaic", 
+			            CALCULATE(
+			                SUM(radiologist_metrics[TotalTime]), 
+			                radiologist_metrics[Period_Type] IN {"Drafting", "Reporting"},
+			                IncludeAllExams || radiologist_metrics[Outliers] = "Excluded",
+			                ISBLANK(SelectedVRA) || radiologist_metrics[vra_assisted_flag] = SelectedVRA
+			            ),
+			        BLANK()
+			    )
+			
+			VAR Result = DIVIDE(TotalRVU, TotalTime / 60)
+			
+			RETURN
+			IF([Volume] > 0, Result, BLANK())
+			```
+		formatString: 0.000
+		lineageTag: 23ddea51-21ce-42fa-8548-207a5bf0cb0c
+
+	measure 'Mean Work Units per Min (With Vol)' = ```
+			
+			VAR MosaicSel = SELECTEDVALUE('Mosaic metric'[Mosaic Flag])
+			VAR SelectedOutlierView = SELECTEDVALUE('Outlier Selector'[Outlier View], "Excluded")
+			VAR IncludeAllExams = (SelectedOutlierView = "Included")
+			
+			VAR TotalTBWU = 
+			    SWITCH(
+			        MosaicSel,
+			        "Drafting Only", 
+			            CALCULATE(
+			                SUM(radiologist_metrics[TotalTBWU]), 
+			                radiologist_metrics[Period_Type] = "Drafting",
+			                IncludeAllExams || radiologist_metrics[Outliers] = "Excluded"
+			            ),
+			        "Reporting Only", 
+			            CALCULATE(
+			                SUM(radiologist_metrics[TotalTBWU]), 
+			                radiologist_metrics[Period_Type] = "Reporting",
+			                IncludeAllExams || radiologist_metrics[Outliers] = "Excluded"
+			            ),
+			        "Non-Mosaic", 
+			            CALCULATE(
+			                SUM(radiologist_metrics[TotalTBWU]), 
+			                radiologist_metrics[Period_Type] = "Baseline",
+			                IncludeAllExams || radiologist_metrics[Outliers] = "Excluded"
+			            ),
+			        "Full Mosaic", 
+			            CALCULATE(
+			                SUM(radiologist_metrics[TotalTBWU]), 
+			                radiologist_metrics[Period_Type] IN {"Drafting", "Reporting"},
+			                IncludeAllExams || radiologist_metrics[Outliers] = "Excluded"
+			            ),
+			        BLANK()
+			    )
+			
+			VAR TotalTime = 
+			    SWITCH(
+			        MosaicSel,
+			        "Drafting Only", 
+			            CALCULATE(
+			                SUM(radiologist_metrics[TotalTime]), 
+			                radiologist_metrics[Period_Type] = "Drafting",
+			                IncludeAllExams || radiologist_metrics[Outliers] = "Excluded"
+			            ),
+			        "Reporting Only", 
+			            CALCULATE(
+			                SUM(radiologist_metrics[TotalTime]), 
+			                radiologist_metrics[Period_Type] = "Reporting",
+			                IncludeAllExams || radiologist_metrics[Outliers] = "Excluded"
+			            ),
+			        "Non-Mosaic", 
+			            CALCULATE(
+			                SUM(radiologist_metrics[TotalTime]), 
+			                radiologist_metrics[Period_Type] = "Baseline",
+			                IncludeAllExams || radiologist_metrics[Outliers] = "Excluded"
+			            ),
+			        "Full Mosaic", 
+			            CALCULATE(
+			                SUM(radiologist_metrics[TotalTime]), 
+			                radiologist_metrics[Period_Type] IN {"Drafting", "Reporting"},
+			                IncludeAllExams || radiologist_metrics[Outliers] = "Excluded"
+			            ),
+			        BLANK()
+			    )
+			
+			VAR Result = DIVIDE(TotalTBWU, TotalTime / 60)
+			
+			RETURN
+			IF([Volume] > 0, Result, BLANK())
+			```
+		formatString: 0.000
+		lineageTag: d5696982-f88b-4075-85d3-04ccb87d4c9b
+
+	column 'Mosaic Flag'
+		dataType: string
+		lineageTag: c96ddda6-6a0d-40de-b80c-eaedbf30d5d8
+		summarizeBy: none
+		sourceColumn: Mosaic Flag
+		sortByColumn: 'Sort Order'
+
+		changedProperty = SortByColumn
+
+		annotation SummarizationSetBy = Automatic
+
+	column 'Sort Order'
+		dataType: string
+		lineageTag: 6e9ea49a-5451-4557-990d-62c2911914a7
+		summarizeBy: none
+		sourceColumn: Sort Order
+
+		annotation SummarizationSetBy = Automatic
+
+	partition 'Mosaic metric' = m
+		mode: import
+		source =
+				let
+				    Source = Table.FromRows(Json.Document(Binary.Decompress(Binary.FromText("i45W8svP0/XNL07MTFbSUTJUitWJVnIpSkwrycxLV/DPy6kEihqBRYNSC/KLkIWNwcJupTk5CnADTJRiYwE=", BinaryEncoding.Base64), Compression.Deflate)), let _t = ((type nullable text) meta [Serialized.Text = true]) in type table [#"Mosaic Flag" = _t, #"Sort Order" = _t]),
+				    #"Changed Type" = Table.TransformColumnTypes(Source,{{"Mosaic Flag", type text}})
+				in
+				    #"Changed Type"
+
+	annotation PBI_ResultType = Table
+
+	annotation PBI_NavigationStepName = Navigation
+

@@ -1,0 +1,37 @@
+table 'Period Category'
+	lineageTag: e2446d32-e4e2-45cd-8f4b-bb81f8ccc212
+
+	column Category
+		lineageTag: c16e779b-e303-4d64-b5db-d12fffa965bd
+		summarizeBy: none
+		isNameInferred
+		sourceColumn: [Category]
+		sortByColumn: 'Sort Order'
+
+		annotation SummarizationSetBy = Automatic
+
+	column 'Sort Order'
+		formatString: 0
+		lineageTag: 9afd66f5-e591-47e7-b5ee-71515fd5851b
+		summarizeBy: sum
+		isNameInferred
+		sourceColumn: [Sort Order]
+
+		annotation SummarizationSetBy = Automatic
+
+	partition 'Period Category' = calculated
+		mode: import
+		source =
+				
+				DATATABLE(
+				    "Category", STRING,
+				    "Sort Order", INTEGER,
+				    {
+				        {"Legacy", 1},
+				        {"Mosaic", 2},
+				        {"Both", 3}
+				    }
+				)
+
+	annotation PBI_Id = 49b4592738c84f79b038f333c1c55539
+

@@ -1,0 +1,25 @@
+table 'Resident FU Status'
+	lineageTag: 48d860bc-3c2a-44fa-97f5-7406a6a8a540
+
+	column 'Fully Utilizing'
+		lineageTag: 269e252a-691e-4ab2-b62a-46b289d04ec3
+		summarizeBy: none
+		isNameInferred
+		sourceColumn: [Fully Utilizing]
+
+		annotation SummarizationSetBy = Automatic
+
+	partition 'Resident FU Status' = calculated
+		mode: import
+		source =
+				
+				DATATABLE(
+				    "Fully Utilizing", STRING,
+				    {
+				        {"Yes"},
+				        {"No"}
+				    }
+				)
+
+	annotation PBI_Id = c308e94a77894805a1ca39daea97014a
+

@@ -1,0 +1,45 @@
+table 'Resident Date Selector'
+	lineageTag: 2731834c-4152-4a25-9eca-dfe77d60221f
+
+	column 'Resident Date Selector '
+		lineageTag: 1f058fce-3cf1-469f-9b6f-1ea40c1a509a
+		summarizeBy: none
+		sourceColumn: [Value1]
+		sortByColumn: 'Resident Date Selector  Order'
+
+		relatedColumnDetails
+			groupByColumn: 'Resident Date Selector  Fields'
+
+		annotation SummarizationSetBy = Automatic
+
+	column 'Resident Date Selector  Fields'
+		isHidden
+		lineageTag: 0c93dee6-e0e1-4f10-b305-acafa5385713
+		summarizeBy: none
+		sourceColumn: [Value2]
+		sortByColumn: 'Resident Date Selector  Order'
+
+		extendedProperty ParameterMetadata = {"version":3,"kind":2}
+
+		annotation SummarizationSetBy = Automatic
+
+	column 'Resident Date Selector  Order'
+		isHidden
+		formatString: 0
+		lineageTag: a311734f-f9e3-4598-9622-4d2095292d8a
+		summarizeBy: sum
+		sourceColumn: [Value3]
+
+		annotation SummarizationSetBy = Automatic
+
+	partition 'Resident Date Selector' = calculated
+		mode: import
+		source =
+				{
+				    ("Week_Of", NAMEOF('Resident Utilization'[Week_Of]), 0),
+				    ("Month", NAMEOF('Resident Utilization'[Month]), 1),
+				    ("Day", NAMEOF('Resident Utilization'[Calendar_Dt]), 2)
+				}
+
+	annotation PBI_Id = 2374e8686c9f4bb28806105c286c0c0e
+

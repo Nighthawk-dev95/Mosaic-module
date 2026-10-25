@@ -1,0 +1,45 @@
+table 'Metric Parameter'
+	lineageTag: f7775790-d75e-44b2-a3f2-6b6118a8e47a
+
+	column 'Metric Parameter'
+		lineageTag: 4508cda0-eece-4f68-91b9-1c5f72ada1ca
+		summarizeBy: none
+		sourceColumn: [Value1]
+		sortByColumn: 'Metric Parameter Order'
+
+		relatedColumnDetails
+			groupByColumn: 'Metric Parameter Fields'
+
+		annotation SummarizationSetBy = Automatic
+
+	column 'Metric Parameter Fields'
+		isHidden
+		lineageTag: f1a7a3f5-33cb-467f-9d7a-883be20e4dcf
+		summarizeBy: none
+		sourceColumn: [Value2]
+		sortByColumn: 'Metric Parameter Order'
+
+		extendedProperty ParameterMetadata = {"version":3,"kind":2}
+
+		annotation SummarizationSetBy = Automatic
+
+	column 'Metric Parameter Order'
+		isHidden
+		formatString: 0
+		lineageTag: 4e546743-079e-41cc-86f1-7e446e1e5121
+		summarizeBy: sum
+		sourceColumn: [Value3]
+
+		annotation SummarizationSetBy = Automatic
+
+	partition 'Metric Parameter' = calculated
+		mode: import
+		source =
+				{
+				    ("On-Shift Capacity (TBWU/9h)", NAMEOF('2.Top N shift Table'[New Capacity RPWU 9h(Top N)]), 0),
+				    ("On-Shift Efficiency (TBWU/min)", NAMEOF('2.Top N shift Table'[New Efficiency(Top N)]), 1),
+				    ("Shift Utilization (% reading)", NAMEOF('2.Top N shift Table'[New Utilization(Top N)]), 2)
+				}
+
+	annotation PBI_Id = 93da8579e7684ba5a23be645364077af
+

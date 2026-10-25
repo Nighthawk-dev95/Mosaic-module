@@ -8,10 +8,6 @@ from app.models.mosaic import (
     CaptureOverview,
     CapturePracticeRollup,
     CaptureRadiologistItem,
-    DeploymentFunnel,
-    DeploymentFunnelStage,
-    DeploymentPracticeRollup,
-    DeploymentRadiologistItem,
     MosaicIntelligenceSnapshot,
     RadiologistRosterItem,
     RadSummaryStat,
@@ -30,8 +26,24 @@ from app.models.mosaic import (
 # CT_ABDPEL_DRAFT_CODES/CT_CHEST_DRAFT_CODES tuples - confirmed live: RPID152-3D/RAD2508 ->
 # 'CT Abd/Pel', RPID249 -> 'CT Chest', RPID22 -> 'CT Head', matching the old lists exactly -
 # and also carries 'US Capturable' as its own drafting_model value, replacing the old Mexproc
-# capture-eligibility marker.
+# capture-eligibility marker. This is a narrow, 7-category DRAFTING-ELIGIBILITY vocabulary
+# (969 procedure codes) - correct for deployment/capture-eligibility joins (keyed on
+# RPID_Procedure_Code), but NOT a substitute for the real clinical exam-category taxonomy -
+# see _EXAM_CATEGORY_XWALK_VW below for that.
 _DRAFTING_ELIGIBLE_VW = f"{settings.qualified}_ref.drafting_eligible_rpids_vw"
+
+# Governed copy of edw_dev.bipa_analytics.exam_category_lookup_xwalk (see memory:
+# exam_category_lookup_xwalk_reference.md) - migrated into enterprise_analytics 2026-10-15
+# (tools/edw_fixes/012_migrate_exam_category_lookup_xwalk_to_enterprise_analytics.sql) after
+# confirming the Efficiency pipeline's `mpcat` column was wrongly sourced from
+# _DRAFTING_ELIGIBLE_VW above - that view's 7 narrow drafting-eligibility buckets don't cover
+# real clinical categories like 'Mammo Diagnostic' at all (confirmed live: zero matching rows),
+# silently dropping most exams out of every category-scoped Efficiency query. This is the real,
+# 26-category taxonomy (969 procedure codes) the original MER Current Method notebook's cell-0
+# actually joins - on ParentRpt = RPID_parent_code, NOT RPID_Procedure_Code (confirmed live:
+# joining on RPID_parent_code covers 79.2M of 88.1M exams since 2024-11-01, vs. near-zero
+# coverage for categories like Mammo Diagnostic via the old drafting-eligibility source).
+_EXAM_CATEGORY_XWALK_VW = f"{settings.qualified}.tbl_exam_category_lookup_xwalk"
 
 # RPCE-sourced rows are identified the same way as before (Source_System_Code is still the
 # raw column name on tbl_exam_inventory).
@@ -57,47 +69,124 @@ def get_radiologist_roster(
     physicians and ~5% of contingent physicians), which would silently drop real reading
     radiologists from a roster built as an INNER JOIN against it.
 
-    deployment_status/deployment_launch_group have no equivalent in enterprise_analytics (they
-    were Mosaic-rollout-cohort fields that lived only in the raw Dataverse rad_onboarding table,
-    unreachable now) - always None; current_team collapses onto the same practice value as
-    home_practice (the separate "Team" dimension from presentation_rpt_vra_capacity_enhance_vw
-    has no reachable source either). capture_enabled is an empirical proxy (has this NPI ever
-    captured a US/BD exam), mirroring the same proxy pattern EDW's own rad_drafting_enabled_flag
-    uses for drafting enablement - sound in one direction only."""
+    The two practice columns are a HOME and a SITE, per the standing domain rule:
+      - provider_local_practice_name_curr = the radiologist's HOME PRACTICE. This is also what
+        PBI calls the TEAM - the two names are synonyms for one column, not two concepts.
+        Single-valued per NPI (max 1 distinct across all 2,875 Mosaic-reading NPIs, measured
+        2026-10-24), so MAX() over it is exact. It is what home_practice and current_team both
+        carry, and Local Region buckets it - utils/localRegion.ts is keyed on the Team.
+      - managing_local_practice_name_curr = the SITE the rad travelled to and read at. This is
+        what PBI calls the PRACTICE. It is an attribute of the EXAM, so it is multi-valued by
+        design: 1,231 NPIs (43%) read at more than one site and some at as many as 70.
+
+    That asymmetry is why they are computed differently. There is no single managing value to
+    return for a rad, so MAX() over it would hand back whichever site name happens to sort last
+    out of 70 - a real string, wrong, and unfalsifiable by eye. primary_site is instead the site
+    the rad reads at MOST by exam count, with site_count alongside it so the other sites are
+    visible rather than silently collapsed. Read it as "where this rad mostly works", never as
+    an identity: for the long tail the primary site is only 12-25% of their volume, and the
+    cube's parent_practice (plan SSB) is the structural fix, not this field.
+
+    The `practice` argument filters on the managing column to match what PBI names it, i.e.
+    "rads who read at this site", which is deliberately a different question from "rads whose
+    home practice is this".
+
+    deployment_status/deployment_launch_group stay None. The literal rollout-cohort fields lived
+    only in the raw Dataverse rad_onboarding table and have no column-for-column equivalent
+    here, though a real drafting deployment lifecycle (consent -> training -> AD group ->
+    enabled) IS reachable via dynamics_rad_drafting_enablement_vw; wiring it up is the
+    Deployment domain's job, not this roster's. capture_enabled is an empirical proxy (has this
+    NPI ever captured a US/BD exam), mirroring the same proxy pattern EDW's own
+    rad_drafting_enabled_flag uses for drafting enablement - sound in one direction only."""
     safe_limit = max(1, min(int(limit), 5000))
     safe_offset = max(0, int(offset))
 
-    where_clauses = ["mosaic_read_flag = true"]
+    # Split deliberately: `base_clauses` scopes which exams count toward a radiologist's
+    # primary site, `row_clauses` scopes which radiologists come back. Folding the practice
+    # filter into both would make primary_site echo whatever was filtered on, so every rad
+    # would appear to mainly work at the filtered site even where it is 2% of their volume.
+    base_clauses = ["mosaic_read_flag = true"]
+    row_clauses: list[str] = []
     params: dict[str, object] = {}
     if practice:
-        where_clauses.append("provider_local_practice_name_curr = %(practice)s")
+        row_clauses.append("managing_local_practice_name_curr = %(practice)s")
         params["practice"] = practice
     if subspecialty:
-        where_clauses.append("provider_primary_subspecialty_curr = %(subspecialty)s")
+        base_clauses.append("provider_primary_subspecialty_curr = %(subspecialty)s")
         params["subspecialty"] = subspecialty
     if deployment_status:
         # No source column exists for this any more - any filter value can never match.
-        where_clauses.append("1 = 0")
+        row_clauses.append("1 = 0")
 
-    where_sql = f"WHERE {' AND '.join(where_clauses)}"
+    base_where = f"WHERE {' AND '.join(base_clauses)}"
+    row_where = f"WHERE {' AND '.join(base_clauses + row_clauses)}"
 
     rows = run_query(
         f"""
+        WITH rad AS (
+          SELECT
+            reading_provider_npi AS npi,
+            MAX(reading_provider_name_full) AS radiologist_name,
+            MAX(provider_primary_subspecialty_curr) AS working_subspecialty,
+            -- The rad's home practice. Safe as MAX: provider_local_practice_name_curr is
+            -- single-valued per NPI (verified live 2026-10-24 - max 1 distinct value across
+            -- all 2,875 reading NPIs), so this is exact, not a guess.
+            MAX(provider_local_practice_name_curr) AS current_team,
+            SUM(CASE WHEN mosaic_read_flag THEN 1 ELSE 0 END) AS reporting_cases_read,
+            SUM(CASE WHEN mosaic_draft_flag THEN 1 ELSE 0 END) AS total_drafting_cases,
+            MAX(CASE WHEN exam_Modality_Code IN ('US', 'BD') AND mosaic_draft_flag THEN 1 ELSE 0 END) = 1 AS capture_enabled
+          FROM {settings.qualified}.tbl_exam_inventory
+          {row_where}
+          GROUP BY reading_provider_npi
+        ),
+        -- managing_local_practice_name_curr is the exam SITE, so it is per-exam and multi-valued
+        -- per rad by design: 43% read at more than one site and some at as many as 70. Pick the
+        -- site they read at most, not MAX() - which returns whichever name sorts last.
+        site_volume AS (
+          SELECT
+            reading_provider_npi AS npi,
+            managing_local_practice_name_curr AS site_name,
+            COUNT(*) AS exams
+          FROM {settings.qualified}.tbl_exam_inventory
+          {base_where}
+            AND managing_local_practice_name_curr IS NOT NULL
+          GROUP BY reading_provider_npi, managing_local_practice_name_curr
+        ),
+        primary_site AS (
+          SELECT npi, site_name, n_sites
+          FROM (
+            SELECT
+              npi,
+              site_name,
+              -- site_name ASC only breaks exact volume ties, so the roster is stable between
+              -- refreshes instead of flickering between two equally-read sites.
+              ROW_NUMBER() OVER (PARTITION BY npi ORDER BY exams DESC, site_name ASC) AS rn,
+              -- Carried through so the UI can show "+N more" rather than implying the primary
+              -- site is the whole story - it is as little as 12% of volume in the long tail.
+              COUNT(*) OVER (PARTITION BY npi) AS n_sites
+            FROM site_volume
+          )
+          WHERE rn = 1
+        )
         SELECT
-          reading_provider_npi AS npi,
-          MAX(reading_provider_name_full) AS radiologist_name,
-          MAX(provider_local_practice_name_curr) AS home_practice,
-          MAX(provider_primary_subspecialty_curr) AS working_subspecialty,
+          r.npi,
+          r.radiologist_name,
+          -- home_practice and current_team are the same column on purpose: the rad's home
+          -- practice IS what PBI labels Team. Kept as two fields only because downstream
+          -- consumers (Radiologist Lookup, Local Region bucketing) read them under both names.
+          r.current_team AS home_practice,
+          r.working_subspecialty,
           CAST(NULL AS STRING) AS deployment_status,
           CAST(NULL AS STRING) AS deployment_launch_group,
-          MAX(provider_local_practice_name_curr) AS current_team,
-          SUM(CASE WHEN mosaic_read_flag THEN 1 ELSE 0 END) AS reporting_cases_read,
-          SUM(CASE WHEN mosaic_draft_flag THEN 1 ELSE 0 END) AS total_drafting_cases,
-          MAX(CASE WHEN exam_Modality_Code IN ('US', 'BD') AND mosaic_draft_flag THEN 1 ELSE 0 END) = 1 AS capture_enabled
-        FROM {settings.qualified}.tbl_exam_inventory
-        {where_sql}
-        GROUP BY reading_provider_npi
-        ORDER BY radiologist_name
+          r.current_team,
+          s.site_name AS primary_site,
+          s.n_sites AS site_count,
+          r.reporting_cases_read,
+          r.total_drafting_cases,
+          r.capture_enabled
+        FROM rad r
+        LEFT JOIN primary_site s ON r.npi = s.npi
+        ORDER BY r.radiologist_name
         LIMIT {safe_limit} OFFSET {safe_offset}
         """,
         params,
@@ -132,190 +221,25 @@ def get_utilization_by_practice(days_back: int = 30) -> list[UtilizationPractice
     return [UtilizationPracticeRollup(**row) for row in rows]
 
 
-def get_deployment_by_radiologist(limit: int = 500, offset: int = 0) -> list[DeploymentRadiologistItem]:
-    """xr_ct_head_status/ct_abdpel_status now come from dynamics_rad_drafting_enablement_vw's
-    drafting_enabled_flag per (NPI, drafting_model) - a simple Enabled/Not Enabled signal,
-    replacing the old 1-of-N-label DraftingStatus/StatusLabel taxonomy from vw_drafting_npi_bridge/
-    vw_ct_abdpel_npi_bridge (those views no longer exist under this app's grants)."""
-    safe_limit = max(1, min(int(limit), 5000))
-    safe_offset = max(0, int(offset))
-    rows = run_query(
-        f"""
-        WITH last14 AS (
-          SELECT
-            e.reading_provider_npi AS npi,
-            SUM(CASE WHEN e.exam_Modality_Code = 'CT' AND e.RPID_Procedure_Code = 'RPID22' AND e.mosaic_draft_flag THEN 1 ELSE 0 END) AS ct_head_drafts_14d,
-            SUM(CASE WHEN e.exam_Modality_Code = 'CR' AND e.mosaic_draft_flag THEN 1 ELSE 0 END) AS xr_drafts_14d,
-            SUM(CASE WHEN d.drafting_model = 'CT Abd/Pel' AND e.mosaic_draft_flag THEN 1 ELSE 0 END) AS ct_abdpel_drafts_14d
-          FROM {settings.qualified}.tbl_exam_inventory e
-          LEFT JOIN {_DRAFTING_ELIGIBLE_VW} d ON d.rpid_procedure_code = e.RPID_Procedure_Code
-          WHERE CAST(e.final_datetime AS DATE) BETWEEN CURRENT_DATE - 14 AND CURRENT_DATE
-          GROUP BY e.reading_provider_npi
-        ),
-        enablement AS (
-          SELECT
-            npi,
-            MAX(CASE WHEN drafting_model = 'XR (CXR/ABD/MSK)' THEN drafting_enabled_flag END) AS xr_enabled,
-            MAX(CASE WHEN drafting_model = 'CT Head' THEN drafting_enabled_flag END) AS ct_head_enabled,
-            MAX(CASE WHEN drafting_model = 'CT Abd Pelvis' THEN drafting_enabled_flag END) AS ct_abdpel_enabled
-          FROM {settings.qualified}.dynamics_rad_drafting_enablement_vw
-          GROUP BY npi
-        )
-        SELECT
-          r.npi, r.radiologist_name, r.home_practice, r.working_subspecialty,
-          CASE WHEN en.xr_enabled OR en.ct_head_enabled THEN 'Enabled' WHEN en.xr_enabled IS NULL AND en.ct_head_enabled IS NULL THEN NULL ELSE 'Not Enabled' END AS xr_ct_head_status,
-          CASE WHEN en.ct_abdpel_enabled THEN 'Enabled' WHEN en.ct_abdpel_enabled IS NULL THEN NULL ELSE 'Not Enabled' END AS ct_abdpel_status,
-          CAST(NULL AS STRING) AS ct_chest_status,
-          COALESCE(l.ct_head_drafts_14d, 0) AS ct_head_drafts_last_14d,
-          COALESCE(l.xr_drafts_14d, 0) AS xr_drafts_last_14d,
-          COALESCE(l.ct_abdpel_drafts_14d, 0) AS ct_abdpel_drafts_last_14d,
-          CAST(NULL AS INT) AS ct_chest_drafts_last_14d
-        FROM (
-          SELECT reading_provider_npi AS npi, MAX(reading_provider_name_full) AS radiologist_name,
-                 MAX(provider_local_practice_name_curr) AS home_practice, MAX(provider_primary_subspecialty_curr) AS working_subspecialty
-          FROM {settings.qualified}.tbl_exam_inventory
-          WHERE mosaic_read_flag = true
-          GROUP BY reading_provider_npi
-        ) r
-        LEFT JOIN enablement en ON en.npi = CAST(r.npi AS STRING)
-        LEFT JOIN last14 l ON l.npi = r.npi
-        ORDER BY r.radiologist_name
-        LIMIT {safe_limit} OFFSET {safe_offset}
-        """
-    )
-    return [DeploymentRadiologistItem(**row) for row in rows]
+# tbl_mosaic_shift_utilization is a governed snapshot in enterprise_analytics (NOT a live view) -
+# migrated from edw_dev.bipa_analytics.presentation_deneb_vw (joined to tbl_exam_inventory for
+# mosaic_read_flag/mosaic_draft_flag) because the deployed app's service principal cannot be
+# granted edw_dev access (same wall _MVP_RAD_ONBOARDING_VW already hit - see
+# tools/edw_fixes/014_migrate_shift_utilization_to_enterprise_analytics.sql for the full
+# rationale and the exact CTAS/refresh SQL). Point-in-time snapshot of a rolling 90-day window as
+# of the last migration run, not live - re-run that script's INSERT OVERWRITE block to refresh.
+# utilization_pct/pct_mosaic_read/pct_ai_drafted are already fractions (0-1) in this table.
+_SHIFT_UTILIZATION_TBL = f"{settings.qualified}.tbl_mosaic_shift_utilization"
 
 
-def get_deployment_by_practice() -> list[DeploymentPracticeRollup]:
-    rows = run_query(
-        f"""
-        WITH last14 AS (
-          SELECT
-            e.reading_provider_npi AS npi,
-            SUM(CASE WHEN e.exam_Modality_Code = 'CT' AND e.RPID_Procedure_Code = 'RPID22' AND e.mosaic_draft_flag THEN 1 ELSE 0 END) AS ct_head_drafts_14d,
-            SUM(CASE WHEN e.exam_Modality_Code = 'CR' AND e.mosaic_draft_flag THEN 1 ELSE 0 END) AS xr_drafts_14d,
-            SUM(CASE WHEN d.drafting_model = 'CT Abd/Pel' AND e.mosaic_draft_flag THEN 1 ELSE 0 END) AS ct_abdpel_drafts_14d
-          FROM {settings.qualified}.tbl_exam_inventory e
-          LEFT JOIN {_DRAFTING_ELIGIBLE_VW} d ON d.rpid_procedure_code = e.RPID_Procedure_Code
-          WHERE CAST(e.final_datetime AS DATE) BETWEEN CURRENT_DATE - 14 AND CURRENT_DATE
-          GROUP BY e.reading_provider_npi
-        ),
-        enablement AS (
-          SELECT
-            npi,
-            MAX(CASE WHEN drafting_model = 'XR (CXR/ABD/MSK)' THEN drafting_enabled_flag END) AS xr_enabled,
-            MAX(CASE WHEN drafting_model = 'CT Head' THEN drafting_enabled_flag END) AS ct_head_enabled,
-            MAX(CASE WHEN drafting_model = 'CT Abd Pelvis' THEN drafting_enabled_flag END) AS ct_abdpel_enabled
-          FROM {settings.qualified}.dynamics_rad_drafting_enablement_vw
-          GROUP BY npi
-        ),
-        roster AS (
-          SELECT reading_provider_npi AS npi, MAX(provider_local_practice_name_curr) AS home_practice
-          FROM {settings.qualified}.tbl_exam_inventory
-          WHERE mosaic_read_flag = true
-          GROUP BY reading_provider_npi
-        )
-        SELECT
-          r.home_practice AS practice,
-          COUNT(DISTINCT r.npi) AS total_rads,
-          COUNT(DISTINCT CASE WHEN en.xr_enabled OR en.ct_head_enabled THEN r.npi END) AS xr_ct_head_enabled_rads,
-          COUNT(DISTINCT CASE WHEN en.ct_abdpel_enabled THEN r.npi END) AS ct_abdpel_enabled_rads,
-          CAST(NULL AS INT) AS ct_chest_enabled_rads,
-          SUM(COALESCE(l.ct_head_drafts_14d, 0)) AS ct_head_cases_last_14d,
-          SUM(COALESCE(l.xr_drafts_14d, 0)) AS xr_cases_last_14d,
-          SUM(COALESCE(l.ct_abdpel_drafts_14d, 0)) AS ct_abdpel_cases_last_14d,
-          CAST(NULL AS INT) AS ct_chest_cases_last_14d
-        FROM roster r
-        LEFT JOIN enablement en ON en.npi = CAST(r.npi AS STRING)
-        LEFT JOIN last14 l ON l.npi = r.npi
-        WHERE r.home_practice IS NOT NULL
-        GROUP BY r.home_practice
-        ORDER BY total_rads DESC
-        """
-    )
-    return [DeploymentPracticeRollup(**row) for row in rows]
+def get_shift_utilization_by_radiologist() -> list[dict]:
+    return run_query(f"SELECT * FROM {_SHIFT_UTILIZATION_TBL}")
 
 
 # mosaic_drafting_metric_vw is a governed Databricks Metric View (confirmed live) - its
 # measure-typed columns require MEASURE(col) in SELECT, bare column references raise
 # METRIC_VIEW_MISSING_MEASURE_FUNCTION.
 _DRAFTING_METRIC_VW = f"{settings.qualified}.mosaic_drafting_metric_vw"
-
-
-def get_deployment_funnel_reporting() -> DeploymentFunnel:
-    """The old 11-stage StatusLabel/StatusRank Reporting-onboarding ladder lived entirely on
-    vw_deployment_npi_bridge, which no longer exists under this app's grants, and no equivalent
-    governed replacement was found anywhere in enterprise_analytics/_ref/_apps (this was a
-    distinct onboarding-pipeline concept from the Drafting funnel below, not just a differently
-    named version of it). Reduced here to the only two stages still observable: finalized exam
-    volume and the subset actually read on the Mosaic platform (Platform Read Rate, from
-    mosaic_drafting_metric_vw) - a real simplification from the original ladder, not a
-    like-for-like replacement."""
-    row = run_query_one(
-        f"""
-        SELECT
-          MEASURE(`Final Exam Count`) AS final_exams,
-          MEASURE(`Mosaic Read Exam Count`) AS mosaic_exams
-        FROM {_DRAFTING_METRIC_VW}
-        """
-    )
-    final_exams = (row["final_exams"] if row else 0) or 0
-    mosaic_exams = (row["mosaic_exams"] if row else 0) or 0
-    stages = [
-        DeploymentFunnelStage(stage="All Finalized Exams", rank=1, count=int(final_exams)),
-        DeploymentFunnelStage(stage="Read on Mosaic", rank=2, count=int(mosaic_exams)),
-    ]
-    return DeploymentFunnel(domain="Reporting", stages=stages)
-
-
-def get_deployment_funnel_drafting() -> DeploymentFunnel:
-    """Mirrors mosaic_drafting_metric_vw's own documented one-denominator-chain: Platform Read
-    Rate (of all finals) -> AI-Assisted Rate (of Mosaic-read) -> Drafting Coverage (draftable of
-    Mosaic-read) -> Drafting Adoption Rate (drafted of draftable) - each stage's count is an
-    absolute volume at that point in the funnel, matching the metric view's own binding
-    one-denominator-chain documentation rather than the old vw_drafting_npi_bridge per-NPI
-    DraftingStatus ladder (which no longer exists under this app's grants)."""
-    row = run_query_one(
-        f"""
-        SELECT
-          MEASURE(`Final Exam Count`) AS final_exams,
-          MEASURE(`Mosaic Read Exam Count`) AS mosaic_exams,
-          MEASURE(`Draftable Exam Count`) AS draftable_exams,
-          MEASURE(`Drafted Exam Count`) AS drafted_exams
-        FROM {_DRAFTING_METRIC_VW}
-        """
-    )
-    row = row or {}
-    stages = [
-        DeploymentFunnelStage(stage="All Finalized Exams", rank=1, count=int(row.get("final_exams") or 0)),
-        DeploymentFunnelStage(stage="Read on Mosaic", rank=2, count=int(row.get("mosaic_exams") or 0)),
-        DeploymentFunnelStage(stage="Draftable", rank=3, count=int(row.get("draftable_exams") or 0)),
-        DeploymentFunnelStage(stage="Drafted", rank=4, count=int(row.get("drafted_exams") or 0)),
-    ]
-    return DeploymentFunnel(domain="Drafting", stages=stages)
-
-
-def get_deployment_funnel_ct_abdpel() -> DeploymentFunnel:
-    """dynamics_rad_drafting_enablement_vw's per-(NPI, drafting_model) drafting_enabled_flag
-    replaces the old vw_ct_abdpel_npi_bridge StatusLabel/StatusRank ladder - reduced to a simple
-    Enabled/Not Enabled rad count (that view's own richer taxonomy - training sent/completed,
-    AD-group date - has no equivalent "funnel stage" framing, since it's a per-model readiness
-    checklist, not a sequential progression)."""
-    row = run_query_one(
-        f"""
-        SELECT
-          COUNT(DISTINCT CASE WHEN NOT drafting_enabled_flag THEN npi END) AS not_enabled,
-          COUNT(DISTINCT CASE WHEN drafting_enabled_flag THEN npi END) AS enabled
-        FROM {settings.qualified}.dynamics_rad_drafting_enablement_vw
-        WHERE drafting_model = 'CT Abd Pelvis'
-        """
-    )
-    row = row or {}
-    stages = [
-        DeploymentFunnelStage(stage="Not Enabled", rank=1, count=int(row.get("not_enabled") or 0)),
-        DeploymentFunnelStage(stage="Enabled", rank=2, count=int(row.get("enabled") or 0)),
-    ]
-    return DeploymentFunnel(domain="CT Abd/Pel", stages=stages)
 
 
 # (blocker label, measure name) - mosaic_drafting_metric_vw's own binding documentation (Aura
@@ -446,11 +370,20 @@ raw_exams AS (
   SELECT
     e.exam_id, e.reading_provider_npi AS Physician_NPI,
     e.reading_provider_name_full AS radiologist_name,
-    e.provider_local_practice_name_curr AS Practice,
+    -- Fix 2 (Team vs Practice conflation) - provider_local_practice_name_curr is the
+    -- radiologist's own home/float-pool TEAM (e.g. "SEAL Team" is cross-coverage, not a billing
+    -- practice); managing_local_practice_name_curr is the real PRACTICE whose exams are being
+    -- read, which is what "By Practice" reporting means business-wise. Confirmed live against
+    -- edw_prod: 'SEAL Team' alone spans 66 distinct managing practices. See
+    -- tools/pbi_semantic_extract/MIGRATION_PLAYBOOK.md. Team stays the join key for
+    -- mosaic_live_practices/qualified_radiologists below (unchanged - "is this radiologist's own
+    -- team live on Mosaic" is genuinely a Team question), only the exposed "Practice" field changes.
+    e.provider_local_practice_name_curr AS Team,
+    e.managing_local_practice_name_curr AS Practice,
     e.provider_primary_subspecialty_curr AS working_subspecialty,
     e.exam_Modality_Code AS Modality_Code,
     e.RPID_parent_code_description AS Parent_Procedure_name,
-    d.drafting_model AS mpcat,
+    x.Category AS mpcat,
     e.RPID_Procedure_Code,
     e.mosaic_read_flag, e.mosaic_draft_flag,
     CAST(e.final_datetime AS DATE) AS Exam_Date,
@@ -463,7 +396,7 @@ raw_exams AS (
   FROM {settings.qualified}.tbl_exam_inventory e
   JOIN mosaic_live_practices mlp ON mlp.practice = e.provider_local_practice_name_curr
   JOIN qualified_radiologists qr ON qr.npi = e.reading_provider_npi
-  LEFT JOIN {_DRAFTING_ELIGIBLE_VW} d ON d.rpid_procedure_code = e.RPID_Procedure_Code
+  LEFT JOIN {_EXAM_CATEGORY_XWALK_VW} x ON x.ParentRpt = e.RPID_parent_code
   WHERE CAST(e.final_datetime AS DATE) >= DATE'2024-11-01'
     AND e.dictation_start_datetime IS NOT NULL
     AND e.dictation_end_datetime IS NOT NULL
@@ -471,10 +404,19 @@ raw_exams AS (
 ),
 adjusted AS (
   SELECT *,
-    GREATEST(0, TIMESTAMPDIFF(SECOND,
+    -- Capped at 3600s (1h) - confirmed live (2026-10-15) that tbl_exam_inventory's
+    -- dictation_end_datetime carries a meaningful tail of corrupted values (max raw
+    -- duration observed: 48.5M seconds, ~18 months; ~9.6% of Mammo Diagnostic rows alone
+    -- exceed 4 hours). Uncapped, these "stuck session" rows don't just inflate their own
+    -- row - they poison the per-RPID_Procedure_Code AVG/STDDEV used below to classify
+    -- Outliers, inflating the threshold so much that genuinely bad rows stop being flagged
+    -- at all (same feedback-loop failure mode as the old ref_readtime_stats_by_procedure_code
+    -- - see memory: upstream_readtime_island_bug.md). Capping here, before the outlier calc,
+    -- fixes both problems at once.
+    LEAST(3600, GREATEST(0, TIMESTAMPDIFF(SECOND,
       CASE WHEN prev_final IS NOT NULL AND prev_final > dictation_start_datetime THEN prev_final ELSE dictation_start_datetime END,
       CASE WHEN final_datetime < dictation_end_datetime THEN final_datetime ELSE dictation_end_datetime END
-    )) AS Adjusted_Read_Time_Sec
+    ))) AS Adjusted_Read_Time_Sec
   FROM raw_exams
 ),
 outlier_calc AS (
@@ -541,15 +483,15 @@ def get_efficiency_matrix() -> list[dict]:
           c.working_subspecialty AS subspecialty, c.Modality_Code AS modality_code,
           c.Parent_Procedure_name AS parent_procedure_name,
           MAX(c.mpcat) AS exam_category,
-          SUM(CASE WHEN c.Period_Type = 'Reporting' THEN c.TBWU ELSE 0 END) AS reporting_tbwu,
-          SUM(CASE WHEN c.Period_Type = 'Reporting' THEN c.Adjusted_Read_Time_Sec ELSE 0 END) AS reporting_time,
-          SUM(CASE WHEN c.Period_Type = 'Reporting' THEN be.baseline_eff_excl * c.Adjusted_Read_Time_Sec ELSE 0 END) AS reporting_baseline_contrib,
-          SUM(CASE WHEN c.Period_Type = 'Drafting' THEN c.TBWU ELSE 0 END) AS drafting_tbwu,
-          SUM(CASE WHEN c.Period_Type = 'Drafting' THEN c.Adjusted_Read_Time_Sec ELSE 0 END) AS drafting_time,
-          SUM(CASE WHEN c.Period_Type = 'Drafting' THEN be.baseline_eff_excl * c.Adjusted_Read_Time_Sec ELSE 0 END) AS drafting_baseline_contrib,
-          SUM(CASE WHEN c.Period_Type = 'Drafting' AND c.Modality_Code IN ('US', 'BD') THEN c.TBWU ELSE 0 END) AS capture_tbwu,
-          SUM(CASE WHEN c.Period_Type = 'Drafting' AND c.Modality_Code IN ('US', 'BD') THEN c.Adjusted_Read_Time_Sec ELSE 0 END) AS capture_time,
-          SUM(CASE WHEN c.Period_Type = 'Drafting' AND c.Modality_Code IN ('US', 'BD') THEN be.baseline_usbd_eff_excl * c.Adjusted_Read_Time_Sec ELSE 0 END) AS capture_baseline_contrib
+          SUM(CASE WHEN c.Period_Type = 'Reporting' AND c.Outliers = 'Excluded' THEN c.TBWU ELSE 0 END) AS reporting_tbwu,
+          SUM(CASE WHEN c.Period_Type = 'Reporting' AND c.Outliers = 'Excluded' THEN c.Adjusted_Read_Time_Sec ELSE 0 END) AS reporting_time,
+          SUM(CASE WHEN c.Period_Type = 'Reporting' AND c.Outliers = 'Excluded' THEN be.baseline_eff_excl * c.Adjusted_Read_Time_Sec ELSE 0 END) AS reporting_baseline_contrib,
+          SUM(CASE WHEN c.Period_Type = 'Drafting' AND c.Outliers = 'Excluded' THEN c.TBWU ELSE 0 END) AS drafting_tbwu,
+          SUM(CASE WHEN c.Period_Type = 'Drafting' AND c.Outliers = 'Excluded' THEN c.Adjusted_Read_Time_Sec ELSE 0 END) AS drafting_time,
+          SUM(CASE WHEN c.Period_Type = 'Drafting' AND c.Outliers = 'Excluded' THEN be.baseline_eff_excl * c.Adjusted_Read_Time_Sec ELSE 0 END) AS drafting_baseline_contrib,
+          SUM(CASE WHEN c.Period_Type = 'Drafting' AND c.Outliers = 'Excluded' AND c.Modality_Code IN ('US', 'BD') THEN c.TBWU ELSE 0 END) AS capture_tbwu,
+          SUM(CASE WHEN c.Period_Type = 'Drafting' AND c.Outliers = 'Excluded' AND c.Modality_Code IN ('US', 'BD') THEN c.Adjusted_Read_Time_Sec ELSE 0 END) AS capture_time,
+          SUM(CASE WHEN c.Period_Type = 'Drafting' AND c.Outliers = 'Excluded' AND c.Modality_Code IN ('US', 'BD') THEN be.baseline_usbd_eff_excl * c.Adjusted_Read_Time_Sec ELSE 0 END) AS capture_baseline_contrib
         FROM classified c
         JOIN baseline_eff be ON be.Physician_NPI = c.Physician_NPI AND be.Parent_Procedure_name = c.Parent_Procedure_name
         WHERE be.baseline_eff_excl <= 1.000
@@ -569,16 +511,19 @@ def get_efficiency_trend_by_category() -> list[dict]:
         SELECT
           CAST(CAST(DATE_TRUNC('MONTH', c.Exam_Date) AS DATE) AS STRING) AS period,
           MAX(c.mpcat) AS exam_category,
-          SUM(CASE WHEN c.Period_Type = 'Reporting' THEN c.TBWU ELSE 0 END) AS reporting_tbwu,
-          SUM(CASE WHEN c.Period_Type = 'Reporting' THEN c.Adjusted_Read_Time_Sec ELSE 0 END) AS reporting_time,
-          SUM(CASE WHEN c.Period_Type = 'Reporting' THEN be.baseline_eff_excl * c.Adjusted_Read_Time_Sec ELSE 0 END) AS reporting_baseline_contrib,
-          COUNT(DISTINCT CASE WHEN c.Period_Type = 'Reporting' THEN c.Physician_NPI END) AS reporting_rad_count,
-          SUM(CASE WHEN c.Period_Type = 'Reporting' THEN 1 ELSE 0 END) AS reporting_exam_count,
-          SUM(CASE WHEN c.Period_Type = 'Drafting' THEN c.TBWU ELSE 0 END) AS drafting_tbwu,
-          SUM(CASE WHEN c.Period_Type = 'Drafting' THEN c.Adjusted_Read_Time_Sec ELSE 0 END) AS drafting_time,
-          SUM(CASE WHEN c.Period_Type = 'Drafting' THEN be.baseline_eff_excl * c.Adjusted_Read_Time_Sec ELSE 0 END) AS drafting_baseline_contrib,
-          COUNT(DISTINCT CASE WHEN c.Period_Type = 'Drafting' THEN c.Physician_NPI END) AS drafting_rad_count,
-          SUM(CASE WHEN c.Period_Type = 'Drafting' THEN 1 ELSE 0 END) AS drafting_exam_count
+          SUM(CASE WHEN c.Period_Type = 'Reporting' AND c.Outliers = 'Excluded' THEN c.TBWU ELSE 0 END) AS reporting_tbwu,
+          SUM(CASE WHEN c.Period_Type = 'Reporting' AND c.Outliers = 'Excluded' THEN c.Adjusted_Read_Time_Sec ELSE 0 END) AS reporting_time,
+          SUM(CASE WHEN c.Period_Type = 'Reporting' AND c.Outliers = 'Excluded' THEN be.baseline_eff_excl * c.Adjusted_Read_Time_Sec ELSE 0 END) AS reporting_baseline_contrib,
+          COUNT(DISTINCT CASE WHEN c.Period_Type = 'Reporting' AND c.Outliers = 'Excluded' THEN c.Physician_NPI END) AS reporting_rad_count,
+          SUM(CASE WHEN c.Period_Type = 'Reporting' AND c.Outliers = 'Excluded' THEN 1 ELSE 0 END) AS reporting_exam_count,
+          SUM(CASE WHEN c.Period_Type = 'Drafting' AND c.Outliers = 'Excluded' THEN c.TBWU ELSE 0 END) AS drafting_tbwu,
+          SUM(CASE WHEN c.Period_Type = 'Drafting' AND c.Outliers = 'Excluded' THEN c.Adjusted_Read_Time_Sec ELSE 0 END) AS drafting_time,
+          SUM(CASE WHEN c.Period_Type = 'Drafting' AND c.Outliers = 'Excluded' THEN be.baseline_eff_excl * c.Adjusted_Read_Time_Sec ELSE 0 END) AS drafting_baseline_contrib,
+          COUNT(DISTINCT CASE WHEN c.Period_Type = 'Drafting' AND c.Outliers = 'Excluded' THEN c.Physician_NPI END) AS drafting_rad_count,
+          SUM(CASE WHEN c.Period_Type = 'Drafting' AND c.Outliers = 'Excluded' THEN 1 ELSE 0 END) AS drafting_exam_count,
+          SUM(CASE WHEN c.Period_Type = 'Drafting' AND c.Outliers = 'Excluded' AND c.Modality_Code IN ('US', 'BD') THEN c.TBWU ELSE 0 END) AS capture_tbwu,
+          SUM(CASE WHEN c.Period_Type = 'Drafting' AND c.Outliers = 'Excluded' AND c.Modality_Code IN ('US', 'BD') THEN c.Adjusted_Read_Time_Sec ELSE 0 END) AS capture_time,
+          SUM(CASE WHEN c.Period_Type = 'Drafting' AND c.Outliers = 'Excluded' AND c.Modality_Code IN ('US', 'BD') THEN be.baseline_usbd_eff_excl * c.Adjusted_Read_Time_Sec ELSE 0 END) AS capture_baseline_contrib
         FROM classified c
         JOIN baseline_eff be ON be.Physician_NPI = c.Physician_NPI AND be.Parent_Procedure_name = c.Parent_Procedure_name
         WHERE be.baseline_eff_excl <= 1.000
@@ -588,62 +533,27 @@ def get_efficiency_trend_by_category() -> list[dict]:
     )
 
 
-# Both MVP queries below share the same two-window period discriminator: a fixed baseline
-# (the real Mosaic Value Project baseline, May-Jul 2026) vs. "current" = the most recent full
-# calendar month (computed relative to CURRENT_DATE(), not hardcoded, so this keeps working as
-# time passes without a code change).
-_MVP_PERIOD_CASE_SQL = """
-  CASE
-    WHEN {date_col} BETWEEN DATE'2026-05-01' AND DATE'2026-07-31' THEN 'baseline'
-    WHEN {date_col} BETWEEN DATE_TRUNC('MONTH', ADD_MONTHS(CURRENT_DATE(), -1))
-                        AND LAST_DAY(ADD_MONTHS(CURRENT_DATE(), -1)) THEN 'current'
-  END
-"""
-_MVP_PERIOD_WHERE_SQL = """
-  ({date_col} BETWEEN DATE'2026-05-01' AND DATE'2026-07-31')
-  OR ({date_col} BETWEEN DATE_TRUNC('MONTH', ADD_MONTHS(CURRENT_DATE(), -1))
-                     AND LAST_DAY(ADD_MONTHS(CURRENT_DATE(), -1)))
-"""
+# MVP (Mosaic Value Project) data, read from a governed copy of the Clinical Transformation
+# team's own Dynamics-synced CRM table rather than approximated from EDW. Confirmed live via
+# query_edw this session: rad_onboarding's own mvp_cohort/exclusion_reason/
+# mvp_tbwus_9h_shift_may_jul_26/*_efficiency_change_* columns ARE the program's real tiering,
+# exclusion taxonomy, and fixed-baseline + rolling efficiency-change figures - a strict upgrade
+# over re-deriving a worse approximation of them in SQL (the old approach's own docstring
+# admitted it couldn't see "Q3 go-live practice"/"Do Not Revisit" exclusions at all, since those
+# only ever lived here). Reads tbl_mvp_rad_onboarding (enterprise_analytics), NOT the raw
+# Dataverse table directly - confirmed live via SHOW GRANTS that this app's service principal
+# can't reach the Dataverse schema (same access gap as the SEAL tables); see
+# tools/edw_fixes/013_migrate_mvp_rad_onboarding_to_enterprise_analytics.sql for the migration
+# that materializes a periodically-refreshed copy here. NPI/column renaming/the `500_dx_cases`
+# quoting are already baked into that copy, so this read is a plain passthrough select.
+_MVP_RAD_ONBOARDING_VW = f"{settings.qualified}.tbl_mvp_rad_onboarding"
 
 
-def get_mvp_efficiency_by_radiologist() -> list[dict]:
-    """Per-(NPI, period) D&C (Drafting+Capture combined - Drafting OR Capture (US/BD modality
-    during Drafting) is the correct non-double-counting filter, mirroring the original's
-    Is_Drafting_Row=1 OR Is_Capture_Row=1) efficiency, plus the 3 per-modality breakdowns
-    (CT/XR Drafting, US Capture) the real Mosaic Value Project's Priority Tier 3 rule needs.
-    period is 'baseline' (fixed May-Jul 2026) or 'current' (most recent full calendar month).
-    Does NOT need the cell-2 baseline-by-procedure join (MVP's own baseline/current comparison
-    is a separate two-window scheme computed in Python downstream, not Weighted_Baseline_Contrib_Excl),
-    so this only needs cell-0/cell-1's LAG+Outliers+Period_Type classification.
-
-    TotalTime is capped at 3600s (1h) per row: confirmed live that a small number of rows carry
-    TotalTime in the hours-to-weeks range (clearly a stuck/corrupted session, not real read
-    time). Aggregated over thousands of radiologists this noise washes out, but a single such
-    row can dominate one radiologist's per-modality baseline sum and produce a nonsensical
-    >1000% "efficiency change" for this specific per-rad, per-modality comparison."""
-    period_case = _MVP_PERIOD_CASE_SQL.format(date_col="Exam_Date")
-    period_where = _MVP_PERIOD_WHERE_SQL.format(date_col="Exam_Date")
-    capped_time = "LEAST(Adjusted_Read_Time_Sec, 3600)"
-    return run_query(
-        _MER_BASE_CTE_SQL
-        + f"""
-        SELECT
-          Physician_NPI AS npi,
-          {period_case} AS period_label,
-          SUM(CASE WHEN Period_Type = 'Drafting' OR (Period_Type = 'Drafting' AND Modality_Code IN ('US', 'BD')) THEN TBWU ELSE 0 END) AS dc_tbwu,
-          SUM(CASE WHEN Period_Type = 'Drafting' OR (Period_Type = 'Drafting' AND Modality_Code IN ('US', 'BD')) THEN {capped_time} ELSE 0 END) AS dc_time,
-          SUM(CASE WHEN Period_Type = 'Drafting' OR (Period_Type = 'Drafting' AND Modality_Code IN ('US', 'BD')) THEN 1 ELSE 0 END) AS dc_exam_count,
-          SUM(CASE WHEN Period_Type = 'Drafting' AND Modality_Code = 'CT' THEN TBWU ELSE 0 END) AS ct_drafting_tbwu,
-          SUM(CASE WHEN Period_Type = 'Drafting' AND Modality_Code = 'CT' THEN {capped_time} ELSE 0 END) AS ct_drafting_time,
-          SUM(CASE WHEN Period_Type = 'Drafting' AND Modality_Code = 'CR' THEN TBWU ELSE 0 END) AS xr_drafting_tbwu,
-          SUM(CASE WHEN Period_Type = 'Drafting' AND Modality_Code = 'CR' THEN {capped_time} ELSE 0 END) AS xr_drafting_time,
-          SUM(CASE WHEN Period_Type = 'Drafting' AND Modality_Code IN ('US', 'BD') THEN TBWU ELSE 0 END) AS us_capture_tbwu,
-          SUM(CASE WHEN Period_Type = 'Drafting' AND Modality_Code IN ('US', 'BD') THEN {capped_time} ELSE 0 END) AS us_capture_time
-        FROM classified
-        WHERE {period_where}
-        GROUP BY Physician_NPI, {period_case}
-        """
-    )
+def get_mvp_rad_onboarding() -> list[dict]:
+    """Every radiologist the real MVP program has either actively tiered (mvp_cohort populated)
+    or explicitly excluded (exclusion_reason populated) - the full program universe, so the UI
+    can show both without a second query."""
+    return run_query(f"SELECT * FROM {_MVP_RAD_ONBOARDING_VW}")
 
 
 # ===========================================================================================
@@ -660,9 +570,14 @@ def get_mvp_efficiency_by_radiologist() -> list[dict]:
 # is replaced by Mosaic_go_live_date (ref_dsa_mosaic_rad_go_live_curr) per decision - the two
 # concepts collapse into one column everywhere below.
 #
-# Same overlap-dedup logic as the notebook (longest-duration shift wins among overlapping
-# instances for the same NPI+date), same 20%-utilization crossing-date baseline/current split,
-# same excluded-practices list (whole NPI dropped if ANY shift ties to an excluded practice).
+# Deliberately does NOT collapse overlapping shift instances to one "winner" - confirmed
+# business rule (see overlapping_shift_dedup_fix.md): each shift independently shows every
+# exam in its own start/end window, including the portion that overlaps another shift. An
+# earlier version of this rebuild picked the longest-duration shift per overlap and discarded
+# the other's exams entirely - confirmed live to silently drop 1.1M+ exams across 1,235 NPIs,
+# reintroducing exactly the "pick one winner" behavior already rejected and fixed in the old
+# pipeline. Same 20%-utilization crossing-date baseline/current split, same excluded-practices
+# list (whole NPI dropped if ANY shift ties to an excluded practice).
 _CAPACITY_EXCLUDED_PRACTICES_SQL = ", ".join(
     f"'{p}'"
     for p in (
@@ -682,12 +597,20 @@ _PROXY_SPECIALIZED_SUBSPECIALTIES_SQL = ", ".join(
     )
 )
 
+# Fix 1 (read-time) + Fix 2 (Team vs Practice) - see
+# tools/pbi_semantic_extract/MIGRATION_PLAYBOOK.md and tbl_capacity_shift_level_vw (edw_test) for
+# the validated reference this was ported from. Both confirmed live against edw_prod before this
+# change: tat_unread_to_final_minutes averages ~921 min (~15h, includes queue-wait) with a max of
+# ~24M minutes (~45 years) - not read time; 'SEAL Team' (provider_local_practice_name_curr) spans
+# 66 distinct managing_local_practice_name_curr values - Team and Practice are different things.
 _CAPACITY_SHIFT_CTE_SQL = f"""
 WITH shift_exams AS (
   SELECT
+    e.exam_id,
     e.reading_provider_npi AS NPI,
     e.reading_provider_name_full AS Rad_name,
-    e.provider_local_practice_name_curr AS localpractice,
+    e.provider_local_practice_name_curr AS team,
+    e.managing_local_practice_name_curr AS localpractice,
     e.scheduled_shift_id AS Shift_No,
     e.scheduled_shift_task_name AS ShiftName,
     CAST(e.scheduled_shift_start_datetime_utc AS DATE) AS ShiftDate,
@@ -697,42 +620,45 @@ WITH shift_exams AS (
     e.final_TBWU AS RP_TBWU,
     e.unassisted_tbwu_current AS adjusted_TBWU,
     e.estimated_wrvu AS Estimated_RVU,
-    e.tat_unread_to_final_minutes AS read_minutes,
+    e.dictation_start_datetime, e.dictation_end_datetime, e.final_datetime,
     e.mosaic_read_flag, e.mosaic_draft_flag,
     e.exam_Modality_Code AS Modality_Code,
     e.exam_interventional_Ind,
     e.exam_subspecialty_code,
-    e.Priority_Name
+    e.Priority_Name,
+    e.Source_System_Code AS source_system_code
   FROM {settings.qualified}.tbl_exam_inventory e
   WHERE e.scheduled_shift_id IS NOT NULL
     AND e.scheduled_shift_start_datetime_utc IS NOT NULL
     AND e.scheduled_shift_end_datetime_utc IS NOT NULL
     AND CAST(e.scheduled_shift_start_datetime_utc AS DATE) >= DATE'2024-10-01'
 ),
-shift_instances AS (
-  SELECT DISTINCT NPI, ShiftDate, ShiftName, Shift_No, Schedule_Start_DateTime, Schedule_End_DateTime,
-    TIMESTAMPDIFF(MINUTE, Schedule_Start_DateTime, Schedule_End_DateTime) AS duration_minutes
+with_lag AS (
+  SELECT *,
+    LAG(final_datetime) OVER (
+      PARTITION BY NPI, DATE(dictation_start_datetime)
+      ORDER BY dictation_start_datetime, exam_id
+    ) AS prev_final
   FROM shift_exams
 ),
-overlap_groups AS (
-  SELECT s1.NPI, s1.ShiftDate, s1.ShiftName, s1.Shift_No, s1.duration_minutes,
-    MAX(s2.duration_minutes) AS max_overlapping_duration
-  FROM shift_instances s1
-  JOIN shift_instances s2
-    ON s1.NPI = s2.NPI AND s1.ShiftDate = s2.ShiftDate
-    AND s1.Schedule_Start_DateTime < s2.Schedule_End_DateTime
-    AND s2.Schedule_Start_DateTime < s1.Schedule_End_DateTime
-  GROUP BY s1.NPI, s1.ShiftDate, s1.ShiftName, s1.Shift_No, s1.duration_minutes
-),
-non_overlapping_shifts AS (
-  SELECT NPI, ShiftDate, ShiftName, Shift_No
-  FROM overlap_groups
-  WHERE duration_minutes = max_overlapping_duration
+with_read_time AS (
+  -- Nullable, not filtered - a shift-attributed exam with no usable dictation timestamps still
+  -- counts toward on_shift_cases/TBWU/case-mix, it just can't contribute to read time. Same LAG-
+  -- based, 3600s-capped derivation _MER_BASE_CTE_SQL already uses correctly for Efficiency.
+  SELECT *,
+    CASE WHEN dictation_start_datetime IS NOT NULL AND dictation_end_datetime IS NOT NULL AND final_datetime IS NOT NULL
+      THEN LEAST(3600, GREATEST(0, TIMESTAMPDIFF(SECOND,
+        CASE WHEN prev_final IS NOT NULL AND prev_final > dictation_start_datetime THEN prev_final ELSE dictation_start_datetime END,
+        CASE WHEN final_datetime < dictation_end_datetime THEN final_datetime ELSE dictation_end_datetime END
+      )))
+      ELSE NULL
+    END AS adjusted_read_time_sec
+  FROM with_lag
 ),
 raw_shifts AS (
   SELECT
-    e.NPI, MAX(e.Rad_name) AS Rad_name, MAX(e.localpractice) AS localpractice,
-    e.ShiftDate, e.ShiftName, ANY_VALUE(e.Shift_No) AS Task_ID,
+    e.NPI, MAX(e.Rad_name) AS Rad_name, MAX(e.team) AS team, MAX(e.localpractice) AS localpractice,
+    e.ShiftDate, e.ShiftName, e.Shift_No AS Task_ID,
     ANY_VALUE(e.shift_location) AS shift_location,
     ANY_VALUE(e.Schedule_Start_DateTime) AS Schedule_Start_DateTime,
     ANY_VALUE(e.Schedule_End_DateTime) AS Schedule_End_DateTime,
@@ -741,7 +667,20 @@ raw_shifts AS (
     CAST(SUM(e.Estimated_RVU) AS DECIMAL(10,2)) AS shift_RVU,
     COUNT(*) AS shift_cases,
     CAST(SUM(e.adjusted_TBWU) AS DECIMAL(10,2)) AS shift_adj_TBWU,
-    SUM(e.read_minutes) AS shift_read_minutes,
+    SUM(e.adjusted_read_time_sec) / 60.0 AS shift_read_minutes,
+    -- Fix 4 (population match): the TBWU produced by *only* the exams that also contributed to
+    -- shift_read_minutes. shift_TBWU above covers every exam on the shift, but SUM() skips NULLs
+    -- so shift_read_minutes covers only exams with usable dictation timestamps. Dividing the
+    -- former by the latter mixes two populations and inflates efficiency by ~1/coverage. Measured
+    -- live 2026-10-24 over 2,213 radiologists since 2026-07-01, bucketed by coverage: the mixed
+    -- ratio runs 39.079 -> 0.199 TBWU/min (196x) as coverage goes 0.6% -> 98%, while
+    -- mixed_ratio * coverage stays flat at 0.16-0.23 - the signature of a pure 1/coverage
+    -- artifact. This column keeps numerator and denominator on the same exams, which holds the
+    -- rate at 0.149-0.233 (1.6x) across the same buckets. Use it for every TBWU-per-minute rate;
+    -- shift_TBWU remains correct for totals and for per-exam rates like tbwu_per_exam.
+    CAST(SUM(CASE WHEN e.adjusted_read_time_sec IS NOT NULL THEN e.RP_TBWU END) AS DECIMAL(10,2)) AS shift_TBWU_with_read_time,
+    SUM(CASE WHEN e.adjusted_read_time_sec IS NOT NULL THEN 1 ELSE 0 END) AS exams_with_valid_read_time,
+    MAX(CASE WHEN e.source_system_code IN ('rpceMidwest', 'rpceSouthwest') THEN 1 ELSE 0 END) AS is_rpce_source,
     try_divide(SUM(CASE WHEN e.mosaic_read_flag THEN 1 ELSE 0 END), COUNT(*)) AS mosaic_utilization_pct,
     SUM(CASE WHEN e.mosaic_read_flag THEN 1 ELSE 0 END) AS mosaic_cases,
     SUM(CASE WHEN e.mosaic_draft_flag THEN 1 ELSE 0 END) AS drafting_cases,
@@ -761,10 +700,8 @@ raw_shifts AS (
     SUM(CASE WHEN e.Priority_Name = 'STROKE' THEN 1 ELSE 0 END) AS stroke_cases,
     SUM(CASE WHEN e.Priority_Name = 'TRAUMA' THEN 1 ELSE 0 END) AS trauma_cases,
     SUM(CASE WHEN e.Priority_Name NOT IN ('ROUTINE', 'STAT', 'STROKE', 'TRAUMA') THEN 1 ELSE 0 END) AS otherp_cases
-  FROM shift_exams e
-  JOIN non_overlapping_shifts nos
-    ON e.NPI = nos.NPI AND e.ShiftDate = nos.ShiftDate AND e.ShiftName = nos.ShiftName AND e.Shift_No = nos.Shift_No
-  GROUP BY e.NPI, e.ShiftDate, e.ShiftName
+  FROM with_read_time e
+  GROUP BY e.NPI, e.ShiftDate, e.ShiftName, e.Shift_No
 )
 """
 
@@ -792,29 +729,6 @@ classified_shifts AS (
 """
 
 
-def get_mvp_capacity_by_radiologist() -> list[dict]:
-    """Per-(NPI, period) avg capacity/shift (TBWU/9h - matches MVP's "Baseline Capacity- Avg
-    Capacity Per Shift" / "TBWU/9 Hour" fields exactly), same baseline/current windows as
-    get_mvp_efficiency_by_radiologist. Uses raw_shifts directly - MVP's baseline/current split
-    is its own fixed-calendar-window scheme, unrelated to the 20%-crossing-date classification
-    the Exact-baseline tier below uses."""
-    period_case = _MVP_PERIOD_CASE_SQL.format(date_col="ShiftDate")
-    period_where = _MVP_PERIOD_WHERE_SQL.format(date_col="ShiftDate")
-    return run_query(
-        _CAPACITY_SHIFT_CTE_SQL
-        + f"""
-        SELECT
-          NPI AS npi,
-          {period_case} AS period_label,
-          AVG(try_divide(shift_TBWU, NULLIF(no_hours, 0)) * 9) AS capacity_per_shift,
-          COUNT(1) AS shift_count
-        FROM raw_shifts
-        WHERE {period_where}
-        GROUP BY NPI, {period_case}
-        """
-    )
-
-
 def get_efficiency_trend_by_practice_category() -> list[dict]:
     """Same as get_efficiency_trend_by_category but also grouped by Practice."""
     return run_query(
@@ -825,20 +739,63 @@ def get_efficiency_trend_by_practice_category() -> list[dict]:
           CAST(CAST(DATE_TRUNC('MONTH', c.Exam_Date) AS DATE) AS STRING) AS period,
           c.Practice AS practice,
           MAX(c.mpcat) AS exam_category,
-          SUM(CASE WHEN c.Period_Type = 'Reporting' THEN c.TBWU ELSE 0 END) AS reporting_tbwu,
-          SUM(CASE WHEN c.Period_Type = 'Reporting' THEN c.Adjusted_Read_Time_Sec ELSE 0 END) AS reporting_time,
-          SUM(CASE WHEN c.Period_Type = 'Reporting' THEN be.baseline_eff_excl * c.Adjusted_Read_Time_Sec ELSE 0 END) AS reporting_baseline_contrib,
-          COUNT(DISTINCT CASE WHEN c.Period_Type = 'Reporting' THEN c.Physician_NPI END) AS reporting_rad_count,
-          SUM(CASE WHEN c.Period_Type = 'Reporting' THEN 1 ELSE 0 END) AS reporting_exam_count,
-          SUM(CASE WHEN c.Period_Type = 'Drafting' THEN c.TBWU ELSE 0 END) AS drafting_tbwu,
-          SUM(CASE WHEN c.Period_Type = 'Drafting' THEN c.Adjusted_Read_Time_Sec ELSE 0 END) AS drafting_time,
-          SUM(CASE WHEN c.Period_Type = 'Drafting' THEN be.baseline_eff_excl * c.Adjusted_Read_Time_Sec ELSE 0 END) AS drafting_baseline_contrib,
-          COUNT(DISTINCT CASE WHEN c.Period_Type = 'Drafting' THEN c.Physician_NPI END) AS drafting_rad_count,
-          SUM(CASE WHEN c.Period_Type = 'Drafting' THEN 1 ELSE 0 END) AS drafting_exam_count
+          SUM(CASE WHEN c.Period_Type = 'Reporting' AND c.Outliers = 'Excluded' THEN c.TBWU ELSE 0 END) AS reporting_tbwu,
+          SUM(CASE WHEN c.Period_Type = 'Reporting' AND c.Outliers = 'Excluded' THEN c.Adjusted_Read_Time_Sec ELSE 0 END) AS reporting_time,
+          SUM(CASE WHEN c.Period_Type = 'Reporting' AND c.Outliers = 'Excluded' THEN be.baseline_eff_excl * c.Adjusted_Read_Time_Sec ELSE 0 END) AS reporting_baseline_contrib,
+          COUNT(DISTINCT CASE WHEN c.Period_Type = 'Reporting' AND c.Outliers = 'Excluded' THEN c.Physician_NPI END) AS reporting_rad_count,
+          SUM(CASE WHEN c.Period_Type = 'Reporting' AND c.Outliers = 'Excluded' THEN 1 ELSE 0 END) AS reporting_exam_count,
+          SUM(CASE WHEN c.Period_Type = 'Drafting' AND c.Outliers = 'Excluded' THEN c.TBWU ELSE 0 END) AS drafting_tbwu,
+          SUM(CASE WHEN c.Period_Type = 'Drafting' AND c.Outliers = 'Excluded' THEN c.Adjusted_Read_Time_Sec ELSE 0 END) AS drafting_time,
+          SUM(CASE WHEN c.Period_Type = 'Drafting' AND c.Outliers = 'Excluded' THEN be.baseline_eff_excl * c.Adjusted_Read_Time_Sec ELSE 0 END) AS drafting_baseline_contrib,
+          COUNT(DISTINCT CASE WHEN c.Period_Type = 'Drafting' AND c.Outliers = 'Excluded' THEN c.Physician_NPI END) AS drafting_rad_count,
+          SUM(CASE WHEN c.Period_Type = 'Drafting' AND c.Outliers = 'Excluded' THEN 1 ELSE 0 END) AS drafting_exam_count,
+          SUM(CASE WHEN c.Period_Type = 'Drafting' AND c.Outliers = 'Excluded' AND c.Modality_Code IN ('US', 'BD') THEN c.TBWU ELSE 0 END) AS capture_tbwu,
+          SUM(CASE WHEN c.Period_Type = 'Drafting' AND c.Outliers = 'Excluded' AND c.Modality_Code IN ('US', 'BD') THEN c.Adjusted_Read_Time_Sec ELSE 0 END) AS capture_time,
+          SUM(CASE WHEN c.Period_Type = 'Drafting' AND c.Outliers = 'Excluded' AND c.Modality_Code IN ('US', 'BD') THEN be.baseline_usbd_eff_excl * c.Adjusted_Read_Time_Sec ELSE 0 END) AS capture_baseline_contrib
         FROM classified c
         JOIN baseline_eff be ON be.Physician_NPI = c.Physician_NPI AND be.Parent_Procedure_name = c.Parent_Procedure_name
         WHERE be.baseline_eff_excl <= 1.000
         GROUP BY DATE_TRUNC('MONTH', c.Exam_Date), c.Practice, c.mpcat
+        ORDER BY period
+        """
+    )
+
+
+def get_mammo_screening_trend() -> list[dict]:
+    """Monthly Mammo-Screening volume + efficiency-change, RP-wide and MVP-mammo-cohort-only in
+    one query - feeds the Mammo Screening dashboard's two combo charts (bars=volume, line=
+    efficiency change). Confirmed live (2026-10-20): RPID_parent_code_description carries
+    SCREENING vs DIAGNOSTIC wording directly (e.g. "MAMMO BREAST SCREENING TOMOSYNTHESIS
+    BILATERAL" vs "MAMMO BREAST DIAGNOSTIC..."), so this is the existing MER CTE chain filtered
+    to Modality_Code='MG' AND Parent_Procedure_name LIKE '%SCREENING%' - no new raw column
+    needed. Combines Reporting+Drafting Period_Types into one "Full Mosaic"-style efficiency
+    figure (mammo screening isn't itself split by reporting-vs-drafting anywhere else in this
+    app, matching the PDF's own un-split framing). The MVP-mammo cohort is joined straight from
+    tbl_mvp_rad_onboarding (mvp_cohort LIKE '%(Mammo)%') rather than a hardcoded NPI list, so it
+    stays current as that table is re-synced."""
+    return run_query(
+        _MER_BASE_CTE_SQL
+        + _MER_BASELINE_CTE_SQL
+        + f"""
+        , mvp_mammo_npis AS (
+          SELECT npi FROM {settings.qualified}.tbl_mvp_rad_onboarding WHERE mvp_cohort LIKE '%(Mammo)%'
+        )
+        SELECT
+          CAST(CAST(DATE_TRUNC('MONTH', c.Exam_Date) AS DATE) AS STRING) AS period,
+          SUM(CASE WHEN c.Outliers = 'Excluded' THEN 1 ELSE 0 END) AS screening_volume,
+          SUM(CASE WHEN c.Outliers = 'Excluded' THEN c.TBWU ELSE 0 END) AS screening_tbwu,
+          SUM(CASE WHEN c.Outliers = 'Excluded' THEN c.Adjusted_Read_Time_Sec ELSE 0 END) AS screening_time,
+          SUM(CASE WHEN c.Outliers = 'Excluded' THEN be.baseline_eff_excl * c.Adjusted_Read_Time_Sec ELSE 0 END) AS screening_baseline_contrib,
+          SUM(CASE WHEN c.Outliers = 'Excluded' AND mn.npi IS NOT NULL THEN 1 ELSE 0 END) AS mvp_mammo_screening_volume,
+          SUM(CASE WHEN c.Outliers = 'Excluded' AND mn.npi IS NOT NULL THEN c.TBWU ELSE 0 END) AS mvp_mammo_screening_tbwu,
+          SUM(CASE WHEN c.Outliers = 'Excluded' AND mn.npi IS NOT NULL THEN c.Adjusted_Read_Time_Sec ELSE 0 END) AS mvp_mammo_screening_time,
+          SUM(CASE WHEN c.Outliers = 'Excluded' AND mn.npi IS NOT NULL THEN be.baseline_eff_excl * c.Adjusted_Read_Time_Sec ELSE 0 END) AS mvp_mammo_screening_baseline_contrib
+        FROM classified c
+        JOIN baseline_eff be ON be.Physician_NPI = c.Physician_NPI AND be.Parent_Procedure_name = c.Parent_Procedure_name
+        LEFT JOIN mvp_mammo_npis mn ON mn.npi = c.Physician_NPI
+        WHERE be.baseline_eff_excl <= 1.000
+          AND c.Modality_Code = 'MG' AND c.Parent_Procedure_name LIKE '%SCREENING%'
+        GROUP BY DATE_TRUNC('MONTH', c.Exam_Date)
         ORDER BY period
         """
     )
@@ -853,10 +810,10 @@ def get_efficiency_trend_rp_avg() -> list[dict]:
         + """
         SELECT
           CAST(CAST(DATE_TRUNC('MONTH', Exam_Date) AS DATE) AS STRING) AS period,
-          SUM(CASE WHEN Period_Type = 'Reporting' THEN TBWU ELSE 0 END) AS reporting_tbwu,
-          SUM(CASE WHEN Period_Type = 'Reporting' THEN Adjusted_Read_Time_Sec ELSE 0 END) AS reporting_time,
-          SUM(CASE WHEN Period_Type = 'Drafting' THEN TBWU ELSE 0 END) AS drafting_tbwu,
-          SUM(CASE WHEN Period_Type = 'Drafting' THEN Adjusted_Read_Time_Sec ELSE 0 END) AS drafting_time
+          SUM(CASE WHEN Period_Type = 'Reporting' AND Outliers = 'Excluded' THEN TBWU ELSE 0 END) AS reporting_tbwu,
+          SUM(CASE WHEN Period_Type = 'Reporting' AND Outliers = 'Excluded' THEN Adjusted_Read_Time_Sec ELSE 0 END) AS reporting_time,
+          SUM(CASE WHEN Period_Type = 'Drafting' AND Outliers = 'Excluded' THEN TBWU ELSE 0 END) AS drafting_tbwu,
+          SUM(CASE WHEN Period_Type = 'Drafting' AND Outliers = 'Excluded' THEN Adjusted_Read_Time_Sec ELSE 0 END) AS drafting_time
         FROM classified
         GROUP BY DATE_TRUNC('MONTH', Exam_Date)
         ORDER BY period
@@ -876,9 +833,9 @@ def get_capture_efficiency_trend_by_practice(granularity: str) -> list[dict]:
         SELECT
           CAST(CAST(DATE_TRUNC('{trunc}', c.Exam_Date) AS DATE) AS STRING) AS period,
           c.Practice AS practice,
-          SUM(CASE WHEN c.Period_Type = 'Drafting' AND c.Modality_Code IN ('US', 'BD') THEN c.TBWU ELSE 0 END) AS capture_tbwu,
-          SUM(CASE WHEN c.Period_Type = 'Drafting' AND c.Modality_Code IN ('US', 'BD') THEN c.Adjusted_Read_Time_Sec ELSE 0 END) AS capture_time,
-          SUM(CASE WHEN c.Period_Type = 'Drafting' AND c.Modality_Code IN ('US', 'BD') THEN be.baseline_usbd_eff_excl * c.Adjusted_Read_Time_Sec ELSE 0 END) AS capture_baseline_contrib
+          SUM(CASE WHEN c.Period_Type = 'Drafting' AND c.Outliers = 'Excluded' AND c.Modality_Code IN ('US', 'BD') THEN c.TBWU ELSE 0 END) AS capture_tbwu,
+          SUM(CASE WHEN c.Period_Type = 'Drafting' AND c.Outliers = 'Excluded' AND c.Modality_Code IN ('US', 'BD') THEN c.Adjusted_Read_Time_Sec ELSE 0 END) AS capture_time,
+          SUM(CASE WHEN c.Period_Type = 'Drafting' AND c.Outliers = 'Excluded' AND c.Modality_Code IN ('US', 'BD') THEN be.baseline_usbd_eff_excl * c.Adjusted_Read_Time_Sec ELSE 0 END) AS capture_baseline_contrib
         FROM classified c
         JOIN baseline_eff be ON be.Physician_NPI = c.Physician_NPI AND be.Parent_Procedure_name = c.Parent_Procedure_name
         WHERE be.baseline_eff_excl <= 1.000
@@ -897,15 +854,58 @@ def get_capture_efficiency_trend_by_radiologist(granularity: str) -> list[dict]:
         SELECT
           CAST(CAST(DATE_TRUNC('{trunc}', c.Exam_Date) AS DATE) AS STRING) AS period,
           c.Physician_NPI AS npi,
-          SUM(CASE WHEN c.Period_Type = 'Drafting' AND c.Modality_Code IN ('US', 'BD') THEN c.TBWU ELSE 0 END) AS capture_tbwu,
-          SUM(CASE WHEN c.Period_Type = 'Drafting' AND c.Modality_Code IN ('US', 'BD') THEN c.Adjusted_Read_Time_Sec ELSE 0 END) AS capture_time,
-          SUM(CASE WHEN c.Period_Type = 'Drafting' AND c.Modality_Code IN ('US', 'BD') THEN be.baseline_usbd_eff_excl * c.Adjusted_Read_Time_Sec ELSE 0 END) AS capture_baseline_contrib
+          SUM(CASE WHEN c.Period_Type = 'Drafting' AND c.Outliers = 'Excluded' AND c.Modality_Code IN ('US', 'BD') THEN c.TBWU ELSE 0 END) AS capture_tbwu,
+          SUM(CASE WHEN c.Period_Type = 'Drafting' AND c.Outliers = 'Excluded' AND c.Modality_Code IN ('US', 'BD') THEN c.Adjusted_Read_Time_Sec ELSE 0 END) AS capture_time,
+          SUM(CASE WHEN c.Period_Type = 'Drafting' AND c.Outliers = 'Excluded' AND c.Modality_Code IN ('US', 'BD') THEN be.baseline_usbd_eff_excl * c.Adjusted_Read_Time_Sec ELSE 0 END) AS capture_baseline_contrib
         FROM classified c
         JOIN baseline_eff be ON be.Physician_NPI = c.Physician_NPI AND be.Parent_Procedure_name = c.Parent_Procedure_name
         WHERE be.baseline_eff_excl <= 1.000
         GROUP BY DATE_TRUNC('{trunc}', c.Exam_Date), c.Physician_NPI
         ORDER BY period
         """
+    )
+
+
+# Below this read-time coverage, utilization is not a weak signal - it is a wrong one, and in a
+# knowable direction. Its numerator (shift_read_minutes) only counts exams with usable dictation
+# timestamps; its denominator (scheduled hours) counts the whole shift, and unlike efficiency
+# there is no "covered subset" of a schedule to match it against. So reported utilization is
+# understated by roughly the coverage fraction: at 50% coverage it reads half the truth, and the
+# LEAST(..., 1.0) cap this used to carry did worse than hide it. Spark's LEAST *skips* NULLs, so
+# when a slice has zero exams with read time - shift_read_minutes NULL - LEAST(NULL / hours, 1.0)
+# collapsed to 1.0 and the slice rendered as a perfect 100% utilization. Measured live 2026-10-24
+# against the then-deployed build: Boca (5,783 shifts / 341,068 exams) and Bethesda (4,597 /
+# 299,725) both have exams_with_valid_read_time = 0 and both reported 100.00%. At the other end
+# RASF, at 0.055% coverage, reported 0.02%.
+# Neither number means anything. 0.75 is the measured bucket boundary (live 2026-10-24): 2,022 of
+# 2,213 radiologists sit above it at ~98% coverage, so this suppresses ~8.6% of radiologists - the
+# ones whose number is wrong by a third or more - and leaves the enterprise figure untouched. At
+# practice grain the bite is larger: 20 of 84 practices, 22.5M of 72.3M exams. That is the point -
+# those are the practices whose utilization is currently fiction. Null it out rather than ship a
+# distorted number the UI would have to explain; every consumer (tables, AI hover cards, exports) then
+# inherits the suppression, and the raw coverage % is still rendered beside it so the user sees
+# why. Same discipline as _MIN_RELIABLE_BASELINE_TBWU_PER_HOUR in cache_service.py.
+_MIN_READ_TIME_COVERAGE = 0.75
+
+
+def _gated_utilization_sql(read_minutes: str, hours: str, covered: str, cases: str) -> str:
+    """"% of scheduled shift time spent actively reading" - suppressed below
+    _MIN_READ_TIME_COVERAGE and capped at 100%, without LEAST().
+
+    LEAST() is the wrong cap here, and was the bug: Spark's LEAST *skips* NULL arguments
+    instead of propagating them, so LEAST(NULL, 1.0) is 1.0 and a slice with no read time at
+    all capped to a flawless 100%. The nested CASE propagates - a NULL ratio is not > 1.0, so
+    it falls through to ELSE and stays NULL. That makes the cap correct on its own terms
+    rather than only correct because the coverage gate in front of it happens to exclude the
+    NULL cases; the gate is a reporting decision, and a reporting decision must not be the
+    only thing standing between a NULL and a fabricated 100%.
+
+    Every utilization this module emits goes through here, so the two cannot drift apart.
+    """
+    ratio = f"try_divide({read_minutes}, {hours} * 60.0)"
+    return (
+        f"CASE WHEN try_divide({covered}, {cases}) >= {_MIN_READ_TIME_COVERAGE}"
+        f" THEN CASE WHEN {ratio} > 1.0 THEN 1.0 ELSE {ratio} END END"
     )
 
 
@@ -919,17 +919,21 @@ def get_capture_efficiency_trend_by_radiologist(granularity: str) -> list[dict]:
 # get_capacity_with_baseline below, which recomputes it properly rather than trusting this
 # column. adjustment_rvu/adjustment_tbwu (a QGenda shift-credit-adjustment concept) has no
 # reachable source under this app's grants - always 0.
-_CAPACITY_MEASURES_SQL = """
+_CAPACITY_MEASURES_SQL = f"""
   COUNT(1)                                                                AS total_shifts,
   SUM(no_hours)                                                           AS total_hours,
   SUM(shift_RVU)                                                         AS capacity_rvu,
   SUM(shift_TBWU)                                                        AS capacity_rpwu,
   CAST(NULL AS DOUBLE)                                                    AS baseline_rvu,
   CAST(NULL AS DOUBLE)                                                    AS baseline_rpwu,
-  LEAST(SUM(shift_read_minutes) / NULLIF(SUM(no_hours) * 60.0, 0), 1.0)   AS utilization_rvu_pct,
-  LEAST(SUM(shift_read_minutes) / NULLIF(SUM(no_hours) * 60.0, 0), 1.0)   AS utilization_rpwu_pct,
-  SUM(shift_TBWU) / NULLIF(SUM(shift_read_minutes), 0)                   AS efficiency_rvu_per_min,
-  SUM(shift_TBWU) / NULLIF(SUM(shift_read_minutes), 0)                   AS efficiency_rpwu_per_min,
+  -- Suppressed below _MIN_READ_TIME_COVERAGE - see the constant for why a low-coverage
+  -- utilization is wrong rather than merely uncertain. NULL renders as "-" in the UI.
+  {_gated_utilization_sql("SUM(shift_read_minutes)", "SUM(no_hours)", "SUM(exams_with_valid_read_time)", "SUM(shift_cases)")} AS utilization_rvu_pct,
+  {_gated_utilization_sql("SUM(shift_read_minutes)", "SUM(no_hours)", "SUM(exams_with_valid_read_time)", "SUM(shift_cases)")} AS utilization_rpwu_pct,
+  -- Numerator is the coverage-matched TBWU (see raw_shifts), NOT shift_TBWU - dividing
+  -- full-population TBWU by covered-only read minutes inflates this by ~1/coverage.
+  SUM(shift_TBWU_with_read_time) / NULLIF(SUM(shift_read_minutes), 0)    AS efficiency_rvu_per_min,
+  SUM(shift_TBWU_with_read_time) / NULLIF(SUM(shift_read_minutes), 0)    AS efficiency_rpwu_per_min,
   SUM(shift_RVU) / NULLIF(SUM(no_hours), 0)                              AS capacity_rvu_per_hour,
   CAST(NULL AS DOUBLE)                                                    AS baseline_rvu_per_hour,
   SUM(shift_cases)                                                       AS on_shift_cases,
@@ -944,7 +948,12 @@ _CAPACITY_MEASURES_SQL = """
   SUM(mr_cases)                                                          AS mr_cases,
   SUM(ir_cases)                                                          AS ir_cases,
   CAST(0 AS DOUBLE)                                                       AS adjustment_rvu,
-  CAST(0 AS DOUBLE)                                                       AS adjustment_tbwu
+  CAST(0 AS DOUBLE)                                                       AS adjustment_tbwu,
+  -- Coverage varies enormously by practice/radiologist (confirmed live: as low as ~0% to 66%+)
+  -- independent of Is RPCE Source alone - always check this before trusting Efficiency/
+  -- Utilization above for a given slice. See tools/pbi_semantic_extract/MIGRATION_PLAYBOOK.md.
+  SUM(exams_with_valid_read_time) / NULLIF(SUM(shift_cases), 0)          AS pct_exams_with_valid_read_time,
+  SUM(CASE WHEN is_rpce_source = 1 THEN shift_cases ELSE 0 END) / NULLIF(SUM(shift_cases), 0) AS pct_shifts_rpce_source
 """
 
 
@@ -955,7 +964,7 @@ def get_capacity_by_radiologist(limit: int = 500, offset: int = 0) -> list[Capac
         _CAPACITY_SHIFT_CTE_SQL
         + f"""
         SELECT
-          NPI AS npi, MAX(Rad_name) AS radiologist_name, MAX(localpractice) AS team, MAX(localpractice) AS practice,
+          NPI AS npi, MAX(Rad_name) AS radiologist_name, MAX(team) AS team, MAX(localpractice) AS practice,
           ARRAY_JOIN(SORT_ARRAY(COLLECT_SET(ShiftName)), ', ') AS shift_names,
           {_CAPACITY_MEASURES_SQL}
         FROM raw_shifts
@@ -987,14 +996,12 @@ def get_capacity_by_practice() -> list[CapacityPracticeRollup]:
 # get_radiologist_scorecard's SELECT below programmatically: 19 metrics x 7 Top-N windows
 # would be ~140 near-identical hand-written expressions otherwise (every other query in this
 # file is deliberately literal SQL, but that convention stops paying off at this repetition
-# factor).
+# factor). Plain counts/sums only - the 3 RATE metrics (efficiency/utilization/avg-units-per-
+# shift) are built separately below as SUM(numerator)/SUM(denominator), not AVG here, see
+# _scorecard_window_sql's own comment for why.
 _SCORECARD_METRICS: list[tuple[str, str, str]] = [
     ("shifts_worked", "COUNT", "1"),
     ("case_count", "SUM", "cases"),
-    ("addl_capacity_per_shift", "AVG", "addl_capacity"),
-    ("efficiency", "AVG", "new_efficiency"),
-    ("shift_utilization", "AVG", "new_utilization"),
-    ("avg_units_per_shift", "AVG", "capacity_rpwu_per_shift"),
     ("ct_cases", "SUM", "ct_cases"),
     ("xr_cases", "SUM", "xr_cases"),
     ("us_cases", "SUM", "us_cases"),
@@ -1015,14 +1022,40 @@ _SCORECARD_METRICS: list[tuple[str, str, str]] = [
 def _scorecard_window_sql(window: int | None) -> str:
     suffix = f"top{window}" if window is not None else "all"
     cond = f"shift_rank <= {window}" if window is not None else None
+
+    def when(col: str) -> str:
+        return f"CASE WHEN {cond} THEN {col} END" if cond else col
+
     parts = []
     for name, agg, col in _SCORECARD_METRICS:
         if agg == "COUNT":
             expr = f"COUNT(CASE WHEN {cond} THEN 1 END)" if cond else "COUNT(1)"
         else:
-            inner = f"CASE WHEN {cond} THEN {col} END" if cond else col
-            expr = f"{agg}({inner})"
+            expr = f"{agg}({when(col)})"
         parts.append(f"{expr} AS {name}_{suffix}")
+
+    # Fix 3 - rate rollup: SUM(numerator)/SUM(denominator) across the window's shifts, never
+    # AVG(per-shift-already-divided-rate) - averaging a pre-divided rate across shifts of
+    # different lengths/volumes silently mis-weights them. See
+    # tools/pbi_semantic_extract/MIGRATION_PLAYBOOK.md's "Rate rollup" finding; same discipline
+    # _CAPACITY_MEASURES_SQL already uses for the by-radiologist/by-practice views.
+    parts.append(f"CAST(NULL AS DOUBLE) AS addl_capacity_per_shift_{suffix}")
+    # Fix 4 - population match: the numerator is shift_TBWU_with_read_time, not shift_TBWU, so
+    # it covers the same exams the denominator does. And utilization is suppressed below
+    # _MIN_READ_TIME_COVERAGE. See raw_shifts and that constant for the measured evidence.
+    parts.append(
+        f"try_divide(SUM({when('shift_TBWU_with_read_time')}), SUM({when('shift_read_minutes')})) AS efficiency_{suffix}"
+    )
+    parts.append(
+        _gated_utilization_sql(
+            f"SUM({when('shift_read_minutes')})",
+            f"SUM({when('no_hours')})",
+            f"SUM({when('exams_with_valid_read_time')})",
+            f"SUM({when('cases')})",
+        )
+        + f" AS shift_utilization_{suffix}"
+    )
+    parts.append(f"try_divide(SUM({when('shift_TBWU')}), SUM({when('no_hours')})) * 9 AS avg_units_per_shift_{suffix}")
     return ",\n          ".join(parts)
 
 
@@ -1050,11 +1083,10 @@ def get_radiologist_scorecard() -> list[dict]:
         ),
         ranked AS (
           SELECT
-            r.NPI, r.Rad_name, r.localpractice AS practice, gl.mosaic_drafting_go_live_date AS Mosaic_go_live_date,
-            CAST(NULL AS DOUBLE) AS addl_capacity,
-            try_divide(r.shift_TBWU, NULLIF(r.shift_read_minutes, 0)) AS new_efficiency,
-            LEAST(try_divide(r.shift_read_minutes, NULLIF(r.no_hours, 0) * 60.0), 1.0) AS new_utilization,
-            try_divide(r.shift_TBWU, NULLIF(r.no_hours, 0)) * 9 AS capacity_rpwu_per_shift,
+            r.NPI, r.Rad_name, r.team, r.localpractice AS practice,
+            gl.mosaic_drafting_go_live_date AS Mosaic_go_live_date,
+            r.shift_TBWU, r.shift_TBWU_with_read_time, r.shift_read_minutes, r.no_hours,
+            r.exams_with_valid_read_time,
             r.shift_cases AS cases,
             r.ct_cases, r.xr_cases, r.us_cases, r.mr_cases, r.nm_cases, r.pt_cases, r.mg_cases, r.ir_cases,
             r.other_modality_cases, r.routine_cases, r.stat_cases, r.stroke_cases, r.trauma_cases, r.otherp_cases,
@@ -1064,7 +1096,11 @@ def get_radiologist_scorecard() -> list[dict]:
           WHERE gl.mosaic_drafting_go_live_date IS NOT NULL AND r.ShiftDate >= gl.mosaic_drafting_go_live_date
         )
         SELECT
-          NPI AS npi, MAX(Rad_name) AS radiologist_name, MAX(practice) AS team,
+          -- Fix 2 (Team vs Practice) at this grain: team is provider_local_practice_name_curr,
+          -- practice is managing_local_practice_name_curr. These differ for cross-staffed rads
+          -- (e.g. SEAL Team), and this SELECT used to report MAX(practice) under both labels -
+          -- silently undoing the fix at the one grain a drill-down lands on.
+          NPI AS npi, MAX(Rad_name) AS radiologist_name, MAX(team) AS team,
           MAX(practice) AS practice, CAST(MAX(Mosaic_go_live_date) AS STRING) AS mosaic_go_live_date,
           {window_sql}
         FROM ranked

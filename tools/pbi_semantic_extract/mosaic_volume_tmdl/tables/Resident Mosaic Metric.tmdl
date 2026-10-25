@@ -1,0 +1,198 @@
+table 'Resident Mosaic Metric'
+	lineageTag: 2fabde13-b1bf-4e0c-8c2b-f51a739db00f
+
+	measure 'Resident Metric Display' = ```
+			
+			VAR SelectedMetricColumn = SELECTEDVALUE('Resident Mosaic Metric'[Resident Mosaic Metric Fields])
+			VAR SelectedDateColumn = SELECTEDVALUE('Resident Date Selector'[Resident Date Selector  Fields])
+			
+			VAR TotalExams = 
+			    SWITCH(
+			        TRUE(),
+			        SelectedDateColumn = NAMEOF('Resident Utilization'[Calendar_Dt]),
+			            COUNTROWS('Resident Utilization'),
+			        SelectedDateColumn = NAMEOF('Resident Utilization'[Week_Of]),
+			            CALCULATE(
+			                COUNTROWS('Resident Utilization'),
+			                ALLEXCEPT(
+			                    'Resident Utilization',
+			                    'Resident Utilization'[Week_Of],                -- ✅ Added
+			                    'Resident Utilization'[Resident Parsed Name],
+			                    'Resident Utilization'[NPI],
+			                    'Resident Utilization'[Site],
+			                    'Resident Utilization'[modality],
+			                    'Resident Utilization'[Practice_Short_Name],
+			                    'Resident Utilization'[siteProcedureName]       -- ✅ Added
+			                )
+			            ),
+			        SelectedDateColumn = NAMEOF('Resident Utilization'[Month]),
+			            CALCULATE(
+			                COUNTROWS('Resident Utilization'),
+			                ALLEXCEPT(
+			                    'Resident Utilization',
+			                    'Resident Utilization'[Month],                  -- ✅ Added
+			                    'Resident Utilization'[Resident Parsed Name],
+			                    'Resident Utilization'[NPI],
+			                    'Resident Utilization'[Site],
+			                    'Resident Utilization'[modality],
+			                    'Resident Utilization'[Practice_Short_Name],
+			                    'Resident Utilization'[siteProcedureName]       -- ✅ Added
+			                )
+			            ),
+			        COUNTROWS('Resident Utilization')
+			    )
+			
+			VAR MosaicExams = 
+			    SWITCH(
+			        TRUE(),
+			        SelectedDateColumn = NAMEOF('Resident Utilization'[Calendar_Dt]),
+			            CALCULATE(
+			                COUNTROWS('Resident Utilization'),
+			                'Resident Utilization'[Msc_Rpt_Ind] = 1
+			            ),
+			        SelectedDateColumn = NAMEOF('Resident Utilization'[Week_Of]),
+			            CALCULATE(
+			                COUNTROWS('Resident Utilization'),
+			                'Resident Utilization'[Msc_Rpt_Ind] = 1,
+			                ALLEXCEPT(
+			                    'Resident Utilization',
+			                    'Resident Utilization'[Week_Of],                -- ✅ Added
+			                    'Resident Utilization'[Resident Parsed Name],
+			                    'Resident Utilization'[NPI],
+			                    'Resident Utilization'[Site],
+			                    'Resident Utilization'[modality],
+			                    'Resident Utilization'[Practice_Short_Name],
+			                    'Resident Utilization'[siteProcedureName]       -- ✅ Added
+			                )
+			            ),
+			        SelectedDateColumn = NAMEOF('Resident Utilization'[Month]),
+			            CALCULATE(
+			                COUNTROWS('Resident Utilization'),
+			                'Resident Utilization'[Msc_Rpt_Ind] = 1,
+			                ALLEXCEPT(
+			                    'Resident Utilization',
+			                    'Resident Utilization'[Month],                  -- ✅ Added
+			                    'Resident Utilization'[Resident Parsed Name],
+			                    'Resident Utilization'[NPI],
+			                    'Resident Utilization'[Site],
+			                    'Resident Utilization'[modality],
+			                    'Resident Utilization'[Practice_Short_Name],
+			                    'Resident Utilization'[siteProcedureName]       -- ✅ Added
+			                )
+			            ),
+			        CALCULATE(
+			            COUNTROWS('Resident Utilization'),
+			            'Resident Utilization'[Msc_Rpt_Ind] = 1
+			        )
+			    )
+			
+			RETURN
+			    SWITCH(
+			        TRUE(),
+			        SelectedMetricColumn = NAMEOF('Resident Utilization'[siteProcedureName]),
+			            TotalExams,
+			        SelectedMetricColumn = NAMEOF('Resident Utilization'[Msc_Rpt_Ind]),
+			            MosaicExams,
+			        SelectedMetricColumn = NAMEOF('Resident Utilization'[modality]),
+			            DIVIDE(MosaicExams, TotalExams, 0),
+			        BLANK()
+			    )
+			```
+		lineageTag: 7274d07e-5e45-468a-85a8-30c038eb466f
+
+		formatStringDefinition = 'Resident Mosaic Metric'[Resident Metric Display Format]
+
+	measure 'Resident Metric Display Format' =
+			
+			VAR SelectedMetricColumn = SELECTEDVALUE('Resident Mosaic Metric'[Resident Mosaic Metric Fields])
+			RETURN
+			    SWITCH(
+			        TRUE(),
+			        SelectedMetricColumn = NAMEOF('Resident Utilization'[siteProcedureName]), "#,##0",
+			        SelectedMetricColumn = NAMEOF('Resident Utilization'[Msc_Rpt_Ind]),       "#,##0",
+			        SelectedMetricColumn = NAMEOF('Resident Utilization'[modality]),           "0%",
+			        "#,##0"
+			    )
+		lineageTag: 446c6330-b002-45a5-8ded-75209a928698
+
+	measure 'Resident Metric Font Color' =
+			
+			VAR SelectedMetricColumn = SELECTEDVALUE('Resident Mosaic Metric'[Resident Mosaic Metric Fields])
+			VAR PctValue = DIVIDE(
+			    CALCULATE(COUNTROWS('Resident Utilization'), 'Resident Utilization'[Msc_Rpt_Ind] = 1),
+			    COUNTROWS('Resident Utilization'),
+			    0
+			)
+			
+			RETURN
+			IF(
+			    SelectedMetricColumn = NAMEOF('Resident Utilization'[modality]),
+			    IF(PctValue < 0.5, "#DE6A73", BLANK()),  -- Red font only when < 50%
+			    BLANK()
+			)
+		lineageTag: 26f30b29-511f-4ee6-81fe-158a20df1201
+
+	measure 'Resident Metric Background Color' =
+			
+			VAR SelectedMetricColumn = SELECTEDVALUE('Resident Mosaic Metric'[Resident Mosaic Metric Fields])
+			VAR PctValue = DIVIDE(
+			    CALCULATE(COUNTROWS('Resident Utilization'), 'Resident Utilization'[Msc_Rpt_Ind] = 1),
+			    COUNTROWS('Resident Utilization'),
+			    0
+			)
+			
+			RETURN
+			IF(
+			    SelectedMetricColumn = NAMEOF('Resident Utilization'[modality]),
+			    SWITCH(
+			        TRUE(),
+			        PctValue < 0.5,  BLANK(),     -- No background for red (font only)
+			        PctValue < 0.8,  "#FFEB9C",   -- Yellow background 50-80%
+			        "#C6EFCE"                      -- Green background > 80%
+			    ),
+			    BLANK()
+			)
+		lineageTag: 563f003c-25fd-4af3-9fc0-20e8288ace9f
+
+	column 'Resident Mosaic Metric'
+		lineageTag: 70cddcc7-5cb1-48fc-96dc-2309faffaa87
+		summarizeBy: none
+		sourceColumn: [Value1]
+		sortByColumn: 'Resident Mosaic Metric Order'
+
+		relatedColumnDetails
+			groupByColumn: 'Resident Mosaic Metric Fields'
+
+		annotation SummarizationSetBy = Automatic
+
+	column 'Resident Mosaic Metric Fields'
+		isHidden
+		lineageTag: e4794df3-0a65-470d-a0bb-16b825a76091
+		summarizeBy: none
+		sourceColumn: [Value2]
+		sortByColumn: 'Resident Mosaic Metric Order'
+
+		extendedProperty ParameterMetadata = {"version":3,"kind":2}
+
+		annotation SummarizationSetBy = Automatic
+
+	column 'Resident Mosaic Metric Order'
+		isHidden
+		formatString: 0
+		lineageTag: 5d1071ae-a853-49be-98a3-736ae9a15e7a
+		summarizeBy: sum
+		sourceColumn: [Value3]
+
+		annotation SummarizationSetBy = Automatic
+
+	partition 'Resident Mosaic Metric' = calculated
+		mode: import
+		source =
+				{
+				    ("Total Exams",     NAMEOF('Resident Utilization'[siteProcedureName]), 0),
+				    ("Mosaic Exams",    NAMEOF('Resident Utilization'[Msc_Rpt_Ind]),       1),
+				    ("% Mosaic Exams",  NAMEOF('Resident Utilization'[modality]),           2)
+				}
+
+	annotation PBI_Id = d02acaef793241aa95375d42e665254e
+

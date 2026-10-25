@@ -1,0 +1,38 @@
+table Legendtable
+	lineageTag: 5f6d11ce-fd91-43a3-943b-6d6918748306
+
+	column Color
+		lineageTag: d9b58c6c-3ddc-46bb-ba21-2f0361baa67c
+		summarizeBy: none
+		isNameInferred
+		sourceColumn: [Color]
+
+		annotation SummarizationSetBy = Automatic
+
+	column Threshold
+		lineageTag: 2b6ed09e-b930-4cb1-8318-c573440c534e
+		summarizeBy: none
+		isNameInferred
+		sourceColumn: [Threshold]
+
+		annotation SummarizationSetBy = Automatic
+
+	partition Legendtable = calculated
+		mode: import
+		source = ```
+				
+				
+				        datatable ( 
+				            "Color", string, 
+				            "Threshold", string, 
+				    { 
+				        {"Green" , ">80%" }, 
+				        {"Yellow", "50-80%" }, 
+				        {"Red",  "<50%"}
+				    }
+				)
+				
+				```
+
+	annotation PBI_Id = 9a590f9b3df44bd08d7c0b6a11e6900b
+

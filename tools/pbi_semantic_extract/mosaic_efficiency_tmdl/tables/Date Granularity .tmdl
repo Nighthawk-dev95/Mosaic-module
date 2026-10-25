@@ -1,0 +1,44 @@
+table 'Date Granularity '
+	lineageTag: fc4fd157-4661-4d52-992f-d21fa5b4ee8b
+
+	column 'Date Granularity '
+		lineageTag: 906db259-567b-4e74-8d02-2e718a8bb836
+		summarizeBy: none
+		sourceColumn: [Value1]
+		sortByColumn: 'Date Granularity  Order'
+
+		relatedColumnDetails
+			groupByColumn: 'Date Granularity  Fields'
+
+		annotation SummarizationSetBy = Automatic
+
+	column 'Date Granularity  Fields'
+		isHidden
+		lineageTag: b02082df-d51a-4910-9ff7-1098d4d57edc
+		summarizeBy: none
+		sourceColumn: [Value2]
+		sortByColumn: 'Date Granularity  Order'
+
+		extendedProperty ParameterMetadata = {"version":3,"kind":2}
+
+		annotation SummarizationSetBy = Automatic
+
+	column 'Date Granularity  Order'
+		isHidden
+		formatString: 0
+		lineageTag: 724fa131-bf89-4503-a7a4-86b19ee24121
+		summarizeBy: sum
+		sourceColumn: [Value3]
+
+		annotation SummarizationSetBy = Automatic
+
+	partition 'Date Granularity ' = calculated
+		mode: import
+		source =
+				{
+				    ("Month", NAMEOF('radiologist_metrics'[Beginning_of_Month]), 0),
+				    ("Week", NAMEOF('radiologist_metrics'[Week_Date]), 1)
+				}
+
+	annotation PBI_Id = 604da94cb3734d98bdfb70200a7308bb
+

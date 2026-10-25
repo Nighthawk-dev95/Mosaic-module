@@ -1,0 +1,49 @@
+table 'Mosaic Metric'
+	lineageTag: 90197681-0597-4ecd-b433-c846382fb943
+
+	column 'Mosaic Metric'
+		lineageTag: d5734c1d-6e07-4189-9509-a2902e89cc31
+		summarizeBy: none
+		sourceColumn: [Value1]
+		sortByColumn: 'Mosaic Metric Order'
+
+		relatedColumnDetails
+			groupByColumn: 'Mosaic Metric Fields'
+
+		annotation SummarizationSetBy = Automatic
+
+	column 'Mosaic Metric Fields'
+		isHidden
+		lineageTag: f4b9c0c3-253d-4a76-9bf0-81f801edc842
+		summarizeBy: none
+		sourceColumn: [Value2]
+		sortByColumn: 'Mosaic Metric Order'
+
+		extendedProperty ParameterMetadata = {"version":3,"kind":2}
+
+		annotation SummarizationSetBy = Automatic
+
+	column 'Mosaic Metric Order'
+		isHidden
+		formatString: 0
+		lineageTag: a7f12bd6-7d0f-4230-be50-c8f341f22a06
+		summarizeBy: sum
+		sourceColumn: [Value3]
+
+		annotation SummarizationSetBy = Automatic
+
+	partition 'Mosaic Metric' = calculated
+		mode: import
+		source = ```
+				{
+				    ("Reporting Exams Ct", NAMEOF('Daily_Extract'[Mosaic Exam Ct]), 0),
+				    ("Total Exams", NAMEOF('Daily_Extract'[Total Exam Ct]), 4),
+				    ("% Reporting", NAMEOF('Daily_Extract'[Mosaic Exam %]), 2), 
+				    ("Drafting Exams Ct", NAMEOF('Daily_Extract'[MosaicdraftCt]), 1), 
+				    ("% Drafting", NAMEOF('Daily_Extract'[% Mosaic drafting]), 3)
+				
+				}
+				```
+
+	annotation PBI_Id = 0b99ba75192643498fc7753cec84aa22
+

@@ -10,6 +10,7 @@ diagnostic_mammo_readtimes_jun_sep2026.csv
 mammo_accession_detail_full.csv
 mammo_discrepancies_jun_sep2026.csv
 _tmp_pull/
+~$Mosaic_Efficiency_Method_Comparison.xlsx
 
 # Standard excludes
 node_modules/

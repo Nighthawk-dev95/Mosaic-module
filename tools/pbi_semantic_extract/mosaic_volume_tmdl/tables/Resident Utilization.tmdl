@@ -1,0 +1,483 @@
+table 'Resident Utilization'
+	lineageTag: c098628e-715e-4737-aacf-d9e30da7821b
+
+	measure 'Resident Total Mosaic Exams (All Time)' =
+			
+			CALCULATE(
+			    COUNTROWS('Resident Utilization'),
+			    'Resident Utilization'[Msc_Rpt_Ind] = 1,
+			    REMOVEFILTERS('Resident Utilization'[Calendar_Dt]),
+			    REMOVEFILTERS('Resident Utilization'[Month])
+			)
+		formatString: 0
+		lineageTag: ac35b23d-93b2-43b0-a9cb-079fbf5e079c
+
+	measure 'Resident First Mosaic Exam' =
+			
+			CALCULATE(
+			    MIN('Resident Utilization'[Calendar_Dt]),
+			    'Resident Utilization'[Msc_Rpt_Ind] = 1,
+			    REMOVEFILTERS('Resident Utilization'[Calendar_Dt]),
+			    REMOVEFILTERS('Resident Utilization'[Month])
+			)
+		formatString: Short Date
+		lineageTag: 7e1cb6e4-ec0f-4cad-9f1b-34c2ab1defec
+
+	measure 'Resident % Mosaic Last 14d' =
+			
+			VAR Last14DaysStart = TODAY() - 14
+			
+			VAR MosaicExams =
+			    CALCULATE(
+			        COUNTROWS('Resident Utilization'),
+			        'Resident Utilization'[Msc_Rpt_Ind] = 1,
+			        'Resident Utilization'[Calendar_Dt] >= Last14DaysStart,
+			        'Resident Utilization'[Calendar_Dt] <= TODAY(),
+			        REMOVEFILTERS('Resident Utilization'[Calendar_Dt]),
+			        REMOVEFILTERS('Resident Utilization'[Month])
+			    )
+			
+			VAR TotalExams =
+			    CALCULATE(
+			        COUNTROWS('Resident Utilization'),
+			        'Resident Utilization'[Calendar_Dt] >= Last14DaysStart,
+			        'Resident Utilization'[Calendar_Dt] <= TODAY(),
+			        REMOVEFILTERS('Resident Utilization'[Calendar_Dt]),
+			        REMOVEFILTERS('Resident Utilization'[Month])
+			    )
+			
+			RETURN DIVIDE(MosaicExams, TotalExams, 0)
+		formatString: 0%;-0%;0%
+		lineageTag: e4630b2a-0021-4bde-a1fc-3fab6faabdaf
+
+	measure 'Resident % Mosaic Last 14d Eligible' =
+			
+			VAR Last14DaysStart = TODAY() - 14
+			VAR ExcludedSites = {
+			    "Tampa General Hospital North Brooksville",
+			    "Tampa General Hospital North Spring Hill",
+			    "TGHI Bayonet Point", "TGHI Bloomingale", "TGHI Bruce B Downs",
+			    "TGHI Carrollwood", "TGHI Habana", "TGHI New Port Richey",
+			    "TGHI New Tampa", "TGHI North Dale Mabry", "TGHI Northcliff",
+			    "TGHI Oldsmar", "TGHI Palm Beach Gardens", "TGHI Parsons",
+			    "TGHI Riverview", "TGHI South Tampa", "TGHI Sun City",
+			    "TGHI Sunlake", "TGHI Trinity", "TGHI Wesley Chapel"
+			}
+			VAR ExcludedExams = {
+			    "CT LUNG SCREENING",
+			    "CT LUNG SCREENING FOLLOW UP WITH IV CONTRAST",
+			    "CT LUNG SCREENING FOLLOW UP WITHOUT IV CONTRAST",
+			    "CT LUNG SCREENING WITHOUT CONTRAST",
+			    "CT Lung WO Screening (LDCT) Initial | 71271",
+			    "CT LUNG WO Screening (LDCT) Initial, CT Lung WO Screening (LDCT) Initial"
+			}
+			VAR ExcludedModalities = {"BD", "MG"}
+			
+			VAR MosaicEligibleExams =
+			    CALCULATE(
+			        COUNTROWS('Resident Utilization'),
+			        'Resident Utilization'[Msc_Rpt_Ind] = 1,
+			        'Resident Utilization'[Calendar_Dt] >= Last14DaysStart,
+			        'Resident Utilization'[Calendar_Dt] <= TODAY(),
+			        NOT('Resident Utilization'[Site] IN ExcludedSites),
+			        NOT('Resident Utilization'[siteProcedureName] IN ExcludedExams),
+			        NOT('Resident Utilization'[modality] IN ExcludedModalities),
+			        REMOVEFILTERS('Resident Utilization'[Calendar_Dt]),
+			        REMOVEFILTERS('Resident Utilization'[Month])
+			    )
+			
+			VAR TotalEligibleExams =
+			    CALCULATE(
+			        COUNTROWS('Resident Utilization'),
+			        'Resident Utilization'[Calendar_Dt] >= Last14DaysStart,
+			        'Resident Utilization'[Calendar_Dt] <= TODAY(),
+			        NOT('Resident Utilization'[Site] IN ExcludedSites),
+			        NOT('Resident Utilization'[siteProcedureName] IN ExcludedExams),
+			        NOT('Resident Utilization'[modality] IN ExcludedModalities),
+			        REMOVEFILTERS('Resident Utilization'[Calendar_Dt]),
+			        REMOVEFILTERS('Resident Utilization'[Month])
+			    )
+			
+			RETURN DIVIDE(MosaicEligibleExams, TotalEligibleExams, 0)
+		formatString: 0%;-0%;0%
+		lineageTag: 8eaff31e-855a-487b-9cdd-8ce877f17432
+
+	measure 'Fully Utilizing (Resident)' =
+			
+			VAR PctMosaic = [Resident % Mosaic Last 14d Eligible]
+			RETURN IF(PctMosaic >= 0.8, "Y", "N")
+		lineageTag: b878afb8-f4da-47d1-b0cf-58e51ff4f47e
+
+	measure 'Count Fully Utilizing Residents' =
+			
+			COUNTROWS(
+			    FILTER(
+			        VALUES('Resident Utilization'[Resident]),
+			        [Fully Utilizing (Resident)] = "Y"
+			    )
+			)
+		formatString: 0
+		lineageTag: b78750cc-a5b3-4be1-bf90-c2c0b861f232
+
+	measure 'Exams This Period' =
+			
+			COUNTROWS('Resident Utilization')
+		formatString: 0
+		lineageTag: 0fed9fb3-ce37-48b4-b287-025654bf6aae
+
+	measure 'Mosaic Exams This Period' =
+			
+			CALCULATE(
+			    COUNTROWS('Resident Utilization'),
+			    'Resident Utilization'[Msc_Rpt_Ind] = 1
+			)
+		formatString: 0
+		lineageTag: 32ba61c3-f659-46ea-9622-a45367fe9eb1
+
+	measure 'Resident First Mosaic Draft Exam' =
+			
+			CALCULATE(
+			    MIN('Resident Utilization'[Calendar_Dt]),
+			    'Resident Utilization'[Msc_Draft_Ind] = 1,
+			    REMOVEFILTERS('Resident Utilization'[Calendar_Dt])
+			)
+		formatString: General Date
+		lineageTag: 5aaff3c5-d2bb-41ae-8ed1-474cc1d4574e
+
+	measure 'Resident % Mosaic Exams' =
+			
+			DIVIDE(
+			    CALCULATE(
+			        COUNTROWS('Resident Utilization'),
+			        'Resident Utilization'[Msc_Rpt_Ind] = 1
+			    ),
+			    COUNTROWS('Resident Utilization'),
+			    0
+			)
+		formatString: 0%;-0%;0%
+		lineageTag: 552e4752-d2c2-4934-a947-8e3d03562f46
+
+	measure 'Resident % Mosaic Eligible' =
+			
+			VAR ExcludedSites = {
+			    "Tampa General Hospital North Brooksville",
+			    "Tampa General Hospital North Spring Hill",
+			    "TGHI Bayonet Point", "TGHI Bloomingale", "TGHI Bruce B Downs",
+			    "TGHI Carrollwood", "TGHI Habana", "TGHI New Port Richey",
+			    "TGHI New Tampa", "TGHI North Dale Mabry", "TGHI Northcliff",
+			    "TGHI Oldsmar", "TGHI Palm Beach Gardens", "TGHI Parsons",
+			    "TGHI Riverview", "TGHI South Tampa", "TGHI Sun City",
+			    "TGHI Sunlake", "TGHI Trinity", "TGHI Wesley Chapel"
+			}
+			VAR ExcludedExams = {
+			    "CT LUNG SCREENING",
+			    "CT LUNG SCREENING FOLLOW UP WITH IV CONTRAST",
+			    "CT LUNG SCREENING FOLLOW UP WITHOUT IV CONTRAST",
+			    "CT LUNG SCREENING WITHOUT CONTRAST",
+			    "CT Lung WO Screening (LDCT) Initial | 71271",
+			    "CT LUNG WO Screening (LDCT) Initial, CT Lung WO Screening (LDCT) Initial"
+			}
+			VAR ExcludedModalities = {"BD", "MG"}
+			
+			RETURN
+			CALCULATE(
+			    [Resident % Mosaic Exams],
+			    NOT('Resident Utilization'[Site] IN ExcludedSites),
+			    NOT('Resident Utilization'[siteProcedureName] IN ExcludedExams),
+			    NOT('Resident Utilization'[modality] IN ExcludedModalities)
+			)
+		formatString: 0%;-0%;0%
+		lineageTag: cdf0aa53-e8e1-41a6-9281-2dc64157f532
+
+	measure 'Resident FU Filter' =
+			
+			VAR SelectedStatus = SELECTEDVALUE('Resident FU Status'[Fully Utilizing])
+			
+			RETURN
+			IF(
+			    ISBLANK(SelectedStatus),
+			    1,  -- Nothing selected = show all
+			    IF(
+			        SelectedStatus = "Yes",
+			        IF([Fully Utilizing (Resident)] = "Y", 1, 0),
+			        IF([Fully Utilizing (Resident)] = "N", 1, 0)
+			    )
+			)
+		formatString: 0
+		lineageTag: 1da8b134-3935-4bd1-883f-f25e4c047f60
+
+	column resident
+		dataType: string
+		lineageTag: 97863a62-d81b-4b6b-a806-8b4e2067142a
+		summarizeBy: none
+		sourceColumn: resident
+
+		annotation SummarizationSetBy = Automatic
+
+	column radiologist
+		dataType: string
+		lineageTag: 6d5027aa-795d-4d6f-89a3-ae1d59528243
+		summarizeBy: none
+		sourceColumn: radiologist
+
+		annotation SummarizationSetBy = Automatic
+
+	column Msc_Draft_Ind
+		dataType: int64
+		formatString: 0
+		lineageTag: 95f09c04-d59c-42aa-b0b7-0f58b8b4f9d3
+		summarizeBy: sum
+		sourceColumn: Msc_Draft_Ind
+
+		annotation SummarizationSetBy = Automatic
+
+	column Msc_Rpt_Ind
+		dataType: int64
+		formatString: 0
+		lineageTag: 08829b7b-52fb-43bf-8f55-027eeb4d7c81
+		summarizeBy: sum
+		sourceColumn: Msc_Rpt_Ind
+
+		annotation SummarizationSetBy = Automatic
+
+	column modality
+		dataType: string
+		lineageTag: ab4cfc58-276b-4ede-8730-da569ce0d111
+		summarizeBy: none
+		sourceColumn: modality
+
+		annotation SummarizationSetBy = Automatic
+
+	column accession
+		dataType: string
+		lineageTag: 9ca1de60-94f3-46f0-9ed6-1acd89d423df
+		summarizeBy: none
+		sourceColumn: accession
+
+		annotation SummarizationSetBy = Automatic
+
+	column timeDictationStarted
+		dataType: dateTime
+		formatString: General Date
+		lineageTag: c0b99ae5-1392-4e08-935a-858f3a070daa
+		summarizeBy: none
+		sourceColumn: timeDictationStarted
+
+		annotation SummarizationSetBy = Automatic
+
+	column timeFinishedDictation
+		dataType: dateTime
+		formatString: General Date
+		lineageTag: a0946ebe-b990-4dab-af68-1bb5f1519e10
+		summarizeBy: none
+		sourceColumn: timeFinishedDictation
+
+		annotation SummarizationSetBy = Automatic
+
+	column siteProcedureCode
+		dataType: string
+		lineageTag: c187b52d-c135-47bd-81b2-9ebf11c550a6
+		summarizeBy: none
+		sourceColumn: siteProcedureCode
+
+		annotation SummarizationSetBy = Automatic
+
+	column siteProcedureName
+		dataType: string
+		lineageTag: 6730b9ac-9cde-47c6-8dda-20af88c0977c
+		summarizeBy: none
+		sourceColumn: siteProcedureName
+
+		annotation SummarizationSetBy = Automatic
+
+	column NPI
+		dataType: string
+		lineageTag: 6b1c5c75-d3f1-4ed3-84a4-6b4df2122925
+		summarizeBy: none
+		sourceColumn: NPI
+
+		annotation SummarizationSetBy = Automatic
+
+	column Practice_Short_Name
+		dataType: string
+		lineageTag: 34373c96-1c0f-4b3d-a029-5f89147a2a39
+		summarizeBy: none
+		sourceColumn: Practice_Short_Name
+
+		annotation SummarizationSetBy = Automatic
+
+	column Sub_Practice_Short_Name
+		dataType: string
+		lineageTag: 7afb8c61-b022-4a43-80ec-56c43eb0f93f
+		summarizeBy: none
+		sourceColumn: Sub_Practice_Short_Name
+
+		annotation SummarizationSetBy = Automatic
+
+	column Site
+		dataType: string
+		lineageTag: 5f3f9381-3711-4a10-bf42-9b2604163a6a
+		summarizeBy: none
+		sourceColumn: Site
+
+		annotation SummarizationSetBy = Automatic
+
+	column Calendar_Dt
+		dataType: dateTime
+		formatString: Short Date
+		lineageTag: 4042722d-ff42-4f31-a1cd-5796af39fb31
+		summarizeBy: none
+		sourceColumn: Calendar_Dt
+
+		changedProperty = SortByColumn
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation UnderlyingDateTimeDataType = Date
+
+	column 'Resident Parsed Name' = ```
+			
+			VAR OpenTag = "<OBR.33.2>"
+			VAR CloseTag = "</OBR.33.2>"
+			VAR OpenTagLen = 10
+			VAR RawValue = 'Resident Utilization'[Resident]
+			
+			-- Extract First Name (first occurrence)
+			VAR FirstNameStart = IFERROR(FIND(OpenTag, RawValue, 1), 0) + OpenTagLen
+			VAR FirstNameEnd = IFERROR(FIND(CloseTag, RawValue, 1), 0)
+			VAR FirstName = IF(FirstNameStart > OpenTagLen && FirstNameEnd > 0, 
+			    MID(RawValue, FirstNameStart, FirstNameEnd - FirstNameStart), 
+			    BLANK()
+			)
+			
+			-- Extract Last Name (second occurrence)
+			VAR SecondOpenStart = IFERROR(FIND(OpenTag, RawValue, FirstNameEnd + 1), 0)
+			VAR LastNameStart = SecondOpenStart + OpenTagLen
+			VAR LastNameEnd = IFERROR(FIND(CloseTag, RawValue, SecondOpenStart + 1), 0)
+			VAR LastName = IF(SecondOpenStart > 0 && LastNameEnd > 0,
+			    MID(RawValue, LastNameStart, LastNameEnd - LastNameStart),
+			    BLANK()
+			)
+			
+			RETURN
+			IF(
+			    ISBLANK(FirstName) || ISBLANK(LastName),
+			    RawValue,  -- Fall back to original if parsing fails
+			    FirstName & " " & LastName
+			)
+			```
+		lineageTag: e4aa6c97-af9e-4bb8-8cb3-dfa07ef3a412
+		summarizeBy: none
+
+		annotation SummarizationSetBy = Automatic
+
+	column Month = DATE(YEAR('Resident Utilization'[Calendar_Dt]), MONTH('Resident Utilization'[Calendar_Dt]), 1)
+		formatString: Short Date
+		lineageTag: 8fe5249e-479b-4ac5-b7c6-3ae91b6511ec
+		summarizeBy: none
+		sortByColumn: 'Month Sort'
+
+		changedProperty = DataType
+
+		changedProperty = SortByColumn
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation UnderlyingDateTimeDataType = Date
+
+	column 'Resident Week of First Mosaic Case' = ```
+			
+			VAR CurrentResident = 'Resident Utilization'[Resident]
+			VAR FirstMosaicDate = 
+			    CALCULATE(
+			        MIN('Resident Utilization'[Calendar_Dt]),
+			        ALL('Resident Utilization'),
+			        'Resident Utilization'[Resident] = CurrentResident,
+			        'Resident Utilization'[Msc_Rpt_Ind] = 1
+			    )
+			VAR WeekStart = 
+			    IF(
+			        NOT(ISBLANK(FirstMosaicDate)),
+			        FirstMosaicDate - WEEKDAY(FirstMosaicDate, 2) + 1,
+			        BLANK()
+			    )
+			RETURN
+			    WeekStart
+			```
+		formatString: Short Date
+		lineageTag: 8da8d105-5120-4fe3-8225-20321e699b51
+		summarizeBy: none
+
+		changedProperty = DataType
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation UnderlyingDateTimeDataType = Date
+
+	column Week_Of = ```
+			
+			'Resident Utilization'[Calendar_Dt] - 
+			WEEKDAY('Resident Utilization'[Calendar_Dt], 2) + 1
+			```
+		formatString: Short Date
+		lineageTag: 909db89d-ac47-43de-8df7-5b8440a3ebe6
+		summarizeBy: none
+		sortByColumn: 'Week_Of Sort'
+
+		changedProperty = DataType
+
+		changedProperty = SortByColumn
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation UnderlyingDateTimeDataType = Date
+
+	column 'Week_Of Sort' = ```
+			-1 * VALUE(
+			    'Resident Utilization'[Calendar_Dt] - 
+			    WEEKDAY('Resident Utilization'[Calendar_Dt], 2) + 1
+			)
+			```
+		lineageTag: be6967ff-0b3e-43ab-83e4-d21d3111c8ea
+		summarizeBy: sum
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column 'Month Sort' = ```
+			-1 * VALUE(
+			    DATE(
+			        YEAR('Resident Utilization'[Calendar_Dt]), 
+			        MONTH('Resident Utilization'[Calendar_Dt]), 
+			        1
+			    )
+			)
+			```
+		lineageTag: e0365761-09ff-4459-bcfd-0e515f6b9feb
+		summarizeBy: sum
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	partition 'Resident Utilization' = m
+		mode: import
+		source =
+				let
+				    Source = Databricks.Catalogs("adb-7306149455716415.15.azuredatabricks.net", "/sql/1.0/warehouses/fe0ad987563c672a", [Catalog=null, Database=null, EnableAutomaticProxyDiscovery=null, Implementation=null]),
+				    edw_dev_Database = Source{[Name="edw_dev",Kind="Database"]}[Data],
+				    bipa_analytics_Schema = edw_dev_Database{[Name="bipa_analytics",Kind="Schema"]}[Data],
+				    model_mosaic_residentutilization_vw_View = bipa_analytics_Schema{[Name="model_mosaic_residentutilization_vw",Kind="View"]}[Data],
+				    #"Removed Columns" = Table.RemoveColumns(model_mosaic_residentutilization_vw_View,{"FK_userID"}),
+				    #"Renamed Columns" = Table.RenameColumns(#"Removed Columns",{{"FK_modality", "modality"}}),
+				    #"Removed Columns1" = Table.RemoveColumns(#"Renamed Columns",{"FK_residentUserID"}),
+				    #"Renamed Columns1" = Table.RenameColumns(#"Removed Columns1",{{"dataValue", "NPI"}}),
+				    #"Removed Columns2" = Table.RemoveColumns(#"Renamed Columns1",{"siteAccession"})
+				in
+				    #"Removed Columns2"
+
+	annotation PBI_NavigationStepName = Navigation
+
+	annotation PBI_ResultType = Table
+

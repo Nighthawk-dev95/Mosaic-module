@@ -1,7 +1,7 @@
-import os
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, BackgroundTasks, Header, HTTPException, Query
+from fastapi import APIRouter, BackgroundTasks, HTTPException, Query
+from fastapi.concurrency import run_in_threadpool
 from pydantic import BaseModel
 
 from app.models.mosaic import (
@@ -18,9 +18,6 @@ from app.models.mosaic import (
     CaptureRadiologistItem,
     CaptureUtilizationTrendPracticePoint,
     CaptureUtilizationTrendRadiologistPoint,
-    DeploymentFunnel,
-    DeploymentPracticeRollup,
-    DeploymentRadiologistItem,
     DraftInsightCategoryGroup,
     DraftInsightModalityStat,
     DraftInsightOverview,
@@ -30,22 +27,38 @@ from app.models.mosaic import (
     EfficiencyFilterOptions,
     EfficiencyTrendPoint,
     EfficiencyTrendRpAvgPoint,
-    ExternalFeedbackItem,
-    FocusRadiologistItem,
+    GenieAskRequest,
+    GenieAskResponse,
+    GenieMessageResponse,
+    MammoScreeningTrendPoint,
     MosaicIntelligenceSnapshot,
+    MvpProgramContext,
+    MvpRadiologistItem,
     PopulationEfficiency,
     RadiologistRosterItem,
-    RadiologistScorecard,
     RadSummaryStat,
+    Note,
+    RadiologistLookupMatch,
     RadSurveySummary,
-    ReconciliationFinding,
     RpceTrendPoint,
+    ShiftUtilizationItem,
     UndraftedCategoryPoint,
     UndraftedFilterOptions,
     UtilizationPracticeRollup,
+    VolumeFilterOptions,
+    VolumeGroupRollup,
+    VolumeSummary,
+    VolumeTrendPoint,
 )
-from app.db import cache_store, postgres_client
-from app.services import baseline_overrides, cache_service, refresh_service
+from app.db import postgres_client
+from app.services import (
+    ai_context_service,
+    baseline_overrides,
+    cache_service,
+    genie_service,
+    mvp_weekly_report_service,
+    refresh_service,
+)
 
 router = APIRouter(prefix="/api/mosaic", tags=["mosaic"])
 
@@ -88,37 +101,42 @@ async def utilization_by_practice(days_back: int = Query(30, ge=1, le=365)):
     return cache_service.get_utilization_by_practice(days_back)
 
 
-@router.get("/deployment/by-radiologist", response_model=list[DeploymentRadiologistItem])
-async def deployment_by_radiologist(limit: int = Query(500, ge=1, le=1000), offset: int = Query(0, ge=0)):
-    return cache_service.get_deployment_by_radiologist(limit, offset)
+@router.get("/volume/summary", response_model=VolumeSummary)
+async def volume_summary():
+    return cache_service.get_volume_summary()
 
 
-@router.get("/deployment/by-practice", response_model=list[DeploymentPracticeRollup])
-async def deployment_by_practice():
-    return cache_service.get_deployment_by_practice()
+@router.get("/volume/by-practice", response_model=list[VolumeGroupRollup])
+async def volume_by_practice():
+    return cache_service.get_volume_by_practice()
 
 
-@router.get("/deployment/funnel/reporting", response_model=DeploymentFunnel)
-async def deployment_funnel_reporting():
-    return cache_service.get_deployment_funnel_reporting()
+@router.get("/volume/by-team", response_model=list[VolumeGroupRollup])
+async def volume_by_team():
+    return cache_service.get_volume_by_team()
 
 
-@router.get("/deployment/funnel/drafting", response_model=DeploymentFunnel)
-async def deployment_funnel_drafting():
-    return cache_service.get_deployment_funnel_drafting()
+@router.get("/volume/by-local-region", response_model=list[VolumeGroupRollup])
+async def volume_by_local_region():
+    return cache_service.get_volume_by_local_region()
 
 
-@router.get("/deployment/blockers/drafting", response_model=list[BlockerByPractice])
+@router.get("/volume/trend", response_model=list[VolumeTrendPoint])
+async def volume_trend():
+    return cache_service.get_volume_trend()
+
+
+@router.get("/volume/filters", response_model=VolumeFilterOptions)
+async def volume_filters():
+    return cache_service.get_volume_filter_options()
+
+
+@router.get("/blockers/drafting", response_model=list[BlockerByPractice])
 async def deployment_blockers_drafting():
     return cache_service.get_drafting_blockers_by_practice()
 
 
-@router.get("/deployment/funnel/ct-abdpel", response_model=DeploymentFunnel)
-async def deployment_funnel_ct_abdpel():
-    return cache_service.get_deployment_funnel_ct_abdpel()
-
-
-@router.get("/deployment/blockers/ct-abdpel", response_model=list[BlockerByPractice])
+@router.get("/blockers/ct-abdpel", response_model=list[BlockerByPractice])
 async def deployment_blockers_ct_abdpel():
     return cache_service.get_ct_abdpel_blockers_by_practice()
 
@@ -157,9 +175,56 @@ async def efficiency_trend_rp_avg():
     return cache_service.get_efficiency_trend_rp_avg()
 
 
-@router.get("/efficiency/focus-radiologists", response_model=list[FocusRadiologistItem])
-async def efficiency_focus_radiologists():
-    return cache_service.get_focus_radiologists()
+@router.get("/mvp/radiologists", response_model=list[MvpRadiologistItem])
+async def mvp_radiologists():
+    return cache_service.get_mvp_radiologists()
+
+
+@router.get("/mvp/context", response_model=MvpProgramContext)
+async def mvp_context():
+    return cache_service.get_mvp_context()
+
+
+@router.get("/mvp/area-detail", response_model=dict[str, list[EfficiencyTrendPoint]])
+async def mvp_area_detail():
+    """All 6 Local teams' 4-line efficiency trend in one call (MVP Area Detail dashboard) -
+    there are only 6, and the dropdown needs instant switching between them."""
+    return cache_service.get_efficiency_trend_by_local_team()
+
+
+@router.get("/mvp/mammo-screening-trend", response_model=list[MammoScreeningTrendPoint])
+async def mvp_mammo_screening_trend():
+    return cache_service.get_mammo_screening_trend()
+
+
+@router.get("/mvp/mammo-screening-trend/mvp-only", response_model=list[MammoScreeningTrendPoint])
+async def mvp_mammo_screening_trend_mvp_only():
+    return cache_service.get_mvp_mammo_screening_trend()
+
+
+@router.post("/mvp/weekly-report/generate")
+async def generate_mvp_weekly_report(scope: str = Query(..., pattern="^(overview|mammo)$")):
+    # Synchronous LLM call inside (generate_weekly_report_narrative) - must not block the
+    # single-threaded event loop, same reasoning as the existing /ai-context route above.
+    return await run_in_threadpool(mvp_weekly_report_service.generate_snapshot, scope)
+
+
+@router.get("/mvp/weekly-report")
+async def get_mvp_weekly_report(scope: str = Query(..., pattern="^(overview|mammo)$")):
+    snapshots = postgres_client.get_weekly_snapshots(scope, limit=1)
+    if not snapshots:
+        raise HTTPException(status_code=404, detail=f"No weekly snapshot generated yet for scope={scope!r}")
+    return snapshots[0]
+
+
+@router.get("/mvp/weekly-report/history")
+async def get_mvp_weekly_report_history(scope: str = Query(..., pattern="^(overview|mammo)$"), limit: int = Query(12, ge=1, le=52)):
+    return postgres_client.get_weekly_snapshots(scope, limit)
+
+
+@router.get("/mvp/methodology-check")
+async def mvp_methodology_check(scope: str = Query(..., pattern="^(overview|mammo)$")):
+    return cache_service.get_mvp_methodology_check(scope)
 
 
 @router.get("/survey/rad-sentiment", response_model=RadSurveySummary)
@@ -226,9 +291,9 @@ async def capacity_by_practice():
     return cache_service.get_capacity_by_practice()
 
 
-@router.get("/radiologist-scorecard", response_model=list[RadiologistScorecard])
-async def radiologist_scorecard(practice: str | None = None):
-    return cache_service.get_radiologist_scorecard(practice)
+@router.get("/shift-utilization", response_model=list[ShiftUtilizationItem])
+async def shift_utilization(practice: str | None = None):
+    return cache_service.get_shift_utilization_by_radiologist(practice)
 
 
 @router.get("/undrafted-analysis", response_model=list[UndraftedCategoryPoint])
@@ -349,57 +414,86 @@ async def get_review_activity(limit: int = Query(20, ge=1, le=100)):
     return enriched
 
 
-# Speculative push-ingestion endpoint - a best-guess mirror of practice-command-dev's apparent
-# resource shape (DATABRICKS_TOKEN / FEEDBACK_QUEUE_WEBHOOK_URL / INGEST_SHARED_SECRET), inferred
-# from `databricks apps list` metadata only - their actual source isn't visible to us, so this is
-# NOT a confirmed replica of their design. Deliberately sandboxed: the allowlist below is the only
-# thing stopping an external caller from overwriting one of the real EDW-sourced cache keys the
-# rest of this app depends on - do not widen it without equally deliberate thought.
-_INGEST_ALLOWED_DATASETS = {"external_feedback_demo"}
+@router.get("/radiologist-lookup/search", response_model=list[RadiologistLookupMatch])
+async def search_radiologist_lookup(q: str = Query(...)):
+    # 3-character minimum, matching PCC's own radiologist-drilldown search gate exactly -
+    # not a soft UX hint, a real server-side floor.
+    if len(q.strip()) < 3:
+        raise HTTPException(status_code=400, detail="Search query must be at least 3 characters")
+    return cache_service.search_radiologist_lookup(q)
 
 
-def _check_ingest_secret(x_ingest_secret: str | None) -> None:
-    expected = os.environ.get("INGEST_SHARED_SECRET")
-    if not expected:
-        # Fail closed: an unset secret must never be treated as "accept anything" - this is
-        # the normal/expected state in local dev, where the resource isn't bound.
-        raise HTTPException(status_code=503, detail="ingest endpoint not configured")
-    if x_ingest_secret != expected:
-        raise HTTPException(status_code=401, detail="invalid or missing X-Ingest-Secret")
+@router.get("/radiologist-lookup/{npi}")
+async def get_radiologist_lookup(npi: int, q: str | None = Query(None)):
+    # The actual privacy-log step - every open of this page writes an audit row, mirroring
+    # PCC's own "views are still logged" rule for this exact kind of individual drilldown.
+    postgres_client.log_radiologist_lookup_view(npi, q, datetime.now(timezone.utc))
+    return cache_service.get_radiologist_lookup_detail(npi)
 
 
-@router.post("/ingest/{dataset_name}")
-async def post_ingest(
-    dataset_name: str, rows: list[ExternalFeedbackItem], x_ingest_secret: str | None = Header(default=None)
-):
-    _check_ingest_secret(x_ingest_secret)
-    if dataset_name not in _INGEST_ALLOWED_DATASETS:
-        raise HTTPException(status_code=404, detail=f"{dataset_name!r} is not an ingestable dataset")
-    cache_store.save(dataset_name, [row.model_dump() for row in rows])
-    return {"status": "ingested", "row_count": len(rows)}
+class AiContextRequest(BaseModel):
+    feature: str
+    entity_label: str
+    metric_label: str
+    value: str
+    extra: dict[str, str] | None = None
 
 
-@router.get("/ingest/{dataset_name}")
-async def get_ingest(dataset_name: str, x_ingest_secret: str | None = Header(default=None)):
-    _check_ingest_secret(x_ingest_secret)
-    if dataset_name not in _INGEST_ALLOWED_DATASETS:
-        raise HTTPException(status_code=404, detail=f"{dataset_name!r} is not an ingestable dataset")
-    rows, refreshed_at = cache_store.load(dataset_name)
-    if rows is None:
-        raise HTTPException(status_code=404, detail="no data ingested yet")
-    return {"rows": rows, "refreshed_at": refreshed_at}
+class AiContextResponse(BaseModel):
+    explanation: str
 
 
-@router.get("/external-feedback", response_model=list[ExternalFeedbackItem])
-async def get_external_feedback():
-    # Internal read path for the dashboard - no X-Ingest-Secret needed here, same as every
-    # other GET route; the secret only gates the external-facing ingest path above.
-    return cache_service.get_external_feedback()
+@router.post("/ai-context", response_model=AiContextResponse)
+async def ai_context(req: AiContextRequest):
+    # explain_data_point makes a synchronous, potentially slow (cold-start, auth-scope-retry,
+    # or just a loaded serving endpoint) network call - confirmed live this session to otherwise
+    # freeze the entire single-threaded ASGI event loop (every other concurrent request, on any
+    # route, stalls until it returns) if called directly from an async route. run_in_threadpool
+    # keeps this endpoint's own fail-closed contract (still never raises) while no longer being
+    # able to take the rest of the app down with it.
+    explanation = await run_in_threadpool(
+        ai_context_service.explain_data_point,
+        req.feature, req.entity_label, req.metric_label, req.value, req.extra,
+    )
+    return AiContextResponse(explanation=explanation)
 
 
-@router.get("/reconciliation", response_model=list[ReconciliationFinding])
-async def get_reconciliation_findings():
-    return cache_service.get_reconciliation_findings()
+@router.post("/genie/ask", response_model=GenieAskResponse)
+async def genie_ask(req: GenieAskRequest):
+    result = genie_service.ask(req.question, req.conversation_id)
+    return GenieAskResponse(**result)
+
+
+@router.get("/genie/message", response_model=GenieMessageResponse)
+async def genie_message(conversation_id: str, message_id: str):
+    result = genie_service.get_message(conversation_id, message_id)
+    return GenieMessageResponse(**result)
+
+
+class NoteIn(BaseModel):
+    entity_type: str
+    entity_key: str
+    note_text: str
+
+
+@router.get("/notes", response_model=list[Note])
+async def get_notes(entity_type: str = Query(...), entity_key: str = Query(...)):
+    return postgres_client.list_notes(entity_type, entity_key)
+
+
+@router.post("/notes")
+async def post_note(note: NoteIn):
+    if note.entity_type not in ("radiologist", "practice"):
+        raise HTTPException(status_code=400, detail="entity_type must be 'radiologist' or 'practice'")
+    saved = postgres_client.save_note(
+        entity_type=note.entity_type,
+        entity_key=note.entity_key,
+        note_text=note.note_text,
+        created_at=datetime.now(timezone.utc),
+    )
+    if not saved:
+        raise HTTPException(status_code=503, detail="Could not save note - Postgres unavailable")
+    return {"status": "saved"}
 
 
 @router.post("/refresh")

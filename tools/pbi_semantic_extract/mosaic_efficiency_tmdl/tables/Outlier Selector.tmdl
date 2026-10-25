@@ -1,0 +1,47 @@
+table 'Outlier Selector'
+	lineageTag: 62552f12-0c3c-4237-89b4-12a023519827
+
+	measure 'Outlier Filter Values' =
+			
+			VAR SelectedView = SELECTEDVALUE('Outlier Selector'[Outlier View], "Excluded")
+			
+			RETURN
+			IF(
+			    SelectedView = "Included",
+			    {"Excluded", "Included"},  -- Return both (all exams)
+			    {"Excluded"}               -- Return non-outliers only
+			)
+		lineageTag: d0e991cc-e106-4482-a9ed-fa42e96ee594
+
+	column 'Outlier View'
+		lineageTag: d5a05c42-fb0d-4ec2-9648-38a687166ce6
+		summarizeBy: none
+		isNameInferred
+		sourceColumn: [Outlier View]
+
+		annotation SummarizationSetBy = Automatic
+
+	column SortOrder
+		formatString: 0
+		lineageTag: 8e081b40-2b0d-4331-a304-7d0a6fe17505
+		summarizeBy: sum
+		isNameInferred
+		sourceColumn: [SortOrder]
+
+		annotation SummarizationSetBy = Automatic
+
+	partition 'Outlier Selector' = calculated
+		mode: import
+		source =
+				
+				DATATABLE(
+				    "Outlier View", STRING,
+				    "SortOrder", INTEGER,
+				    {
+				        {"Excluded", 0},
+				        {"Included", 1}
+				    }
+				)
+
+	annotation PBI_Id = a1011dde48d04079a195e7120169f39e
+

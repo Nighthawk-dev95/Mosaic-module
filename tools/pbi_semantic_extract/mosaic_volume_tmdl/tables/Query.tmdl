@@ -1,0 +1,131 @@
+table Query
+	lineageTag: bfcf1d0a-168e-43d7-bc17-3706d45b5486
+
+	measure 'first draft case' = calculate ( min ('Daily_Extract'[Final_DateTime - Date]), filter ( 'Daily_Extract','Daily_Extract'[mosaic_draft_flag] = 1 ))
+		formatString: Short Date
+		lineageTag: 97c79747-18f0-40d1-b519-029ca929ab0b
+
+	measure 'Distinct Providers with First Draft Case and AD Group Date' =
+			
+			CALCULATE(
+			    DISTINCTCOUNT(Query[NPI]),
+			    FILTER(
+			        Query,
+			        NOT(ISBLANK(Query[first draft case])) &&
+			        NOT(ISBLANK(Query[Date Added to AD Group]))
+			    )
+			)
+		formatString: 0
+		lineageTag: eb322376-efc2-43bb-9178-dbcb033a866b
+
+	measure TotalRadsLive_ByAdoption_debug =
+			
+			
+			
+			VAR SelectedStatuses = VALUES( FullyAdoptedSlicer[Status] )
+			VAR ApplySingleStatus = COUNTROWS( SelectedStatuses ) = 1
+			VAR SelStatus = IF( ApplySingleStatus, MAX( FullyAdoptedSlicer[Status] ), BLANK() )
+			
+			-- pre-calculate fully adopted per provider
+			VAR ProviderTable =
+			    ADDCOLUMNS(
+			        VALUES('Daily_Extract'[NPI]),
+			        "FirstCase",
+			            CALCULATE(
+			                MIN('Daily_Extract'[Final_DateTime - Date]),
+			                'Daily_Extract'[Mosaic Exam Flag] = 1,
+			                ALLEXCEPT('Daily_Extract','Daily_Extract'[NPI])
+			            ),
+			        "ProviderTotalExams_Last14",
+			            CALCULATE(
+			                COUNTROWS('Daily_Extract'),
+			                'Daily_Extract'[NPI] = EARLIER('Daily_Extract'[NPI]),
+			                'Daily_Extract'[Date] > TODAY() - 14,
+			                'Daily_Extract'[Date] <= TODAY()
+			            ),
+			        "ProviderMosaicExams_Last14",
+			            CALCULATE(
+			                COUNTROWS('Daily_Extract'),
+			                'Daily_Extract'[NPI] = EARLIER('Daily_Extract'[NPI]),
+			                'Daily_Extract'[Date] > TODAY() - 14,
+			                'Daily_Extract'[Date] <= TODAY(),
+			                'Daily_Extract'[Mosaic Exam Flag] = 1
+			            )
+			    )
+			
+			VAR ProviderWithFlag =
+			    ADDCOLUMNS(
+			        ProviderTable,
+			        "IsFullyAdopted",
+			            VAR PctMosaic = DIVIDE([ProviderMosaicExams_Last14],[ProviderTotalExams_Last14],0)
+			            VAR IsEligible = NOT(ISBLANK([FirstCase])) && [FirstCase] <= TODAY() - 14
+			            RETURN IsEligible && PctMosaic > 0.8
+			    )
+			
+			VAR FullyAdoptedCount =
+			    COUNTROWS( FILTER( ProviderWithFlag, [IsFullyAdopted] ) )
+			
+			VAR OverallCount =
+			    COUNTROWS( FILTER( ProviderWithFlag, NOT ISBLANK([FirstCase]) ) )
+			
+			RETURN
+			SWITCH(
+			    TRUE(),
+			    NOT ApplySingleStatus,               -- no slicer selection = overall totals
+			        IF( HASONEVALUE(FullyAdoptedSlicer[Status]),
+			            BLANK(),                     -- keep the per-row calculation for normal rows
+			            SWITCH(
+			                SELECTEDVALUE(FullyAdoptedSlicer[Status]),
+			                "Fully Adopted", FullyAdoptedCount,
+			                "Not Fully Adopted", OverallCount - FullyAdoptedCount,
+			                OverallCount
+			            )
+			        ),
+			    SelStatus = "Fully Adopted", FullyAdoptedCount,
+			    SelStatus = "Not Fully Adopted", OverallCount - FullyAdoptedCount,
+			    OverallCount
+			)
+		formatString: 0
+		lineageTag: 3c4b1943-6793-4d58-a254-b7e7c6d79f0b
+
+	column NPI
+		dataType: string
+		lineageTag: 76163ee8-f8f6-42de-90bd-31e1b361048e
+		summarizeBy: none
+		sourceColumn: NPI
+
+		annotation SummarizationSetBy = Automatic
+
+	column 'Date Added to AD Group'
+		dataType: string
+		lineageTag: a1a566ae-77be-49e8-9751-0d217f52661e
+		summarizeBy: none
+		sourceColumn: Date Added to AD Group
+
+		annotation SummarizationSetBy = Automatic
+
+	column 'Date of first Mosaic Drafting case'
+		dataType: string
+		lineageTag: 6620262d-e47e-4440-8a2d-5f6dd09644eb
+		summarizeBy: none
+		sourceColumn: Date of first Mosaic Drafting case
+
+		annotation SummarizationSetBy = Automatic
+
+	partition Query = m
+		mode: import
+		source =
+				let
+				    Source = PowerPlatform.Dataflows(null),
+				    Workspaces = Source{[Id="Workspaces"]}[Data],
+				    #"26a2af7d-1704-4c73-a99a-c01d91d2ae8b" = Workspaces{[workspaceId="26a2af7d-1704-4c73-a99a-c01d91d2ae8b"]}[Data],
+				    #"7a02d70a-fda1-4f5c-810a-dec6c9b465f6" = #"26a2af7d-1704-4c73-a99a-c01d91d2ae8b"{[dataflowId="7a02d70a-fda1-4f5c-810a-dec6c9b465f6"]}[Data],
+				    Query_ = #"7a02d70a-fda1-4f5c-810a-dec6c9b465f6"{[entity="Query",version=""]}[Data],
+				    #"Removed Duplicates" = Table.Distinct(Query_, {"NPI"})
+				in
+				    #"Removed Duplicates"
+
+	annotation PBI_NavigationStepName = Navigation
+
+	annotation PBI_ResultType = Table
+

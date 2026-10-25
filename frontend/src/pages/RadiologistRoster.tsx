@@ -4,16 +4,45 @@ import { useFetch } from "../hooks/useFetch";
 import { DataTable } from "../components/DataTable";
 import type { DataTableColumn } from "../components/DataTable";
 import { FilterBar } from "../components/FilterBar";
+import { AIHoverCard } from "../components/AIHoverCard";
 import { useFilters, matchesPractice, matchesRadiologistSearch } from "../context/FilterContext";
 import { getLocalRegion } from "../utils/localRegion";
 import type { RadiologistRosterItem } from "../api/types";
 
+// The rad's home practice is what PBI labels Team - one column, two names - so it is rendered
+// once, not twice. What PBI labels Practice is the exam SITE, which is per-exam and multi-valued
+// (43% of rads read at more than one, up to 70), so it gets its own column showing the site they
+// read at most with the number of others beside it, never a single name standing in for all.
 const COLUMNS: DataTableColumn<RadiologistRosterItem>[] = [
   { key: "radiologist_name", label: "Radiologist" },
-  { key: "home_practice", label: "Practice" },
+  { key: "current_team", label: "Team (Home Practice)" },
+  {
+    key: "primary_site",
+    label: "Primary Site",
+    render: (r) =>
+      r.primary_site
+        ? `${r.primary_site}${r.site_count && r.site_count > 1 ? ` +${r.site_count - 1}` : ""}`
+        : "—",
+  },
   { key: "working_subspecialty", label: "Subspecialty" },
-  { key: "deployment_status", label: "Deployment Status" },
-  { key: "current_team", label: "Team" },
+  {
+    key: "deployment_status",
+    label: "Deployment Status",
+    render: (r) =>
+      r.deployment_status ? (
+        <AIHoverCard
+          feature="adoption_rollout"
+          entityLabel={r.radiologist_name ?? `NPI ${r.npi}`}
+          metricLabel="Deployment status"
+          value={r.deployment_status}
+          extra={{ practice: r.home_practice ?? "unknown", subspecialty: r.working_subspecialty ?? "unknown" }}
+        >
+          {r.deployment_status}
+        </AIHoverCard>
+      ) : (
+        "—"
+      ),
+  },
   { key: "reporting_cases_read", label: "Exams Read" },
   { key: "total_drafting_cases", label: "Drafting Cases" },
   { key: "total_mosaic_exams", label: "Total Mosaic Exams" },

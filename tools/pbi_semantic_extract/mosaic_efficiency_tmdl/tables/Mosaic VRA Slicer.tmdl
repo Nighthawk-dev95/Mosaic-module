@@ -1,0 +1,45 @@
+table 'Mosaic VRA Slicer'
+	lineageTag: 94eecb77-983a-4dd9-a922-beb516cea2ec
+
+	measure 'Debug Info' = ```
+			
+			VAR CurrentRad = SELECTEDVALUE(radiologist_metrics[Radiologist])
+			VAR CurrentProc = SELECTEDVALUE(radiologist_metrics[Parent_Procedure_name])
+			RETURN
+			"Rad: " & IF(ISBLANK(CurrentRad), "BLANK", CurrentRad) & 
+			" | Proc: " & IF(ISBLANK(CurrentProc), "BLANK", CurrentProc)
+			```
+		lineageTag: ca73d5a1-f7d5-41b8-a267-f22f663817e7
+
+	column VRA_Mosaic
+		formatString: 0
+		lineageTag: 150fcdfa-3ea3-47ae-a032-1639ca8dd4e4
+		summarizeBy: sum
+		isNameInferred
+		sourceColumn: [VRA_Mosaic]
+
+		annotation SummarizationSetBy = Automatic
+
+	column VRA_Drafting_Label
+		lineageTag: 6ca6cc7c-0c11-4c98-9f01-070758ef5020
+		summarizeBy: none
+		isNameInferred
+		sourceColumn: [VRA_Drafting_Label]
+
+		annotation SummarizationSetBy = Automatic
+
+	partition 'Mosaic VRA Slicer' = calculated
+		mode: import
+		source =
+				
+				DATATABLE(
+				    "VRA_Mosaic", INTEGER,
+				    "VRA_Drafting_Label", STRING,
+				    {
+				        {0, "Non-VRA Drafting"},
+				        {1, "VRA Drafting"}
+				    }
+				)
+
+	annotation PBI_Id = 59c321bbf613451cad35e585e10618b0
+

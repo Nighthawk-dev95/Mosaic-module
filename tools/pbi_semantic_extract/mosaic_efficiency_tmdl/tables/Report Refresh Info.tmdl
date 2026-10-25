@@ -1,0 +1,36 @@
+table 'Report Refresh Info'
+	lineageTag: 79203baf-ffaa-4bd9-b308-95e0a11a3f47
+
+	measure 'Report Refreshed Label' =
+			
+			VAR RefreshTS = MAX('Report Refresh Info'[LastRefresh])
+			RETURN
+			"Report Refreshed: "
+			& FORMAT(RefreshTS, "mmmm d,yyyy hh:mm AM/PM")
+			& " MST - Data Sources: Clinical"
+		lineageTag: d346c2ba-f845-45e9-aff6-cdbee3f24101
+
+	column LastRefresh
+		formatString: General Date
+		lineageTag: 733c81cf-1b4d-491f-ae7f-a46f9bd54093
+		summarizeBy: none
+		isNameInferred
+		sourceColumn: [LastRefresh]
+
+		variation Variation
+			isDefault
+			relationship: b2eb60dd-70a2-411d-bd88-d28f85c7722f
+			defaultHierarchy: LocalDateTable_a8ad2615-cfa7-4b58-a50f-db7099855152.'Date Hierarchy'
+
+		annotation SummarizationSetBy = Automatic
+
+	partition 'Report Refresh Info' = calculated
+		mode: import
+		source =
+				
+				ROW(
+				    "LastRefresh", NOW()
+				)
+
+	annotation PBI_Id = e7ca7b17caa34384bacdfdc6d6441b8e
+

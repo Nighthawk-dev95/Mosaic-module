@@ -1,0 +1,69 @@
+table vrarp_launchmodel
+	lineageTag: cfa04e88-0301-4ee7-9f36-f2ef5a183b33
+
+	column 'Model Go-Live Date'
+		dataType: dateTime
+		formatString: General Date
+		lineageTag: 2ed87470-3ae0-48ea-8c78-dd8ec565f428
+		summarizeBy: none
+		sourceColumn: vrarp_launchdate
+
+		annotation SummarizationSetBy = Automatic
+
+	column 'Model Status'
+		dataType: string
+		lineageTag: 8d98da03-b9b3-4ce9-a7a6-8dceff725920
+		summarizeBy: none
+		sourceColumn: vrarp_modelstatusname
+
+		annotation SummarizationSetBy = Automatic
+
+	column 'Model Type'
+		dataType: string
+		lineageTag: de11b0ed-30b6-448d-9d40-b227790722ec
+		summarizeBy: none
+		sourceColumn: vrarp_modeltypename
+
+		annotation SummarizationSetBy = Automatic
+
+	column Practice
+		dataType: string
+		lineageTag: b8ea8298-e897-4b8e-8902-830fac5daaab
+		summarizeBy: none
+		sourceColumn: vrarp_practicename
+
+		annotation SummarizationSetBy = Automatic
+
+	column 'Launch Model'
+		dataType: string
+		lineageTag: 0d5f0f10-ea6d-4098-9e86-60233a6fc45b
+		summarizeBy: none
+		sourceColumn: vrarp_launchmodelname
+
+		annotation SummarizationSetBy = Automatic
+
+	column 'Model Launch Owner'
+		dataType: string
+		lineageTag: 0e7e2531-d79b-46ff-837e-7fb75e086081
+		summarizeBy: none
+		sourceColumn: vrarp_modellaunchownername
+
+		annotation SummarizationSetBy = Automatic
+
+	partition vrarp_launchmodel = m
+		mode: import
+		source =
+				let
+				    Source = CommonDataService.Database("orgdf658607.crm.dynamics.com"),
+				    dbo_vrarp_launchmodel = Source{[Schema="dbo",Item="vrarp_launchmodel"]}[Data],
+				    #"Filtered Rows" = Table.SelectRows(dbo_vrarp_launchmodel, each ([vrarp_launchmodelname] = "Pool (CT,MR,US)" or [vrarp_launchmodelname] = "US Pool")),
+				    #"Removed Columns" = Table.RemoveColumns(#"Filtered Rows",{"vrarp_modellaunchowneryominame", "vrarp_modelradchampion2name", "vrarp_modelradchampion2yominame", "vrarp_modelvendorname", "vrarp_modelvendoryominame", "vrarp_radpipelinename", "account(vrarp_account)", "account(vrarp_modelvendor)", "account(vrarp_practice)", "asyncoperation", "businessunit", "contact(vrarp_modellaunchowner)", "contact(vrarp_modelradchampion2)", "contact(vrarp_vravendor)", "processsession", "systemuser(createdby)", "systemuser(createdonbehalfby)", "systemuser(modifiedby)", "systemuser(modifiedonbehalfby)", "systemuser(owninguser)", "team", "vrarp_model", "vrarp_radchecklisttemplate", "vrarp_radpipeline(vrarp_radpipeline)", "vrarp_launchmodelid", "createdon", "createdby", "modifiedon", "modifiedby", "createdonbehalfby", "modifiedonbehalfby", "createdbyname", "createdbyyominame", "createdonbehalfbyname", "createdonbehalfbyyominame", "modifiedbyname", "modifiedbyyominame", "modifiedonbehalfbyname", "modifiedonbehalfbyyominame", "ownerid", "owneridname", "owneridyominame", "owningbusinessunit", "owninguser", "owningteam", "owningbusinessunitname", "statecode", "statecodename", "statuscode", "statuscodename", "importsequencenumber", "overriddencreatedon", "timezoneruleversionnumber", "utcconversiontimezonecode", "vrarp_name", "vrarp_account", "vrarp_fullylaunched", "vrarp_fullylaunchedname", "vrarp_launchmodeldetail", "vrarp_modelname", "vrarp_modelstatus", "vrarp_modeltype", "vrarp_notes", "vrarp_practice", "vrarp_strategy", "vrarp_vratoradratio", "vrarp_accountyominame", "vrarp_practiceyominame", "vrarp_accountname", "vrarp_vravendor", "vrarp_modelnamename", "vrarp_vravendorname", "vrarp_vravendoryominame", "vrarp_cascadetaskstorads", "vrarp_cascadetaskstoradsname", "vrarp_launchmodel", "vrarp_launchmodeltype", "vrarp_launchmodeltypename", "vrarp_modelexitdate", "vrarp_practicetext", "vrarp_radpipeline", "vrarp_modelradchampion2", "vrarp_modellaunchowner", "vrarp_modelvendor"}),
+				    #"Filtered Rows1" = Table.SelectRows(#"Removed Columns", each ([vrarp_launchdate] <> null)),
+				    #"Removed Duplicates" = Table.Distinct(#"Filtered Rows1", {"vrarp_practicename"})
+				in
+				    #"Removed Duplicates"
+
+	annotation PBI_NavigationStepName = Navigation
+
+	annotation PBI_ResultType = Table
+

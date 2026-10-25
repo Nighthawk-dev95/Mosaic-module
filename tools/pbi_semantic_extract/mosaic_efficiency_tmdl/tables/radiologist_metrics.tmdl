@@ -1,0 +1,641 @@
+table radiologist_metrics
+	lineageTag: 88b35387-1fcc-4cd8-8aae-7a6e33b61be1
+
+	column Radiologist
+		dataType: string
+		lineageTag: 4822b842-d1a2-41b6-9715-2687d4fb0a1b
+		summarizeBy: none
+		sourceColumn: Radiologist
+
+		annotation SummarizationSetBy = Automatic
+
+	column Physician_NPI
+		dataType: double
+		lineageTag: d5301eac-2271-4abd-a009-17dcf19ac3ab
+		summarizeBy: none
+		sourceColumn: Physician_NPI
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column Team
+		dataType: string
+		lineageTag: c6e0f136-b434-4505-890d-8e5a5f124f53
+		summarizeBy: none
+		sourceColumn: Team
+
+		annotation SummarizationSetBy = Automatic
+
+	column Parent_Procedure_name
+		dataType: string
+		lineageTag: e94f86e2-9b45-4c4d-9adf-2209044777cc
+		summarizeBy: none
+		sourceColumn: Parent_Procedure_name
+
+		annotation SummarizationSetBy = Automatic
+
+	column Practice
+		dataType: string
+		lineageTag: 646c0b9a-7516-4a1b-b32f-38e2c2303f1e
+		summarizeBy: none
+		sourceColumn: Practice
+
+		annotation SummarizationSetBy = Automatic
+
+	column Location_Name
+		dataType: string
+		lineageTag: 505e933f-1383-49c3-af62-bfe4cfaf9c62
+		summarizeBy: none
+		sourceColumn: Location_Name
+
+		annotation SummarizationSetBy = Automatic
+
+	column working_subspecialty
+		dataType: string
+		lineageTag: 42bd4581-7837-4e96-8aa4-5fbe6b4faed6
+		summarizeBy: none
+		sourceColumn: working_subspecialty
+
+		annotation SummarizationSetBy = Automatic
+
+	column Place_of_Service
+		dataType: string
+		lineageTag: 1aae9d94-f053-4ca7-8476-40dd9e8894b3
+		summarizeBy: none
+		sourceColumn: Place_of_Service
+
+		annotation SummarizationSetBy = Automatic
+
+	column Priority_Description
+		dataType: string
+		lineageTag: d7429ea0-7f03-4809-8754-3072b85fec05
+		summarizeBy: none
+		sourceColumn: Priority_Description
+
+		annotation SummarizationSetBy = Automatic
+
+	column Modality_Code
+		dataType: string
+		lineageTag: 4260bfd5-4e31-488a-89f3-46dd94cd25d1
+		summarizeBy: none
+		sourceColumn: Modality_Code
+
+		annotation SummarizationSetBy = Automatic
+
+	column Interventional_Flag
+		dataType: int64
+		formatString: 0
+		lineageTag: 4e554a2c-33c4-4e2c-8fd4-e9bcd0f3e1bb
+		summarizeBy: sum
+		sourceColumn: Interventional_Flag
+
+		annotation SummarizationSetBy = Automatic
+
+	column Exam_Date
+		dataType: dateTime
+		formatString: Short Date
+		lineageTag: cf224a28-7f75-4a78-87f3-8627b28c6f94
+		summarizeBy: none
+		sourceColumn: Exam_Date
+
+		variation Variation
+			isDefault
+			relationship: 6c3be3e8-ed70-4b2b-a720-e9af8940bca6
+			defaultHierarchy: LocalDateTable_e6eddf89-ad40-4a9b-b9e8-1432f8dbecf4.'Date Hierarchy'
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation UnderlyingDateTimeDataType = Date
+
+	column vra_assisted_flag
+		dataType: int64
+		formatString: 0
+		lineageTag: 132b63a4-d848-4039-9211-c7572216644d
+		summarizeBy: sum
+		sourceColumn: vra_assisted_flag
+
+		annotation SummarizationSetBy = Automatic
+
+	column Outliers
+		dataType: string
+		lineageTag: 72f0367e-b435-40fa-babd-b63e84e3bb8e
+		summarizeBy: none
+		sourceColumn: Outliers
+
+		annotation SummarizationSetBy = Automatic
+
+	column Period_Type
+		dataType: string
+		lineageTag: 5d6b2538-8223-49c3-915b-fb4cd015d531
+		summarizeBy: none
+		sourceColumn: Period_Type
+
+		annotation SummarizationSetBy = Automatic
+
+	column TotalTime
+		dataType: int64
+		formatString: 0
+		lineageTag: 0aa02c29-6bb8-4802-a40d-8b61a3bb7199
+		summarizeBy: sum
+		sourceColumn: TotalTime
+
+		annotation SummarizationSetBy = Automatic
+
+	column TotalRVU
+		dataType: double
+		lineageTag: 3d5ffc8c-33d7-4ae6-9c70-f2fea596400f
+		summarizeBy: sum
+		sourceColumn: TotalRVU
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column TotalTBWU
+		dataType: double
+		lineageTag: 79209c57-0df7-421b-8cfc-ad08597a2dd3
+		summarizeBy: sum
+		sourceColumn: TotalTBWU
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column ExamCount
+		dataType: int64
+		formatString: 0
+		lineageTag: abeb991b-9c44-453d-8dbd-9470fe1840a6
+		summarizeBy: sum
+		sourceColumn: ExamCount
+
+		annotation SummarizationSetBy = Automatic
+
+	column Week_Date =
+			
+			radiologist_metrics[Exam_Date] - WEEKDAY(radiologist_metrics[Exam_Date], 2) + 1
+		formatString: Short Date
+		lineageTag: bfb791cd-2f3d-4d37-a5ec-49879c148109
+		summarizeBy: none
+
+		variation Variation
+			isDefault
+			relationship: 6a28c533-10e0-497c-8a34-6d242140c7c6
+			defaultHierarchy: LocalDateTable_58c92a4e-6169-4ee5-b10c-359dadf04b1a.'Date Hierarchy'
+
+		changedProperty = DataType
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation UnderlyingDateTimeDataType = Date
+
+	column 'Drafting Enabled' =
+			
+			VAR CurrentNPI = radiologist_metrics[Physician_NPI]
+			
+			VAR HasCXR = NOT(ISBLANK(
+			    LOOKUPVALUE(
+			        'RadPipeline'[Added to AD Group (CXR/ABD/MSK)],
+			        'RadPipeline'[NPI], CurrentNPI
+			    )
+			))
+			
+			VAR HasCT = NOT(ISBLANK(
+			    LOOKUPVALUE(
+			        'RadPipeline'[Added to AD Group (CT Head)],
+			        'RadPipeline'[NPI], CurrentNPI
+			    )
+			))
+			
+			RETURN
+			SWITCH(
+			    TRUE(),
+			    HasCT, "Rads on CT Drafting",
+			    HasCXR, "Rads on XR Drafting",
+			    "Rads not on Drafting"
+			)
+		lineageTag: 860bdde0-247d-448c-80ad-df2f91b2f3d8
+		summarizeBy: none
+
+		annotation SummarizationSetBy = Automatic
+
+	column Beginning_of_Month =
+			
+			DATE(YEAR(radiologist_metrics[Exam_Date]), MONTH(radiologist_metrics[Exam_Date]), 1)
+		formatString: Short Date
+		lineageTag: 27ae67f2-561f-4f3d-8896-54ebf657a653
+		summarizeBy: none
+
+		variation Variation
+			isDefault
+			relationship: c2092a71-acb4-4bba-95bf-bf0b46931a8b
+			defaultHierarchy: LocalDateTable_9b0907be-f3e3-4ffb-ab69-0586bad9e657.'Date Hierarchy'
+
+		changedProperty = DataType
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation UnderlyingDateTimeDataType = Date
+
+	column Local =
+			
+			
+			SWITCH(
+			
+			    TRUE(),
+			
+			    radiologist_metrics[Team] IN {"ESR", "LFI", "Jefferson", "GLI", "RAI", "RP Cascade", "RP Crossroads","JR","DRSRP","RP East Florida","RP North Florida", "RP Palm Beach","RP Florida West","PRA","ESRMH Garnet","ESRMH Hackensack","ESRMH Legacy","ESR Long Island","ESR Metro Hudson","SEAL Team", "SEAL Legacy","vRad","Spec Ops Reserve"}, "Special Operations",
+			
+			    radiologist_metrics[Team] IN {"ADI", "ADR", "CRC Central", "CRC NW", "CRC SW", "Midstate", "NEOH", "Rad Alliance", "RP Kentucky", "RP Bluegrass","RAC","RACSW","RPKY","RPBG","RA","ADR Legacy","CRC","Rad Alliance Legacy", "Rad Alliance NorthCrest","RP Bluegrass Legacy"}, "Apex",
+			
+			    radiologist_metrics[Team]  IN {"Coastal", "Greensboro", "MBB", "Northside", "Greensboro Canopy", "RAF", "RP Florida", "RP Sandhills", "RP South Carolina", "SOAR","BOCA","GR","NRA","RASF","MBB Legacy","MBB Phoebe Putney","Northside Radiology","RAF East Coast", "RAF Panhandle", "RAF Sarasota", "RAF Tampa", "RAF Tele","RASF Miami", "RASF Naples","RP Florida Legacy", "RP Florida West"}, "Genesis",
+			
+			     radiologist_metrics[Team]   IN {"Advanced Radiology", "Alaska", "CIR", "Desert", "GIMA", "RP SoCal", "IAM", "IAMSE", "MIA", "Mountain", "NIR", "RAA", "MXC", "Red Rock", "RIMA", "RP Sol", "RP Sun City", "RP Chicago", "RP Forest City", "Saline Valley", "RP Valley Radiologists", "SVDI", "Western Colorado","WIR","RP IOWA","GSIA","SVL","MR","DR","NWIR","ARSC","DR Legacy","DR DRS","IAMSE Hurley", "IAM Marquette", "IAM Midlands","Lakefront Imaging","Mountain Legacy", "Mountain Yampa","RP NWIR", "RP SMIL", "RP SoCal Lakewood", "RP SoCal Legacy", "RP SoCal Palmdale", "RP Valley","SVDI Legacy", "SVDI San Ramon","SMI","RIMA", "RIMA California"}, "Maverick",
+			
+			    radiologist_metrics[Team]  IN {"Access Alexandria", "ARA", "BR Academic", "BR Community", "CIRPA", "Community", "RP Eagle", "EBI", "GIA", "Lake Charles", "RP Borderlands", "RP Brazosport", "RP Corpus Christi", "RP Dallas", "RP El Paso", "RP Gulf Coast", "RP Houston", "RP Laredo", "RP Victoria","BR","Slidell","ACC","RPNM","EAG","RPEP","RPGC","RPH","Other","EXTHMC" ,"RP Singleton Academic" ,"RP Singleton Community", "RP Singleton","Rose","RP North Houston","Synergy", "Access Lake Charles","Community Laredo", "Community Legacy", "Community Victoria","Elite","RP Borderlands Legacy", "RP Borderlands Lovelace","RP Helios"}, "Trailblazer",
+			
+			    "Matrix"
+			
+			)
+		lineageTag: 79ce641e-ed96-4d82-ac5f-ef2597a55a87
+		summarizeBy: none
+
+		annotation SummarizationSetBy = Automatic
+
+	column Exam_Category
+		dataType: string
+		lineageTag: 683426d2-db37-475e-a252-c3be5d3399c4
+		summarizeBy: none
+		sourceColumn: Exam_Category
+
+		annotation SummarizationSetBy = Automatic
+
+	column Is_Mosaic_Row
+		dataType: int64
+		formatString: 0
+		lineageTag: 39c6fd57-beb9-4f57-b991-460bdb508fe6
+		summarizeBy: sum
+		sourceColumn: Is_Mosaic_Row
+
+		annotation SummarizationSetBy = Automatic
+
+	column Is_Drafting_Row
+		dataType: int64
+		formatString: 0
+		lineageTag: 143a6514-8b61-4a25-8901-352b89f4ae12
+		summarizeBy: sum
+		sourceColumn: Is_Drafting_Row
+
+		annotation SummarizationSetBy = Automatic
+
+	column Is_Reporting_Row
+		dataType: int64
+		formatString: 0
+		lineageTag: 39179821-9b94-4efa-aa5c-6d5f3aff87a7
+		summarizeBy: sum
+		sourceColumn: Is_Reporting_Row
+
+		annotation SummarizationSetBy = Automatic
+
+	column Is_Baseline_Row
+		dataType: int64
+		formatString: 0
+		lineageTag: 28c717d8-6367-4184-b83a-31f323811968
+		summarizeBy: sum
+		sourceColumn: Is_Baseline_Row
+
+		annotation SummarizationSetBy = Automatic
+
+	column Is_Capture_Row
+		dataType: int64
+		formatString: 0
+		lineageTag: cc40f3e8-643f-4aa8-9506-52f614710951
+		summarizeBy: sum
+		sourceColumn: Is_Capture_Row
+
+		annotation SummarizationSetBy = Automatic
+
+	column Baseline_Eff_Proc_Excl
+		dataType: double
+		lineageTag: 347ac969-99f8-4202-a12e-80b3f6918777
+		summarizeBy: sum
+		sourceColumn: Baseline_Eff_Proc_Excl
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column Baseline_Eff_Proc_Incl
+		dataType: double
+		lineageTag: 12da26ac-52b5-4553-86b5-b6d6d0c0ac74
+		summarizeBy: sum
+		sourceColumn: Baseline_Eff_Proc_Incl
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column Baseline_USBD_Eff_Proc_Excl
+		dataType: double
+		lineageTag: 5ff9089b-0ffc-4763-aa3b-5f2930ba5e7a
+		summarizeBy: sum
+		sourceColumn: Baseline_USBD_Eff_Proc_Excl
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column Baseline_USBD_Eff_Proc_Incl
+		dataType: double
+		lineageTag: 962021e9-bb3f-4d84-a385-9c1f25671c99
+		summarizeBy: sum
+		sourceColumn: Baseline_USBD_Eff_Proc_Incl
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column Has_Baseline_Proc_Excl
+		dataType: int64
+		formatString: 0
+		lineageTag: 8509789b-4251-46cb-96c8-f58ba7ca653b
+		summarizeBy: sum
+		sourceColumn: Has_Baseline_Proc_Excl
+
+		annotation SummarizationSetBy = Automatic
+
+	column Has_Baseline_Proc_Incl
+		dataType: int64
+		formatString: 0
+		lineageTag: 4c426611-e82c-4320-b4f1-5217f5f9fd26
+		summarizeBy: sum
+		sourceColumn: Has_Baseline_Proc_Incl
+
+		annotation SummarizationSetBy = Automatic
+
+	column Has_Baseline_USBD_Proc_Excl
+		dataType: int64
+		formatString: 0
+		lineageTag: 42514056-ceb4-4b41-bea3-6a83b2205de9
+		summarizeBy: sum
+		sourceColumn: Has_Baseline_USBD_Proc_Excl
+
+		annotation SummarizationSetBy = Automatic
+
+	column Has_Baseline_USBD_Proc_Incl
+		dataType: int64
+		formatString: 0
+		lineageTag: 62fe85d2-4cfa-4d08-848c-d2d742523f4c
+		summarizeBy: sum
+		sourceColumn: Has_Baseline_USBD_Proc_Incl
+
+		annotation SummarizationSetBy = Automatic
+
+	column Baseline_Exams_Proc_Excl
+		dataType: int64
+		formatString: 0
+		lineageTag: 32aadf9d-6835-4aa5-9924-bb2e7fae2429
+		summarizeBy: sum
+		sourceColumn: Baseline_Exams_Proc_Excl
+
+		annotation SummarizationSetBy = Automatic
+
+	column Baseline_Exams_Proc_Incl
+		dataType: int64
+		formatString: 0
+		lineageTag: 760a99c9-ad77-4ee1-a368-2402a790815a
+		summarizeBy: sum
+		sourceColumn: Baseline_Exams_Proc_Incl
+
+		annotation SummarizationSetBy = Automatic
+
+	column Weighted_Baseline_Contrib_Excl
+		dataType: double
+		lineageTag: 16bee91a-787f-4c42-a02d-011c1cf2049e
+		summarizeBy: sum
+		sourceColumn: Weighted_Baseline_Contrib_Excl
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column Weighted_Baseline_Contrib_Incl
+		dataType: double
+		lineageTag: afb0b10d-3715-45cf-a1ba-c1d163a92ed8
+		summarizeBy: sum
+		sourceColumn: Weighted_Baseline_Contrib_Incl
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column Weighted_Baseline_USBD_Contrib_Excl
+		dataType: double
+		lineageTag: af41086a-1e78-4814-915a-51e64413ff21
+		summarizeBy: sum
+		sourceColumn: Weighted_Baseline_USBD_Contrib_Excl
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column Weighted_Baseline_USBD_Contrib_Incl
+		dataType: double
+		lineageTag: eb677306-bc8b-4e7f-99a5-b02f8abb05d5
+		summarizeBy: sum
+		sourceColumn: Weighted_Baseline_USBD_Contrib_Incl
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column Proc_Drafting_AllTime_Excl
+		dataType: int64
+		formatString: 0
+		lineageTag: 7b2e7a47-62a7-4698-87e8-d7d1c89fb7b2
+		summarizeBy: sum
+		sourceColumn: Proc_Drafting_AllTime_Excl
+
+		annotation SummarizationSetBy = Automatic
+
+	column Proc_Drafting_AllTime_Incl
+		dataType: int64
+		formatString: 0
+		lineageTag: 16237f7a-142f-4839-b4a2-5e136cea71eb
+		summarizeBy: sum
+		sourceColumn: Proc_Drafting_AllTime_Incl
+
+		annotation SummarizationSetBy = Automatic
+
+	column Proc_Reporting_AllTime_Excl
+		dataType: int64
+		formatString: 0
+		lineageTag: bcc34323-a397-4ff4-90d5-e2c3f57ecbc4
+		summarizeBy: sum
+		sourceColumn: Proc_Reporting_AllTime_Excl
+
+		annotation SummarizationSetBy = Automatic
+
+	column Proc_Reporting_AllTime_Incl
+		dataType: int64
+		formatString: 0
+		lineageTag: 341c53d0-1869-473b-ad68-601d02c7ebc0
+		summarizeBy: sum
+		sourceColumn: Proc_Reporting_AllTime_Incl
+
+		annotation SummarizationSetBy = Automatic
+
+	column Proc_Mosaic_AllTime_Excl
+		dataType: int64
+		formatString: 0
+		lineageTag: 8ace794c-ca12-45e2-b3a3-4ceba7c8937e
+		summarizeBy: sum
+		sourceColumn: Proc_Mosaic_AllTime_Excl
+
+		annotation SummarizationSetBy = Automatic
+
+	column Proc_Mosaic_AllTime_Incl
+		dataType: int64
+		formatString: 0
+		lineageTag: 5bb9813b-e34f-4089-a7f3-6d756ccb908b
+		summarizeBy: sum
+		sourceColumn: Proc_Mosaic_AllTime_Incl
+
+		annotation SummarizationSetBy = Automatic
+
+	column Proc_Capture_AllTime_Excl
+		dataType: int64
+		formatString: 0
+		lineageTag: ff59434a-ec2d-4ab8-ab21-e09b8f6cb675
+		summarizeBy: sum
+		sourceColumn: Proc_Capture_AllTime_Excl
+
+		annotation SummarizationSetBy = Automatic
+
+	column Proc_Capture_AllTime_Incl
+		dataType: int64
+		formatString: 0
+		lineageTag: 7059b1f3-a103-4be3-8b3d-51312a7f4bb2
+		summarizeBy: sum
+		sourceColumn: Proc_Capture_AllTime_Incl
+
+		annotation SummarizationSetBy = Automatic
+
+	column Proc_Baseline_AllTime_Excl
+		dataType: int64
+		formatString: 0
+		lineageTag: cbf937a4-22f7-4a03-8702-b509dd89dd92
+		summarizeBy: sum
+		sourceColumn: Proc_Baseline_AllTime_Excl
+
+		annotation SummarizationSetBy = Automatic
+
+	column Proc_Baseline_AllTime_Incl
+		dataType: int64
+		formatString: 0
+		lineageTag: 74566ab9-9298-4879-b989-c433e9b043d1
+		summarizeBy: sum
+		sourceColumn: Proc_Baseline_AllTime_Incl
+
+		annotation SummarizationSetBy = Automatic
+
+	column Rad_Drafting_AllTime_Excl
+		dataType: int64
+		formatString: 0
+		lineageTag: 9fd0b8d6-f758-4376-899f-8ef60cef7fa1
+		summarizeBy: sum
+		sourceColumn: Rad_Drafting_AllTime_Excl
+
+		annotation SummarizationSetBy = Automatic
+
+	column Rad_Drafting_AllTime_Incl
+		dataType: int64
+		formatString: 0
+		lineageTag: 6ac77cb9-6503-43d6-8f2c-ed962c20e8d5
+		summarizeBy: sum
+		sourceColumn: Rad_Drafting_AllTime_Incl
+
+		annotation SummarizationSetBy = Automatic
+
+	column Rad_Reporting_AllTime_Excl
+		dataType: int64
+		formatString: 0
+		lineageTag: dd204248-ad8c-4a08-95da-75c95c8af29f
+		summarizeBy: sum
+		sourceColumn: Rad_Reporting_AllTime_Excl
+
+		annotation SummarizationSetBy = Automatic
+
+	column Rad_Reporting_AllTime_Incl
+		dataType: int64
+		formatString: 0
+		lineageTag: 7ac01e20-dc2c-4782-a428-9fd3d5d6c63d
+		summarizeBy: sum
+		sourceColumn: Rad_Reporting_AllTime_Incl
+
+		annotation SummarizationSetBy = Automatic
+
+	column Rad_Mosaic_AllTime_Excl
+		dataType: int64
+		formatString: 0
+		lineageTag: c9445d91-fd4a-491f-893c-f0ee4cc94fbd
+		summarizeBy: sum
+		sourceColumn: Rad_Mosaic_AllTime_Excl
+
+		annotation SummarizationSetBy = Automatic
+
+	column Rad_Mosaic_AllTime_Incl
+		dataType: int64
+		formatString: 0
+		lineageTag: c8d3b662-7c9a-4016-a278-425af847cea1
+		summarizeBy: sum
+		sourceColumn: Rad_Mosaic_AllTime_Incl
+
+		annotation SummarizationSetBy = Automatic
+
+	column Rad_Capture_AllTime_Excl
+		dataType: int64
+		formatString: 0
+		lineageTag: c2a40eae-9cbd-4f1f-8400-0ef37acc3d74
+		summarizeBy: sum
+		sourceColumn: Rad_Capture_AllTime_Excl
+
+		annotation SummarizationSetBy = Automatic
+
+	column Rad_Capture_AllTime_Incl
+		dataType: int64
+		formatString: 0
+		lineageTag: e16c92df-67e4-4939-87f1-7c44f6077ceb
+		summarizeBy: sum
+		sourceColumn: Rad_Capture_AllTime_Incl
+
+		annotation SummarizationSetBy = Automatic
+
+	column draft_finding_category
+		dataType: string
+		lineageTag: 6c12d481-d4b7-4ffc-97e0-608e5332558c
+		summarizeBy: none
+		sourceColumn: draft_finding_category
+
+		annotation SummarizationSetBy = Automatic
+
+	partition radiologist_metrics = m
+		mode: import
+		source =
+				let
+				    Source = Databricks.Catalogs(
+				    "adb-7306149455716415.15.azuredatabricks.net",
+				    "/sql/1.0/warehouses/fe0ad987563c672a", [Catalog=null, Database=null, EnableAutomaticProxyDiscovery=null, Implementation=null]),
+				    edw_dev_Database = Source{[Name="edw_dev",Kind="Database"]}[Data],
+				    bipa_analytics_Schema = edw_dev_Database{[Name="bipa_analytics",Kind="Schema"]}[Data],
+				    radiologist_metrics_optimized_View = bipa_analytics_Schema{[Name="radiologist_metrics_optimized",Kind="View"]}[Data],
+				    #"Removed Columns1" = Table.RemoveColumns(radiologist_metrics_optimized_View,{"Exam_Category"}),
+				    #"Renamed Columns" = Table.RenameColumns(#"Removed Columns1",{{"mpcat", "Exam_Category"}}),
+				    #"Removed Columns2" = Table.RemoveColumns(#"Renamed Columns",{"mpproc"})
+				in
+				    #"Removed Columns2"
+
+	annotation PBI_NavigationStepName = Navigation
+
+	annotation PBI_ResultType = Table
+

@@ -1,0 +1,26 @@
+relationship 4f71fbf1-412d-4640-b7d5-672cf39d3a3b
+	toCardinality: many
+	fromColumn: Daily_Extract.'Local Practice Division'
+	toColumn: 'MODEL POWERBI_USER_FILTERS'.Local_Practic_Division_transition
+
+relationship 9deff861-5c3f-5d6f-22a8-163f70526855
+	toCardinality: many
+	fromColumn: Mini_practice_directory.Local_Practic_Division_transition
+	toColumn: RLSTeamTable.Local_Practic_Division_transition
+
+relationship 4783b8d0-4a7d-eb9b-cb90-c05a86c7d39d
+	fromColumn: Daily_Extract.Provider_NPI
+	toColumn: vrarp_radpipeline.NPI
+
+relationship 07c92c4f-f52a-4570-9cee-44f375148f02
+	fromColumn: Daily_Extract.NPI
+	toColumn: 'Query (3)'.vrarp_npi
+
+relationship c91af980-221e-6d9e-7736-01e23438afb0
+	fromColumn: Daily_Extract.Team
+	toColumn: team_rollups.Team
+
+relationship 439a51de-ce41-0cf8-0cb7-107e4c4bf598
+	fromColumn: Daily_Extract.Provider_NPI
+	toColumn: provpractice_vw.NPI
+

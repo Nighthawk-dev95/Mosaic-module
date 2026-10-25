@@ -1,0 +1,57 @@
+table 'Display Shift Filter Table'
+	lineageTag: 3d5fd575-6815-44f5-be25-b5b3ecbc701d
+
+	measure 'Display Shifts Slicer' = ```
+			
+			VAR _selection = SELECTEDVALUE('Display Shift Filter Table'[Selection])
+			VAR _count = [Selected Shift Ct.]
+			RETURN
+			    SWITCH(
+			        _selection,
+			        "Less than 2 Shifts", IF(_count < 2, 1, 0),
+			        "More than 2 Shifts", IF(_count >= 2, 1, 0),  
+			        1  -- default return all if nothing selected
+			    )
+			```
+		formatString: 0
+		lineageTag: 95609ab0-446f-4b10-854e-48b456dd6558
+
+	column Selection
+		dataType: string
+		lineageTag: 18da69cd-ed7a-427f-b676-3541cebd3e49
+		summarizeBy: none
+		sourceColumn: Selection
+
+		annotation SummarizationSetBy = Automatic
+
+	column Order
+		dataType: int64
+		formatString: 0
+		lineageTag: 3c728a89-033d-4f8f-a1f8-d17f5795f8ac
+		summarizeBy: sum
+		sourceColumn: Order
+
+		annotation SummarizationSetBy = Automatic
+
+	column Ct
+		dataType: int64
+		formatString: 0
+		lineageTag: 8bd53aca-d5d1-42cd-803d-bd6a942139ef
+		summarizeBy: sum
+		sourceColumn: Ct
+
+		annotation SummarizationSetBy = Automatic
+
+	partition 'Display Shift Filter Table' = m
+		mode: import
+		source =
+				let
+				    Source = Table.FromRows(Json.Document(Binary.Decompress(Binary.FromText("i45W8kktLlYoyUjMUzBSCM7ITCspVtJRMgJiQ6VYnWgl3/yiVAxpY7CS2FgA", BinaryEncoding.Base64), Compression.Deflate)), let _t = ((type nullable text) meta [Serialized.Text = true]) in type table [Selection = _t, Ct = _t, Order = _t]),
+				    #"Changed Type" = Table.TransformColumnTypes(Source,{{"Selection", type text}, {"Ct", Int64.Type}, {"Order", Int64.Type}})
+				in
+				    #"Changed Type"
+
+	annotation PBI_NavigationStepName = Navigation
+
+	annotation PBI_ResultType = Table
+

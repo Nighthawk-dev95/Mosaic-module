@@ -1,0 +1,38 @@
+table Metrictypeselector
+	lineageTag: 487a4ed3-95d3-47c6-bcfc-558da07e2c9a
+
+	column MetricType
+		lineageTag: b3ba0659-c293-4ffe-ba9d-27025ff8e42d
+		summarizeBy: none
+		isNameInferred
+		sourceColumn: [MetricType]
+		sortByColumn: SortOrder
+
+		annotation SummarizationSetBy = Automatic
+
+	column SortOrder
+		formatString: 0
+		lineageTag: 10a5f38c-a837-466a-9791-88a2fe75dd35
+		summarizeBy: sum
+		isNameInferred
+		sourceColumn: [SortOrder]
+
+		annotation SummarizationSetBy = Automatic
+
+	partition Metrictypeselector-e35c47f1-816c-4a28-b196-4381989d7051 = calculated
+		mode: import
+		source = ```
+				DATATABLE(
+				    "MetricType", String, "SortOrder", INTEGER,
+				    {
+				    {"Estimated RVU" , 4},
+				    {"Best Available RVU", 3},
+				    {"TBWU" , 2}, 
+				    {"Exam Count" , 1}
+				 
+				}
+				)
+				```
+
+	annotation PBI_Id = ad9c760eb57e4a8abb8fbc41f9dff13f
+

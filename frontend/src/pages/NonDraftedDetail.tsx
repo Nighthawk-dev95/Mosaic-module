@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { mosaicApi } from "../api/client";
 import { useFetch } from "../hooks/useFetch";
 import { FilterBar } from "../components/FilterBar";
+import { AIHoverCard } from "../components/AIHoverCard";
 import { useFilters, matchesPractice } from "../context/FilterContext";
 import { getLocalRegion } from "../utils/localRegion";
 import { UndraftedStackedChart } from "../components/UndraftedStackedChart";
@@ -105,6 +106,20 @@ export function NonDraftedDetail() {
     [undrafted.data, filters]
   );
 
+  const byReason = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const r of filteredRows) counts.set(r.category, (counts.get(r.category) ?? 0) + (metric === "tbwu" ? r.tbwu : r.exam_count));
+    return counts;
+  }, [filteredRows, metric]);
+
+  const byReasonExtra = useMemo(() => {
+    const out: Record<string, string> = {};
+    for (const [category, value] of byReason.entries()) out[category] = value.toFixed(metric === "tbwu" ? 1 : 0);
+    return out;
+  }, [byReason, metric]);
+
+  const totalNotDrafted = Array.from(byReason.values()).reduce((a, b) => a + b, 0);
+
   return (
     <div style={{ padding: 24, display: "flex", flexDirection: "column", gap: 20, flex: 1, overflowY: "auto" }}>
       <div>
@@ -155,7 +170,15 @@ export function NonDraftedDetail() {
 
       <div style={{ background: "var(--surface-1)", border: "1px solid var(--border)", borderRadius: 8, padding: 16 }}>
         <div style={{ color: "var(--text-muted)", fontSize: 13, marginBottom: 12, textTransform: "uppercase", letterSpacing: 0.5 }}>
-          Percent of Draftable Cases Not Drafted, by Reason
+          <AIHoverCard
+            feature="non_drafted_reason"
+            entityLabel={filters.practice || "Enterprise-wide"}
+            metricLabel={`Total not drafted (${metric === "tbwu" ? "TBWU" : "exams"})`}
+            value={totalNotDrafted.toFixed(metric === "tbwu" ? 1 : 0)}
+            extra={byReasonExtra}
+          >
+            Percent of Draftable Cases Not Drafted, by Reason
+          </AIHoverCard>
         </div>
         {undrafted.data && <UndraftedStackedChart data={filteredRows} metric={metric} displayMode={displayMode} />}
       </div>

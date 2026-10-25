@@ -1,0 +1,85 @@
+table '1.Measure Tbl - Adjustment Tally'
+	lineageTag: 8809a9dd-58af-4956-aa86-77e7947b5aa2
+
+	measure 'Adjustment Tally No.Shifts' = COUNTROWS('0. Cur')
+		formatString: 0
+		lineageTag: ce29ff58-df06-4ec8-98ff-96701c6af1f6
+
+	measure 'Adjustment Tally - Total Baseline' =
+			
+			[Shift Baseline]
+		formatString: #,0
+		lineageTag: 5f120f71-23b3-4ba2-a58c-7cb0dfb2bc69
+
+		annotation PBI_FormatHint = {"isDecimal":true}
+
+	measure 'Adjustment Tally - Total Capacity' = [On-Shift Capacity] + [Off-Shift Assisted Capacity]
+		formatString: #,0
+		lineageTag: 27ec1904-aa00-4c4d-9c7e-796c6ad26772
+
+		annotation PBI_FormatHint = {"isDecimal":true}
+
+	measure 'Adjustment Tally - Work Unit Adjustment' = [Adjustment]
+		formatString: #,0
+		lineageTag: f1cf38c8-06d7-40db-958a-d1ab919074ed
+
+		annotation PBI_FormatHint = {"isDecimal":true}
+
+	measure 'Adjustment Tally - Adjusted Work Units' = [Adjustment Tally - Total Capacity]+ [Adjustment Tally - Work Unit Adjustment]
+		formatString: #,0
+		lineageTag: dfd4d79f-28cf-462b-a875-232eba8886c1
+
+		annotation PBI_FormatHint = {"isDecimal":true}
+
+	measure 'Adjustment Tally - New Capacity Per Shift' = AVERAGEX('0. Cur',[Adjustment Tally - Total Capacity])
+		formatString: #,0
+		lineageTag: 9c99462c-c1dc-4fc3-83ff-ed3c0aedf8cd
+
+		annotation PBI_FormatHint = {"isDecimal":true}
+
+	measure 'Adjustment Tally - Allocated VRAs' =
+			
+			VAR SummaryTable =
+			    ADDCOLUMNS (
+			        SUMMARIZE (
+			            '0. Cur',
+			            '0. Cur'[Team],
+			            '0. Cur'[NPI],
+			            '0. Cur'[Shift Date (Year Month)]
+			            -- Replace with your actual group column
+			        ),
+			        "no_vra", IF([Adjustment Tally - New Capacity Per Shift] >90,2,1),
+			        "no_shift", [Adjustment Tally No.Shifts],
+			        "Total_shift", [Adjustment Tally No.Shifts]*IF([Adjustment Tally - New Capacity Per Shift] >90,2,1)
+			    )
+			
+			
+			RETURN
+			    SUMX(SummaryTable,[Total_shift])/SUMX(SummaryTable,[no_shift])
+		lineageTag: 09c76160-5d91-4d6c-b3d2-f4b3d9999abd
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	measure 'Adjustment Tally - Shift Cost' =
+			
+			125*[Adjustment Tally - Allocated VRAs]*[Adjustment Tally No.Shifts]
+		formatString: \$#,0.###############;(\$#,0.###############);\$#,0.###############
+		lineageTag: caae01cd-0e66-4257-92ad-0512d53f9759
+
+	column Column
+		formatString: 0
+		lineageTag: 988453e2-7fd6-477c-93f6-1673eed05680
+		summarizeBy: sum
+		isNameInferred
+		sourceColumn: [Column]
+
+		annotation SummarizationSetBy = Automatic
+
+	partition '1.Measure Tbl - Adjustment Tally' = calculated
+		mode: import
+		source = Row("Column", BLANK())
+
+	annotation PBI_Id = dec1b2df720f4e269fbb39d10ef3cccc
+
+	annotation 436ba87b-9c83-4389-a31b-ebd06a36be98 = {"Expression":""}
+

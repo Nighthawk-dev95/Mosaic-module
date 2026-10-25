@@ -6,35 +6,18 @@ import type { DataTableColumn } from "../components/DataTable";
 import { TABLE_SECTION_STYLE, TABLE_SCROLL_STYLE } from "../styles/tableLayout";
 import { EfficiencyTrendChart } from "../components/EfficiencyTrendChart";
 import { FilterBar } from "../components/FilterBar";
-import { TrendDelta } from "../components/TrendDelta";
-import { Badge } from "../components/Badge";
+import { AIHoverCard } from "../components/AIHoverCard";
 import { useFilters, matchesPractice, matchesRadiologistSearch } from "../context/FilterContext";
 import type {
   EfficiencyMode,
   EfficiencyPracticeRollup,
   EfficiencyRadiologistItem,
-  FocusRadiologistItem,
   PopulationEfficiency,
 } from "../api/types";
 
 function fmtRate(value: number | null | undefined): string {
   return value === null || value === undefined ? "—" : value.toFixed(3);
 }
-
-const TIER_COLORS: Record<string, string> = {
-  "Tier 1": "var(--status-critical)",
-  "Tier 2": "var(--status-warning)",
-  "Tier 3": "var(--text-secondary)",
-};
-
-const FOCUS_RAD_COLUMNS: DataTableColumn<FocusRadiologistItem>[] = [
-  { key: "radiologist_name", label: "Radiologist" },
-  { key: "practice", label: "Practice" },
-  { key: "priority_tier", label: "Priority Tier", render: (r) => <Badge label={r.priority_tier} color={TIER_COLORS[r.priority_tier] ?? "var(--text-secondary)"} /> },
-  { key: "baseline_capacity_per_shift", label: "Baseline Capacity/Shift", render: (r) => fmtRate(r.baseline_capacity_per_shift) },
-  { key: "dc_efficiency_change_pct", label: "D&C Efficiency Δ", render: (r) => <TrendDelta value={r.dc_efficiency_change_pct} /> },
-  { key: "capacity_change_pct", label: "Capacity Δ", render: (r) => <TrendDelta value={r.capacity_change_pct} /> },
-];
 
 const MODES: { value: EfficiencyMode; label: string }[] = [
   { value: "full_mosaic", label: "Full Mosaic" },
@@ -131,18 +114,29 @@ function FilterSelect({
 
 function PopulationTile({ label, data }: { label: string; data: PopulationEfficiency | null }) {
   return (
-    <div
-      style={{
-        background: "var(--surface-1)",
-        border: "1px solid var(--border)",
-        borderRadius: 8,
-        padding: "16px 20px",
-        flex: "1 1 260px",
-        minWidth: 240,
+    <AIHoverCard
+      feature="efficiency_metric"
+      entityLabel={label}
+      metricLabel="Mosaic TBWU/min vs baseline"
+      value={fmtRate(data?.mosaic_tbwu_per_min)}
+      extra={{
+        baseline_tbwu_per_min: fmtRate(data?.baseline_tbwu_per_min),
+        pct_change_vs_baseline: fmtPct(data?.pct_change_vs_baseline),
+        read_time_change_pct: fmtPct(data?.read_time_change_pct),
       }}
+      underline={false}
+      style={{ flex: "1 1 260px", minWidth: 240, display: "block" }}
     >
-      <div style={{ color: "var(--text-muted)", fontSize: 13, marginBottom: 8 }}>{label}</div>
-      <div style={{ display: "flex", gap: 24 }}>
+      <div
+        style={{
+          background: "var(--surface-1)",
+          border: "1px solid var(--border)",
+          borderRadius: 8,
+          padding: "16px 20px",
+        }}
+      >
+        <div style={{ color: "var(--text-muted)", fontSize: 13, marginBottom: 8 }}>{label}</div>
+        <div style={{ display: "flex", gap: 24 }}>
         <div>
           <div style={{ fontSize: 22, fontWeight: 600, color: "var(--text-primary)" }}>
             {fmtRate(data?.mosaic_tbwu_per_min)}
@@ -167,8 +161,9 @@ function PopulationTile({ label, data }: { label: string; data: PopulationEffici
           </div>
           <div style={{ fontSize: 11, color: "var(--text-muted)" }}>Read Time Change</div>
         </div>
+        </div>
       </div>
-    </div>
+    </AIHoverCard>
   );
 }
 
@@ -199,15 +194,6 @@ export function EfficiencyDetail() {
     [examCategory, practice]
   );
   const rpAvgTrend = useFetch(() => mosaicApi.getEfficiencyTrendRpAvg(), []);
-  const focusRads = useFetch(() => mosaicApi.getFocusRadiologists(), []);
-
-  const filteredFocusRadRows = useMemo(
-    () =>
-      (focusRads.data ?? []).filter(
-        (r) => matchesPractice(filters, r.practice) && matchesRadiologistSearch(filters, r.radiologist_name, r.npi)
-      ),
-    [focusRads.data, filters]
-  );
 
   const [population, setPopulation] = useState<PopulationEfficiency | null>(null);
   useEffect(() => {
@@ -324,25 +310,6 @@ export function EfficiencyDetail() {
       <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: -12 }}>
         Practice/Subspecialty also narrow the tables below; Modality/Procedure only narrow the Population Efficiency comparison;
         Exam Category also narrows the trend charts below.
-      </div>
-
-      <div style={{ background: "var(--surface-1)", border: "1px solid var(--border)", borderRadius: 8, padding: 16 }}>
-        <div style={{ color: "var(--text-muted)", fontSize: 13, marginBottom: 4, textTransform: "uppercase", letterSpacing: 0.5 }}>
-          Focus Rads
-        </div>
-        <div style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 12 }}>
-          Real Mosaic Value Project (MVP) methodology: fixed May–Jul 2026 baseline vs. the most recent full month,
-          gated by a 100+ exam volume floor and an "already gaining capacity" exclusion, tiered by baseline
-          capacity × efficiency-loss severity. Doesn't model MVP's CRM-only exclusions ("Q3 go-live practice",
-          "Do Not Revisit" flags) — those live in a manually-maintained tracker, not EDW.
-        </div>
-        {(focusRads.data ?? []).length === 0 ? (
-          <div style={{ color: "var(--text-muted)", fontSize: 13 }}>No radiologists currently flagged.</div>
-        ) : filteredFocusRadRows.length === 0 ? (
-          <div style={{ color: "var(--text-muted)", fontSize: 13 }}>No flagged radiologists match the current filters.</div>
-        ) : (
-          <DataTable columns={FOCUS_RAD_COLUMNS} rows={filteredFocusRadRows} rowKey={(r) => r.npi} />
-        )}
       </div>
 
       <div style={{ display: "flex", gap: 16, flexWrap: "wrap" }}>

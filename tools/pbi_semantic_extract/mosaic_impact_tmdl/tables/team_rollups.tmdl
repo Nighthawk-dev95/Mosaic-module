@@ -1,0 +1,34 @@
+table team_rollups
+	lineageTag: 1a25e9e8-7c11-40b5-89b3-1ebf5d0d70a7
+
+	column Team
+		dataType: string
+		lineageTag: 3e668504-d1de-4c16-aac9-04341d205477
+		summarizeBy: none
+		sourceColumn: Team
+
+		annotation SummarizationSetBy = Automatic
+
+	column 'Team Roll Up (KS)'
+		dataType: string
+		lineageTag: 44f3e964-c3be-4286-95fc-b0b8ff484982
+		summarizeBy: none
+		sourceColumn: Team Roll Up (KS)
+
+		annotation SummarizationSetBy = Automatic
+
+	partition team_rollups = m
+		mode: import
+		source =
+				let
+				    Source = Databricks.Catalogs("adb-7306149455716415.15.azuredatabricks.net", "/sql/protocolv1/o/7306149455716415/1001-005109-y614eyxc", [Catalog=null, Database=null, EnableAutomaticProxyDiscovery=null, Implementation=null]),
+				    edw_dev_Database = Source{[Name="edw_dev",Kind="Database"]}[Data],
+				    bipa_analytics_Schema = edw_dev_Database{[Name="bipa_analytics",Kind="Schema"]}[Data],
+				    team_rollups_Table = bipa_analytics_Schema{[Name="team_rollups",Kind="Table"]}[Data]
+				in
+				    team_rollups_Table
+
+	annotation PBI_NavigationStepName = Navigation
+
+	annotation PBI_ResultType = Table
+

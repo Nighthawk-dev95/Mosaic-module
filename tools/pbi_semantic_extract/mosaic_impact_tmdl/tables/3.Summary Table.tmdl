@@ -1,0 +1,380 @@
+table '3.Summary Table'
+	lineageTag: 55c12770-e4e3-43e4-af3e-33b4900ccc50
+
+	measure Summary_Rads_Displayed =
+			
+			VAR BaseNPI =
+			    VALUES('0. Cur'[NPI])   -- NPIs in current visual context
+			VAR WithFlags =
+			    ADDCOLUMNS(
+			        BaseNPI,
+			        "__shift", COALESCE([Display Shifts Slicer], 0),
+			        "__impact", COALESCE([Impact selection filter flag], 1),
+			        "__baseline", COALESCE([Has_Baseline_For_Selected_Unit], 0)
+			    )
+			VAR Passing =
+			    FILTER(
+			        WithFlags,
+			        [__shift] = 1 &&
+			        [__impact] = 0 &&
+			        [__baseline] = 1 &&
+			        NOT ISBLANK('0. Cur'[NPI])
+			    )
+			VAR Passing1Col =
+			    SELECTCOLUMNS(Passing, "NPI", '0. Cur'[NPI])   -- make it 1 column for TREATAS
+			RETURN
+			CALCULATE(
+			    DISTINCTCOUNT('0. Cur'[NPI]),
+			    KEEPFILTERS( TREATAS(Passing1Col, '0. Cur'[NPI]) )
+			)
+		formatString: 0
+		lineageTag: fc754464-15d4-4ed8-90f7-2631bcbab730
+
+	measure Summary_Average_Capacity_Increase_formated = ```
+			
+			VAR BaseNPI =
+			    VALUES('0. Cur'[NPI])   -- NPIs in current visual context
+			VAR WithFlags =
+			    ADDCOLUMNS(
+			        BaseNPI,
+			        "__shift", COALESCE([Display Shifts Slicer], 0),
+			        "__impact", COALESCE([Impact selection filter flag], 1),
+			        "__baseline", COALESCE([Has_Baseline_For_Selected_Unit], 0)
+			    )
+			VAR Passing =
+			    FILTER(
+			        WithFlags,
+			        [__shift] = 1 &&
+			        [__impact] = 0 &&
+			        [__baseline] = 1 &&
+			        NOT ISBLANK('0. Cur'[NPI])
+			    )
+			VAR Passing1Col =
+			    SELECTCOLUMNS(Passing, "NPI", '0. Cur'[NPI])   -- make it 1 column for TREATAS
+			RETURN
+			FORMAT(
+			    CALCULATE([Add'l Capacity / Shift (Top N)],
+			    KEEPFILTERS( TREATAS(Passing1Col, '0. Cur'[NPI])) 
+			), "#.#") & " " & SELECTEDVALUE('1. Unit_Tbl'[Productivity Unit])
+			```
+		lineageTag: 97ce9097-a012-406a-9a2d-c45fe3da336e
+
+	measure Summary_Annualized_Capacity_Increase_formated =
+			
+			/*VAR SummaryTable =
+			        SUMMARIZE (
+			            '0. Cur',
+			            '0. Cur'[NPI]  -- Replace with your actual group column
+			        )
+			Var unit = IF(CONTAINSSTRINGEXACT(SELECTEDVALUE('1. Unit_Tbl'[Productivity Unit]),"RVU"),"RVUs","RPWUs")
+			RETURN
+			(FORMAT(CALCULATE([Annualized_addl_capacity (Top N)(overwrite display)],
+			FILTER(SummaryTable,AND([Impact selection filter flag] = 0,'Display Shift Filter Table'[Display Shifts Slicer] =1))),"#,#") & " " & unit)
+			*/
+			VAR BaseNPI =
+			    VALUES('0. Cur'[NPI])   -- NPIs in current visual context
+			VAR WithFlags =
+			    ADDCOLUMNS(
+			        BaseNPI,
+			        "__shift", COALESCE([Display Shifts Slicer], 0),
+			        "__impact", COALESCE([Impact selection filter flag], 1)
+			    )
+			VAR Passing =
+			    FILTER(
+			        WithFlags,
+			        [__shift] = 1 &&
+			        [__impact] = 0 &&
+			        NOT ISBLANK('0. Cur'[NPI])
+			    )
+			VAR Passing1Col =
+			    SELECTCOLUMNS(Passing, "NPI", '0. Cur'[NPI])   -- make it 1 column for TREATAS
+			Var unit = IF(CONTAINSSTRINGEXACT(SELECTEDVALUE('1. Unit_Tbl'[Productivity Unit]),"RVU"),"RVUs","TBWUs")
+			
+			RETURN
+			FORMAT(CALCULATE([Annualized_addl_capacity (Top N)(overwrite display)]
+			    ,
+			    KEEPFILTERS(TREATAS(Passing1Col, '0. Cur'[NPI]))),"#,#") & " " & unit
+		lineageTag: 7853ada2-39b9-4675-9f2d-e270d71533f6
+
+	measure Summary_rad_equivalents_created =
+			
+			VAR BaseNPI =
+			    VALUES('0. Cur'[NPI])   -- NPIs in current visual context
+			VAR WithFlags =
+			    ADDCOLUMNS(
+			        BaseNPI,
+			        "__shift", COALESCE([Display Shifts Slicer], 0),
+			        "__impact", COALESCE([Impact selection filter flag], 1)
+			    )
+			VAR Passing =
+			    FILTER(
+			        WithFlags,
+			        [__shift] = 1 &&
+			        [__impact] = 0 &&
+			        NOT ISBLANK('0. Cur'[NPI])
+			    )
+			VAR Passing1Col =
+			    SELECTCOLUMNS(Passing, "NPI", '0. Cur'[NPI])   -- make it 1 column for TREATAS
+			RETURN
+			CALCULATE(
+			    [Rad Equivalents Created],
+			    KEEPFILTERS( TREATAS(Passing1Col, '0. Cur'[NPI]) )
+			)
+			/*VAR SummaryTable =
+			        SUMMARIZE (
+			            '0. Cur',
+			            '0. Cur'[NPI]  -- Replace with your actual group column
+			        )
+			RETURN
+			CALCULATE([Rad Equivalents Created],FILTER(SummaryTable,AND([Impact selection filter flag] = 0,'Display Shift Filter Table'[Display Shifts Slicer] =1)))*/
+		lineageTag: d4a56ff5-c486-4877-b8a0-22000a4d14b6
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	measure Summary_Practice_Displayed =
+			
+			VAR BasePractice =
+			    VALUES('0. Cur'[localpractice])   -- practices in current visual context
+			VAR WithFlags =
+			    ADDCOLUMNS(
+			        BasePractice,
+			        "__shift", COALESCE([Display Shifts Slicer], 0),
+			        "__impact", COALESCE([Impact selection filter flag], 1),
+			        "__baseline", COALESCE([Has_Baseline_For_Selected_Unit], 0)
+			    )
+			VAR Passing =
+			    FILTER(
+			        WithFlags,
+			        [__shift] = 1 &&
+			        [__impact] = 0 &&
+			        [__baseline] = 1 &&
+			        NOT ISBLANK('0. Cur'[localpractice])
+			    )
+			VAR Passing1Col =
+			    SELECTCOLUMNS(Passing, "LocalPractice", '0. Cur'[localpractice])   -- make it 1 column for TREATAS
+			RETURN
+			CALCULATE(
+			    DISTINCTCOUNT('0. Cur'[localpractice]),
+			    KEEPFILTERS( TREATAS(Passing1Col, '0. Cur'[localpractice]) )
+			)
+		formatString: 0
+		lineageTag: 5d09220c-6284-424a-bffa-aa52c019b0aa
+
+	measure Summary_Average_Capacity_Increase_practiceformated = ```
+			
+			/*VAR SummaryTable =
+			        SUMMARIZE (
+			            '0. Cur',
+			            '0. Cur'[NPI]  -- Replace with your actual group column
+			        )
+			    
+			RETURN
+			//(FORMAT(CALCULATE([Add'l Capacity / Shift (Top N)],FILTER(SummaryTable,[Rads to Include filter flag] = 0)),0) & " " & SELECTEDVALUE('1. Unit_Tbl'[Productivity Unit]))
+			FORMAT(CALCULATE([Add'l Capacity / Shift (Top N)],FILTER(SummaryTable,AND([Impact selection filter flag] = 0,'Display Shift Filter Table'[Display Shifts Slicer] =1))), "#.#") & " " & SELECTEDVALUE('1. Unit_Tbl'[Productivity Unit])*/
+			VAR BaseNPI =
+			    VALUES('0. Cur'[localpractice])   -- NPIs in current visual context
+			VAR WithFlags =
+			    ADDCOLUMNS(
+			        BaseNPI,
+			        "__shift", COALESCE([Display Shifts Slicer], 0),
+			        "__impact", COALESCE([Impact selection filter flag], 1)
+			    )
+			VAR Passing =
+			    FILTER(
+			        WithFlags,
+			        [__shift] = 1 &&
+			        [__impact] = 0 &&
+			        NOT ISBLANK('0. Cur'[localpractice])
+			    )
+			VAR Passing1Col =
+			    SELECTCOLUMNS(Passing, "NPI", '0. Cur'[localpractice])   -- make it 1 column for TREATAS
+			RETURN
+			FORMAT(
+			    CALCULATE([Add'l Capacity / Shift (Top N)],
+			    KEEPFILTERS( TREATAS(Passing1Col, '0. Cur'[localpractice])) 
+			), "#.#") & " " & SELECTEDVALUE('1. Unit_Tbl'[Productivity Unit])
+			```
+		lineageTag: 0c6f8cee-bb96-4c65-ae78-21d6abaf30d9
+
+	measure Summary_practice_equivalents_created =
+			
+			VAR BaseNPI =
+			    VALUES('0. Cur'[localpractice])   -- NPIs in current visual context
+			VAR WithFlags =
+			    ADDCOLUMNS(
+			        BaseNPI,
+			        "__shift", COALESCE([Display Shifts Slicer], 0),
+			        "__impact", COALESCE([Impact selection filter flag], 1)
+			    )
+			VAR Passing =
+			    FILTER(
+			        WithFlags,
+			        [__shift] = 1 &&
+			        [__impact] = 0 &&
+			        NOT ISBLANK('0. Cur'[localpractice])
+			    )
+			VAR Passing1Col =
+			    SELECTCOLUMNS(Passing, "NPI", '0. Cur'[localpractice])   -- make it 1 column for TREATAS
+			RETURN
+			CALCULATE(
+			    [Rad Equivalents Created],
+			    KEEPFILTERS( TREATAS(Passing1Col, '0. Cur'[localpractice]) )
+			)
+		lineageTag: 062944e4-2954-47b7-a7b2-161d6f9359f6
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	measure Summary_Average_Capacity_Increase_LPformated = ```
+			
+			VAR BasePractice =
+			    VALUES('0. Cur'[localpractice])   -- practices in current visual context
+			VAR WithFlags =
+			    ADDCOLUMNS(
+			        BasePractice,
+			        "__shift", COALESCE([Display Shifts Slicer], 0),
+			        "__impact", COALESCE([Impact selection filter flag], 1),
+			        "__baseline", COALESCE([Has_Baseline_For_Selected_Unit], 0)
+			    )
+			VAR Passing =
+			    FILTER(
+			        WithFlags,
+			        [__shift] = 1 &&
+			        [__impact] = 0 &&
+			        [__baseline] = 1 &&
+			        NOT ISBLANK('0. Cur'[localpractice])
+			    )
+			VAR Passing1Col =
+			    SELECTCOLUMNS(Passing, "LocalPractice", '0. Cur'[localpractice])   -- make it 1 column for TREATAS
+			RETURN
+			FORMAT(
+			    CALCULATE([Add'l Capacity / Shift (Top N)],
+			    KEEPFILTERS( TREATAS(Passing1Col, '0. Cur'[localpractice])) 
+			), "#.#") & " " & SELECTEDVALUE('1. Unit_Tbl'[Productivity Unit])
+			```
+		lineageTag: 6da7a617-d1f7-4b4b-9b96-850cfc2d95b2
+
+	measure Summary_Average_Capacity_Increase_mosaicformated = ```
+			
+			/*VAR SummaryTable =
+			        SUMMARIZE (
+			            '0. Cur',
+			            '0. Cur'[NPI]  -- Replace with your actual group column
+			        )
+			    
+			RETURN
+			//(FORMAT(CALCULATE([Add'l Capacity / Shift (Top N)],FILTER(SummaryTable,[Rads to Include filter flag] = 0)),0) & " " & SELECTEDVALUE('1. Unit_Tbl'[Productivity Unit]))
+			FORMAT(CALCULATE([Add'l Capacity / Shift (Top N)],FILTER(SummaryTable,AND([Impact selection filter flag] = 0,'Display Shift Filter Table'[Display Shifts Slicer] =1))), "#.#") & " " & SELECTEDVALUE('1. Unit_Tbl'[Productivity Unit])*/
+			VAR BaseNPI =
+			    VALUES('0. Cur'[NPI])   -- NPIs in current visual context
+			VAR WithFlags =
+			    ADDCOLUMNS(
+			        BaseNPI,
+			        "__shift", COALESCE([Display Shifts Slicer], 0),
+			        "__impact", COALESCE([Impact selection filter flag], 1)
+			    )
+			VAR Passing =
+			    FILTER(
+			        WithFlags,
+			        [__shift] = 1 &&
+			        [__impact] = 0 &&
+			        NOT ISBLANK('0. Cur'[NPI])
+			    )
+			VAR Passing1Col =
+			    SELECTCOLUMNS(Passing, "NPI", '0. Cur'[NPI])   -- make it 1 column for TREATAS
+			RETURN
+			FORMAT(
+			    CALCULATE([Add'l Capacity / Shift (Top N) mosaic],
+			    KEEPFILTERS( TREATAS(Passing1Col, '0. Cur'[NPI])) 
+			), "#.#") & " " & SELECTEDVALUE('1. Unit_Tbl'[Productivity Unit])
+			```
+		lineageTag: 1bd1499e-9f92-4941-aae0-170266effee8
+
+	measure Summary_Annualized_Capacity_Increase_mosaicformated =
+			
+			/*VAR SummaryTable =
+			        SUMMARIZE (
+			            '0. Cur',
+			            '0. Cur'[NPI]  -- Replace with your actual group column
+			        )
+			Var unit = IF(CONTAINSSTRINGEXACT(SELECTEDVALUE('1. Unit_Tbl'[Productivity Unit]),"RVU"),"RVUs","RPWUs")
+			RETURN
+			(FORMAT(CALCULATE([Annualized_addl_capacity (Top N)(overwrite display)],
+			FILTER(SummaryTable,AND([Impact selection filter flag] = 0,'Display Shift Filter Table'[Display Shifts Slicer] =1))),"#,#") & " " & unit)
+			*/
+			VAR BaseNPI =
+			    VALUES('0. Cur'[NPI])   -- NPIs in current visual context
+			VAR WithFlags =
+			    ADDCOLUMNS(
+			        BaseNPI,
+			        "__shift", COALESCE([Display Shifts Slicer], 0),
+			        "__impact", COALESCE([Impact selection filter flag], 1)
+			    )
+			VAR Passing =
+			    FILTER(
+			        WithFlags,
+			        [__shift] = 1 &&
+			        [__impact] = 0 &&
+			        NOT ISBLANK('0. Cur'[NPI])
+			    )
+			VAR Passing1Col =
+			    SELECTCOLUMNS(Passing, "NPI", '0. Cur'[NPI])   -- make it 1 column for TREATAS
+			Var unit = IF(CONTAINSSTRINGEXACT(SELECTEDVALUE('1. Unit_Tbl'[Productivity Unit]),"RVU"),"RVUs","TBWUs")
+			
+			RETURN
+			FORMAT(CALCULATE([Annualized_addl_capacity (Top N)(overwrite display) mosaic]
+			    ,
+			    KEEPFILTERS(TREATAS(Passing1Col, '0. Cur'[NPI]))),"#,#") & " " & unit
+		lineageTag: d63793ae-7494-4a1d-866e-52c41e49ba15
+
+	measure Summary_rad_equivalents_mosaiccreated =
+			
+			VAR BaseNPI =
+			    VALUES('0. Cur'[NPI])   -- NPIs in current visual context
+			VAR WithFlags =
+			    ADDCOLUMNS(
+			        BaseNPI,
+			        "__shift", COALESCE([Display Shifts Slicer], 0),
+			        "__impact", COALESCE([Impact selection filter flag], 1)
+			    )
+			VAR Passing =
+			    FILTER(
+			        WithFlags,
+			        [__shift] = 1 &&
+			        [__impact] = 0 &&
+			        NOT ISBLANK('0. Cur'[NPI])
+			    )
+			VAR Passing1Col =
+			    SELECTCOLUMNS(Passing, "NPI", '0. Cur'[NPI])   -- make it 1 column for TREATAS
+			RETURN
+			CALCULATE(
+			    [Rad Equivalents MosaicCreated],
+			    KEEPFILTERS( TREATAS(Passing1Col, '0. Cur'[NPI]) )
+			)
+			/*VAR SummaryTable =
+			        SUMMARIZE (
+			            '0. Cur',
+			            '0. Cur'[NPI]  -- Replace with your actual group column
+			        )
+			RETURN
+			CALCULATE([Rad Equivalents Created],FILTER(SummaryTable,AND([Impact selection filter flag] = 0,'Display Shift Filter Table'[Display Shifts Slicer] =1)))*/
+		lineageTag: c7bd7137-fc9f-4c0a-beb3-a6747f0bf098
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column Value
+		formatString: 0
+		lineageTag: a39e8dfb-2903-4a3d-b6dd-64c30354592f
+		summarizeBy: sum
+		isNameInferred
+		sourceColumn: [Value]
+
+		annotation SummarizationSetBy = Automatic
+
+	partition '3.Summary Table' = calculated
+		mode: import
+		source = Row("Value", BLANK())
+
+	annotation PBI_Id = 7f26e15b67f24f299c8042594b8b70a8
+
+	annotation 436ba87b-9c83-4389-a31b-ebd06a36be98 = {"Expression":""}
+

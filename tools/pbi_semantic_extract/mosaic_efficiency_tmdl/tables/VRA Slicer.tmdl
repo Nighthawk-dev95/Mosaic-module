@@ -1,0 +1,35 @@
+table 'VRA Slicer'
+	lineageTag: b82913d7-fb9d-443c-930c-2bc01ca639da
+
+	column VRA
+		formatString: 0
+		lineageTag: 6afb84d9-4ec7-496a-b2de-cb98ef9084c8
+		summarizeBy: sum
+		isNameInferred
+		sourceColumn: [VRA]
+
+		annotation SummarizationSetBy = Automatic
+
+	column VRA_Label
+		lineageTag: 1bd0097c-2392-40ea-a186-fb89189337bd
+		summarizeBy: none
+		isNameInferred
+		sourceColumn: [VRA_Label]
+
+		annotation SummarizationSetBy = Automatic
+
+	partition 'VRA Slicer' = calculated
+		mode: import
+		source =
+				
+				DATATABLE(
+				    "VRA", INTEGER,
+				    "VRA_Label", STRING,
+				    {
+				        {1, "Assisted"},
+				        {0, "Not Assisted"}
+				    }
+				)
+
+	annotation PBI_Id = 7552cd1451db4346aefcf9e8e455ed45
+

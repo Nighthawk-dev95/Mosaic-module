@@ -1,0 +1,174 @@
+table Mode_Lines_NB
+	lineageTag: f6e09be9-8551-44bd-a6f8-86e043c25602
+
+	measure Benchmark_By_Mode_Line = ```
+			
+			VAR _modeLine = SELECTEDVALUE(Mode_Lines_NB[ModeLine])
+			VAR _outlierView = SELECTEDVALUE('Outlier Selector'[Outlier View], "Excluded")
+			VAR _minExams = SELECTEDVALUE('Mosaic Min Exams'[MinExams], 0)
+			
+			// Check if current X-axis point has Drafting data
+			VAR _hasDraftingData = 
+			    CALCULATE(
+			        COUNTROWS('radiologist_metrics(1)'),
+			        'radiologist_metrics(1)'[Period_Type] = "Drafting",
+			        IF(_outlierView = "Excluded", 'radiologist_metrics(1)'[Outliers] = "Excluded", TRUE())
+			    ) > 0
+			
+			// Get qualifying rads based on ALL TIME exams (not selected period)
+			VAR _qualifiedRads = 
+			    FILTER(
+			        CALCULATETABLE(
+			            VALUES('radiologist_summary(1)'[Radiologist]),
+			            REMOVEFILTERS('radiologist_metrics(1)'[Exam_Date])
+			        ),
+			        VAR _radExamsAllTime = 
+			            CALCULATE(
+			                SUM('radiologist_metrics(1)'[ExamCount]),
+			                REMOVEFILTERS('radiologist_metrics(1)'[Exam_Date]),
+			                'radiologist_metrics(1)'[Period_Type] IN {"Drafting", "Reporting"},
+			                IF(_outlierView = "Excluded", 'radiologist_metrics(1)'[Outliers] = "Excluded", TRUE())
+			            )
+			        RETURN _radExamsAllTime >= _minExams
+			    )
+			
+			// Drafting Only - respects X-axis month context
+			VAR _draftingTBWU = 
+			    SUMX(
+			        _qualifiedRads,
+			        CALCULATE(
+			            SUM('radiologist_metrics(1)'[TotalTBWU]),
+			            'radiologist_metrics(1)'[Period_Type] = "Drafting",
+			            IF(_outlierView = "Excluded", 'radiologist_metrics(1)'[Outliers] = "Excluded", TRUE())
+			        )
+			    )
+			
+			VAR _draftingTime = 
+			    SUMX(
+			        _qualifiedRads,
+			        CALCULATE(
+			            SUM('radiologist_metrics(1)'[TotalTime]),
+			            'radiologist_metrics(1)'[Period_Type] = "Drafting",
+			            IF(_outlierView = "Excluded", 'radiologist_metrics(1)'[Outliers] = "Excluded", TRUE())
+			        )
+			    )
+			
+			VAR _draftingEff = DIVIDE(_draftingTBWU, _draftingTime / 60)
+			
+			// Reporting Only (Non-Drafted)
+			VAR _reportingTBWU = 
+			    SUMX(
+			        _qualifiedRads,
+			        CALCULATE(
+			            SUM('radiologist_metrics(1)'[TotalTBWU]),
+			            'radiologist_metrics(1)'[Period_Type] = "Reporting",
+			            IF(_outlierView = "Excluded", 'radiologist_metrics(1)'[Outliers] = "Excluded", TRUE())
+			        )
+			    )
+			
+			VAR _reportingTime = 
+			    SUMX(
+			        _qualifiedRads,
+			        CALCULATE(
+			            SUM('radiologist_metrics(1)'[TotalTime]),
+			            'radiologist_metrics(1)'[Period_Type] = "Reporting",
+			            IF(_outlierView = "Excluded", 'radiologist_metrics(1)'[Outliers] = "Excluded", TRUE())
+			        )
+			    )
+			
+			VAR _reportingEff = DIVIDE(_reportingTBWU, _reportingTime / 60)
+			
+			// Full Mosaic
+			VAR _fullMosaicTBWU = 
+			    SUMX(
+			        _qualifiedRads,
+			        CALCULATE(
+			            SUM('radiologist_metrics(1)'[TotalTBWU]),
+			            'radiologist_metrics(1)'[Period_Type] IN {"Drafting", "Reporting"},
+			            IF(_outlierView = "Excluded", 'radiologist_metrics(1)'[Outliers] = "Excluded", TRUE())
+			        )
+			    )
+			
+			VAR _fullMosaicTime = 
+			    SUMX(
+			        _qualifiedRads,
+			        CALCULATE(
+			            SUM('radiologist_metrics(1)'[TotalTime]),
+			            'radiologist_metrics(1)'[Period_Type] IN {"Drafting", "Reporting"},
+			            IF(_outlierView = "Excluded", 'radiologist_metrics(1)'[Outliers] = "Excluded", TRUE())
+			        )
+			    )
+			
+			VAR _fullMosaicEff = DIVIDE(_fullMosaicTBWU, _fullMosaicTime / 60)
+			
+			// Drafting Overall Avg - flat benchmark line (only where Drafting data exists)
+			VAR _draftingOverallTBWU = 
+			    CALCULATE(
+			        SUM('radiologist_metrics(1)'[TotalTBWU]),
+			        ALL('radiologist_summary(1)'),
+			        ALL('radiologist_metrics(1)'),
+			        'radiologist_metrics(1)'[Exam_Date] IN VALUES('Mosaic_Calendar'[Date]),
+			        'radiologist_metrics(1)'[Period_Type] = "Drafting",
+			        IF(_outlierView = "Excluded", 'radiologist_metrics(1)'[Outliers] = "Excluded", TRUE())
+			    )
+			
+			VAR _draftingOverallTime = 
+			    CALCULATE(
+			        SUM('radiologist_metrics(1)'[TotalTime]),
+			        ALL('radiologist_summary(1)'),
+			        ALL('radiologist_metrics(1)'),
+			        'radiologist_metrics(1)'[Exam_Date] IN VALUES('Mosaic_Calendar'[Date]),
+			        'radiologist_metrics(1)'[Period_Type] = "Drafting",
+			        IF(_outlierView = "Excluded", 'radiologist_metrics(1)'[Outliers] = "Excluded", TRUE())
+			    )
+			
+			VAR _draftingOverallEff = IF(_hasDraftingData, DIVIDE(_draftingOverallTBWU, _draftingOverallTime / 60), BLANK())
+			
+			RETURN
+			SWITCH(
+			    _modeLine,
+			    "Drafting Only", _draftingEff,
+			    "Non-Drafted", _reportingEff,
+			    "Full Mosaic", _fullMosaicEff,
+			    "RP Avg, Drafting Only", _draftingOverallEff,
+			    BLANK()
+			)
+			```
+		formatString: 0.000
+		lineageTag: 7413d668-41c7-48ec-ba0c-1e9af8395d40
+
+	column ModeLine
+		lineageTag: 1449d4ee-26f6-4764-a23a-28c2f014d2aa
+		summarizeBy: none
+		isNameInferred
+		sourceColumn: [ModeLine]
+
+		annotation SummarizationSetBy = Automatic
+
+	column ModeOrder
+		formatString: 0
+		lineageTag: bb93e895-e055-47a6-a91c-8d80a06ef4ae
+		summarizeBy: sum
+		isNameInferred
+		sourceColumn: [ModeOrder]
+
+		annotation SummarizationSetBy = Automatic
+
+	partition Mode_Lines_NB = calculated
+		mode: import
+		source = ```
+				
+				DATATABLE(
+				    "ModeLine", STRING,
+				    "ModeOrder", INTEGER,
+				    {
+				        {"Drafting Only", 1},
+				        {"Full Mosaic", 2},
+				        {"Non-Drafted", 3}, 
+				        {"RP Avg, Drafting Only", 4}
+				    }
+				)
+				```
+
+	annotation PBI_Id = f366f2d045fb4166b86da6da3146d599
+

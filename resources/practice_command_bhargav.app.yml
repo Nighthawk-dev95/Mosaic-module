@@ -27,3 +27,7 @@ resources:
             scope: mosaic-bhargav
             key: ingest-shared-secret
             permission: READ
+        - name: ai-context-endpoint
+          serving_endpoint:
+            name: databricks-claude-haiku-5-5
+            permission: CAN_QUERY

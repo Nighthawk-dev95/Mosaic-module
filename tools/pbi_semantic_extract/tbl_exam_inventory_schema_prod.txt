@@ -1,0 +1,1943 @@
+COLUMNS:
+  exam_id: bigint
+  source_exam_id: bigint
+  accession_number: string
+  Source_Accession_Number: string
+  Study_Status_Code: string
+  Unread_Exam_Flag: boolean
+  Priority_Name: string
+  Source_Priority_Code: string
+  source_shift_name: string
+  Source_System_Code: string
+  mosaic_read_flag: boolean
+  mosaic_draft_flag: boolean
+  VRA_Flag: boolean
+  autonext_flag: boolean
+  patient_key: bigint
+  patient_class_key: bigint
+  patient_age_at_order: int
+  care_setting: string
+  Hist_Imaging_Site_ID: bigint
+  Site_Current_ID: bigint
+  site_location_id: bigint
+  Site_MDM_ID: string
+  Workday_Site_ID: string
+  Site_Type: string
+  Site_Name: string
+  Source_Site_Name: string
+  site_group: string
+  site_idn: string
+  site_health_system: string
+  managing_local_practice_name: string
+  managing_division_name: string
+  managing_region_name: string
+  managing_area_name: string
+  managing_local_name: string
+  managing_local_practice_name_curr: string
+  managing_division_name_curr: string
+  managing_region_name_curr: string
+  managing_area_name_curr: string
+  managing_local_name_curr: string
+  financial_division_flag: string
+  hist_reading_radiologist_id: bigint
+  reading_radiologist_current_id: bigint
+  reading_provider_npi: decimal(10,0)
+  reading_provider_name_full: string
+  reading_provider_name_source: string
+  reading_provider_affiliation: string
+  source_reading_radiologist_name: string
+  reading_provider_first_name: string
+  reading_provider_last_name: string
+  reading_provider_credentials: string
+  reading_provider_employee_id: string
+  reading_provider_employment_type: string
+  reading_provider_fte_percentage: double
+  reading_provider_employee_flag: string
+  reading_provider_ic_flag: string
+  reading_provider_locum_flag: string
+  reading_provider_resident_flag: string
+  reading_provider_fellow_flag: string
+  provider_local_practice_name_curr: string
+  provider_division_name_curr: string
+  provider_region_name_curr: string
+  provider_area_name_curr: string
+  provider_local_name_curr: string
+  provider_local_practice_name: string
+  provider_division_name: string
+  provider_region_name: string
+  provider_area_name: string
+  provider_local_name: string
+  reading_provider_operating_entity_company: string
+  reading_provider_locum_agency_name: string
+  reading_provider_agency_name: string
+  provider_hierarchy_source: string
+  provider_primary_subspecialty_curr: string
+  provider_secondary_subspecialty_curr: string
+  provider_tertiary_subspecialty_curr: string
+  hist_signing_radiologist_id: bigint
+  signing_radiologist_current_id: bigint
+  signing_radiologist_npi: decimal(10,0)
+  signing_radiologist_name_full: string
+  different_signer_flag: boolean
+  hist_rsdnt_radiologist_id: bigint
+  resident_radiologist_npi: decimal(10,0)
+  resident_radiologist_name_full: string
+  Hist_Procedure_ID: bigint
+  Source_Procedure_Description: string
+  Source_Procedure_Code: string
+  RPID_Procedure_Code: string
+  RPID_procedure_description: string
+  exam_Body_Part_Name: string
+  exam_Modality_Code: string
+  exam_Modality_Description: string
+  exam_interventional_Ind: tinyint
+  exam_cpt_code_list: string
+  exam_subspecialty_code: string
+  exam_subspecialty_name: string
+  RPID_parent_code: string
+  RPID_parent_code_description: string
+  Radiology_Report_ID: bigint
+  Combined_Exam_Src_Id: string
+  exam_encounter_id: string
+  draft_system_name: string
+  report_transcription_system_name: string
+  Worklist_Name: string
+  self_assigned_flag: boolean
+  source_wrvu: decimal(14,4)
+  estimated_wrvu: decimal(5,2)
+  billed_wrvu: decimal(22,2)
+  best_wrvu: decimal(22,2)
+  source_tbwu: decimal(10,4)
+  final_TBWU: decimal(24,4)
+  base_tbwu_current: double
+  setting_multiplier_category_current: string
+  setting_multiplier_value_current: double
+  unassisted_tbwu_current: decimal(15,4)
+  ai_read_time_change_pct_current: double
+  empirical_tbwu_current: decimal(15,4)
+  value_shared_with_rad_pct_current: double
+  allocated_tbwu_current: decimal(15,4)
+  base_tbwu: double
+  setting_multiplier_value: double
+  unassisted_tbwu: decimal(15,4)
+  ai_read_time_change_pct: double
+  empirical_tbwu: decimal(15,4)
+  value_shared_with_rad_pct: double
+  allocated_tbwu: decimal(15,4)
+  tbwu_version_effective_start: timestamp
+  tbwu_version_effective_end: timestamp
+  rpid_draftable_flag: boolean
+  practice_rpid_in_drafting_program_flag: boolean
+  rad_drafting_enabled_flag: boolean
+  exam_draftable_flag: boolean
+  exam_not_draftable_reason: string
+  billed_wrvu_variance: decimal(23,2)
+  Billing_Accession_Match_Flag: boolean
+  order_datetime_utc: timestamp
+  completed_datetime_utc: timestamp
+  on_pacs_datetime_utc: timestamp
+  unread_datetime_utc: timestamp
+  read_datetime_utc: timestamp
+  preliminary_datetime_utc: timestamp
+  dictation_start_datetime_utc: timestamp
+  dictation_end_datetime_utc: timestamp
+  final_datetime_utc: timestamp
+  previous_final_datetime_utc: timestamp
+  target_datetime_utc: timestamp
+  on_ris_datetime_utc: timestamp
+  available_to_physician_datetime_utc: timestamp
+  addendum_datetime_utc: timestamp
+  wet_read_datetime_utc: timestamp
+  original_timezone_code: string
+  order_datetime: timestamp
+  completed_datetime: timestamp
+  on_pacs_datetime: timestamp
+  unread_datetime: timestamp
+  read_datetime: timestamp
+  preliminary_datetime: timestamp
+  dictation_start_datetime: timestamp
+  dictation_end_datetime: timestamp
+  final_datetime: timestamp
+  previous_final_datetime: timestamp
+  target_datetime: timestamp
+  on_ris_datetime: timestamp
+  available_to_physician_datetime: timestamp
+  addendum_datetime: timestamp
+  wet_read_datetime: timestamp
+  RP_Standard_Target_Datetime: timestamp
+  Best_Available_SLA_Target_Datetime: timestamp
+  Time_of_Read_Bucket: string
+  tat_category: string
+  unread_age_minutes: decimal(12,2)
+  backlog_age_minutes: decimal(12,2)
+  backlog_age_bucket: string
+  tat_order_to_complete_minutes: decimal(12,2)
+  tat_complete_to_unread_minutes: decimal(12,2)
+  tat_unread_to_final_minutes: decimal(12,2)
+  tat_order_to_final_minutes: decimal(12,2)
+  tat_exclusion_reason: string
+  tat_outlier_flag: boolean
+  tat_outlier_threshold_minutes: decimal(10,2)
+  rp_sla_category: string
+  rp_sla_threshold_minutes: int
+  local_sla_met_flag: boolean
+  rp_sla_met_flag: boolean
+  best_available_sla_met_flag: boolean
+  reading_efficiency_tbwu_per_min: decimal(10,4)
+  reading_efficiency_wrvu_per_min: decimal(10,4)
+  idle_time_category: string
+  time_between_exams_flag: boolean
+  short_break_flag: boolean
+  long_break_flag: boolean
+  stacked_exam_adjusted_flag: boolean
+  rad_prod_seconds: bigint
+  rad_idle_seconds: bigint
+  rad_prod_duration: string
+  rad_idle_duration: string
+  internal_cross_read_flag: boolean
+  external_cross_read_flag: boolean
+  cross_read_type: string
+  scheduled_shift_id: bigint
+  scheduled_shift_flag: boolean
+  scheduling_local_practice_code: string
+  scheduling_local_practice_name: string
+  scheduling_division_name: string
+  scheduling_region_name: string
+  scheduling_area_name: string
+  scheduling_practice_source: string
+  scheduled_shift_start_datetime_utc: timestamp
+  scheduled_shift_end_datetime_utc: timestamp
+  scheduled_shift_start_datetime: timestamp
+  scheduled_shift_end_datetime: timestamp
+  scheduled_shift_location: string
+  scheduled_On_Off_Shift_Code: string
+  scheduled_task_category: string
+  scheduled_shift_type: string
+  Moonlight_Worklist_Flag: boolean
+  scheduled_shift_task_name: string
+  Shift_Target_1_Amount: decimal(10,2)
+  Shift_Target_2_Amount: decimal(10,2)
+  time_into_shift_minutes: bigint
+  shift_utilization_pct: double
+  total_matching_shifts: bigint
+  shift_match_method: string
+  Sched_Credit_Amt: decimal(20,9)
+  Phy_Pct_Expct_Amt: decimal(10,2)
+  Scheduled_Shift_Notes: string
+  exam_status: string
+  time_to_target_minutes: decimal(12,2)
+  mammo_hold_flag: boolean
+  exam_group: string
+  noread_flag: boolean
+  edw_charge_id_list: string
+  billed_cpt_code_list: string
+  has_payor_bill_charges: int
+  has_direct_bill_charges: int
+  has_primary_bridge_data: int
+  has_secondary_bridge_data: int
+  payor_bill_charge_count: bigint
+  direct_bill_charge_count: bigint
+  total_charge_count: bigint
+  most_recent_primary_allowed_amount: decimal(22,2)
+  billed_trvu: decimal(24,2)
+  charge_post_date: string
+  billing_npi: string
+  billing_radiologist_name_full: string
+  finance_carrier: string
+  carrier_type_level_1: string
+  carrier_type_level_2: string
+  carrier_type_level_3: string
+  primary_parent_payor: string
+  Billing_Site_MDM_ID: decimal(18,0)
+  Billing_Workday_Site_ID: string
+  Billing_Source_Service_Location_Name: string
+  Billing_Source_Service_Location_Address1: string
+  Billing_Source_Service_Location_City: string
+  Billing_Source_Database_Code: string
+  Exclusion_Reason_ID: bigint
+  Exclusion_Reason_Cd: string
+  Exclusion_Reason_Nm: string
+  EDW_Source_Table: string
+  dq_pillar_master_data: decimal(17,1)
+  dq_pillar_timestamps: decimal(17,1)
+  dq_pillar_billing: decimal(17,1)
+  dq_pillar_scheduling: decimal(17,1)
+  dq_pillar_outliers: decimal(17,1)
+  dq_overall_quality_score: decimal(22,1)
+  dq_trust_tier: string
+  dq_site_location_matched: boolean
+  dq_site_master_matched: boolean
+  dq_provider_master_matched: boolean
+  dq_procedure_master_matched: boolean
+  dq_subspecialty_matched: boolean
+  dq_workday_matched: boolean
+  dq_mdm_roster_matched: boolean
+  dq_timestamps_logical_order: boolean
+  dq_local_practice_aligned: boolean
+  final_datetime_utc: timestamp
+  reading_provider_npi: decimal(10,0)
+  managing_local_practice_name: string
+
+SAMPLE DATA:
+  Row 1:
+    exam_id: 1747554118
+    source_exam_id: 46272586
+    accession_number: 25367784CHS
+    Source_Accession_Number: 25367784
+    Study_Status_Code: Final
+    Unread_Exam_Flag: false
+    Priority_Name: STAT
+    Source_Priority_Code: STAT ER
+    source_shift_name: 
+    Source_System_Code: rpceMidwest
+    mosaic_read_flag: false
+    mosaic_draft_flag: false
+    VRA_Flag: false
+    autonext_flag: false
+    patient_key: 297794082
+    patient_class_key: 23
+    patient_age_at_order: 87
+    care_setting: ED
+    Hist_Imaging_Site_ID: 51695
+    Site_Current_ID: 51695
+    site_location_id: 470003
+    Site_MDM_ID: 1844
+    Workday_Site_ID: 1410001
+    Site_Type: Client
+    Site_Name: Catholic Health Mercy Medical Center
+    Source_Site_Name: ESR-Mercy Medical Center
+    site_group: 
+    site_idn: Catholic Health (AKA Catholic Health Services of Long Island)
+    site_health_system: Independent Health System
+    managing_local_practice_name: ESR Long Island
+    managing_division_name: None
+    managing_region_name: Northeast
+    managing_area_name: Northeast
+    managing_local_name: Special Operations
+    managing_local_practice_name_curr: ESR Long Island
+    managing_division_name_curr: None
+    managing_region_name_curr: Northeast
+    managing_area_name_curr: Northeast
+    managing_local_name_curr: Special Operations
+    financial_division_flag: N
+    hist_reading_radiologist_id: 2365091
+    reading_radiologist_current_id: 2366220
+    reading_provider_npi: 1528341203
+    reading_provider_name_full: Greif, Eric
+    reading_provider_name_source: MDM
+    reading_provider_affiliation: RP_ROSTER
+    source_reading_radiologist_name: Eric Greif
+    reading_provider_first_name: Eric
+    reading_provider_last_name: Greif
+    reading_provider_credentials: DO
+    reading_provider_employee_id: 100014067
+    reading_provider_employment_type: EMP
+    reading_provider_fte_percentage: 1.0
+    reading_provider_employee_flag: Y
+    reading_provider_ic_flag: N
+    reading_provider_locum_flag: N
+    reading_provider_resident_flag: N
+    reading_provider_fellow_flag: N
+    provider_local_practice_name_curr: ESR Long Island
+    provider_division_name_curr: None
+    provider_region_name_curr: Northeast
+    provider_area_name_curr: Northeast
+    provider_local_name_curr: Special Operations
+    provider_local_practice_name: ESR Long Island
+    provider_division_name: None
+    provider_region_name: Northeast
+    provider_area_name: Northeast
+    provider_local_name: Special Operations
+    reading_provider_operating_entity_company: Empire State Radiology, P.C.
+    reading_provider_locum_agency_name: 
+    reading_provider_agency_name: 
+    provider_hierarchy_source: WORKDAY
+    provider_primary_subspecialty_curr: Neuroradiology
+    provider_secondary_subspecialty_curr: General
+    provider_tertiary_subspecialty_curr: Not Applicable
+    hist_signing_radiologist_id: 2365091
+    signing_radiologist_current_id: 2366220
+    signing_radiologist_npi: 1528341203
+    signing_radiologist_name_full: Greif, Eric
+    different_signer_flag: false
+    hist_rsdnt_radiologist_id: -2
+    resident_radiologist_npi: -2
+    resident_radiologist_name_full: Unknown, Unknown
+    Hist_Procedure_ID: 248966
+    Source_Procedure_Description: CT ANGIO BRAIN AND NECK STROKE PROTOCOL
+    Source_Procedure_Code: 93651
+    RPID_Procedure_Code: RPID1004
+    RPID_procedure_description: CT HEAD NECK ANGIOGRAPHY WITH IV CON
+    exam_Body_Part_Name: Head,Neck
+    exam_Modality_Code: CT
+    exam_Modality_Description: Computed Tomography
+    exam_interventional_Ind: 0
+    exam_cpt_code_list: 70496,70498
+    exam_subspecialty_code: NEURO
+    exam_subspecialty_name: MXNEUROGEN
+    RPID_parent_code: RPID1004
+    RPID_parent_code_description: CT HEAD NECK ANGIOGRAPHY WITH IV CONTRAST
+    Radiology_Report_ID: 478103738
+    Combined_Exam_Src_Id: 6925da6634834
+    exam_encounter_id: 3090527924CHS
+    draft_system_name: 
+    report_transcription_system_name: 
+    Worklist_Name: 
+    self_assigned_flag: 
+    source_wrvu: 3.5000
+    estimated_wrvu: 3.50
+    billed_wrvu: 
+    best_wrvu: 3.50
+    source_tbwu: 2.1600
+    final_TBWU: 2.1600
+    base_tbwu_current: 1.9989
+    setting_multiplier_category_current: ED
+    setting_multiplier_value_current: 0.99
+    unassisted_tbwu_current: 1.9789
+    ai_read_time_change_pct_current: 0.0
+    empirical_tbwu_current: 1.9789
+    value_shared_with_rad_pct_current: 0.0
+    allocated_tbwu_current: 1.9789
+    base_tbwu: 1.9989
+    setting_multiplier_value: 0.99
+    unassisted_tbwu: 1.9789
+    ai_read_time_change_pct: 0.0
+    empirical_tbwu: 1.9789
+    value_shared_with_rad_pct: 0.0
+    allocated_tbwu: 1.9789
+    tbwu_version_effective_start: 1900-01-01T00:00:00.000Z
+    tbwu_version_effective_end: 2026-07-01T05:01:00.000Z
+    rpid_draftable_flag: false
+    practice_rpid_in_drafting_program_flag: false
+    rad_drafting_enabled_flag: false
+    exam_draftable_flag: false
+    exam_not_draftable_reason: exam_not_read_on_mosaic
+    billed_wrvu_variance: 0.00
+    Billing_Accession_Match_Flag: false
+    order_datetime_utc: 2025-11-25T15:56:00.000Z
+    completed_datetime_utc: 2025-11-25T16:15:00.000Z
+    on_pacs_datetime_utc: 2025-11-25T16:15:00.000Z
+    unread_datetime_utc: 2025-11-25T16:17:09.000Z
+    read_datetime_utc: 2025-11-25T16:07:00.000Z
+    preliminary_datetime_utc: 
+    dictation_start_datetime_utc: 
+    dictation_end_datetime_utc: 2025-11-25T16:47:57.000Z
+    final_datetime_utc: 2025-11-25T16:47:54.000Z
+    previous_final_datetime_utc: 2025-11-25T16:47:54.000Z
+    target_datetime_utc: 2025-11-25T17:00:00.000Z
+    on_ris_datetime_utc: 2025-11-25T16:10:00.000Z
+    available_to_physician_datetime_utc: 2025-11-25T16:15:00.000Z
+    addendum_datetime_utc: 
+    wet_read_datetime_utc: 
+    original_timezone_code: America/New_York
+    order_datetime: 2025-11-25T10:56:00.000Z
+    completed_datetime: 2025-11-25T11:15:00.000Z
+    on_pacs_datetime: 2025-11-25T11:15:00.000Z
+    unread_datetime: 2025-11-25T11:17:09.000Z
+    read_datetime: 2025-11-25T11:07:00.000Z
+    preliminary_datetime: 
+    dictation_start_datetime: 
+    dictation_end_datetime: 2025-11-25T11:47:57.000Z
+    final_datetime: 2025-11-25T11:47:54.000Z
+    previous_final_datetime: 2025-11-25T11:47:54.000Z
+    target_datetime: 2025-11-25T12:00:00.000Z
+    on_ris_datetime: 2025-11-25T11:10:00.000Z
+    available_to_physician_datetime: 2025-11-25T11:15:00.000Z
+    addendum_datetime: 
+    wet_read_datetime: 
+    RP_Standard_Target_Datetime: 2025-11-25T11:47:09.000Z
+    Best_Available_SLA_Target_Datetime: 2025-11-25T12:00:00.000Z
+    Time_of_Read_Bucket: Daytime: 7am-5pm
+    tat_category: ED
+    unread_age_minutes: 
+    backlog_age_minutes: 
+    backlog_age_bucket: N/A
+    tat_order_to_complete_minutes: 19.00
+    tat_complete_to_unread_minutes: 2.15
+    tat_unread_to_final_minutes: 30.75
+    tat_order_to_final_minutes: 51.90
+    tat_exclusion_reason: 
+    tat_outlier_flag: false
+    tat_outlier_threshold_minutes: 1440.00
+    rp_sla_category: ED
+    rp_sla_threshold_minutes: 30
+    local_sla_met_flag: true
+    rp_sla_met_flag: false
+    best_available_sla_met_flag: true
+    reading_efficiency_tbwu_per_min: 
+    reading_efficiency_wrvu_per_min: 
+    idle_time_category: 
+    time_between_exams_flag: false
+    short_break_flag: false
+    long_break_flag: false
+    stacked_exam_adjusted_flag: false
+    rad_prod_seconds: 
+    rad_idle_seconds: 
+    rad_prod_duration: 
+    rad_idle_duration: 
+    internal_cross_read_flag: false
+    external_cross_read_flag: 
+    cross_read_type: 
+    scheduled_shift_id: 11224414
+    scheduled_shift_flag: true
+    scheduling_local_practice_code: 
+    scheduling_local_practice_name: 
+    scheduling_division_name: 
+    scheduling_region_name: 
+    scheduling_area_name: 
+    scheduling_practice_source: UNKNOWN_TASK_PRACTICE
+    scheduled_shift_start_datetime_utc: 2025-11-25T13:00:00.000Z
+    scheduled_shift_end_datetime_utc: 2025-11-25T22:00:00.000Z
+    scheduled_shift_start_datetime: 2025-11-25T08:00:00.000Z
+    scheduled_shift_end_datetime: 2025-11-25T17:00:00.000Z
+    scheduled_shift_location: Onsite
+    scheduled_On_Off_Shift_Code: 
+    scheduled_task_category: Onsite Dx
+    scheduled_shift_type: Primary
+    Moonlight_Worklist_Flag: false
+    scheduled_shift_task_name: DX St. Joe Hospital CH 8a-5p
+    Shift_Target_1_Amount: 64.00
+    Shift_Target_2_Amount: 
+    time_into_shift_minutes: 227
+    shift_utilization_pct: 42.03703703703704
+    total_matching_shifts: 1
+    shift_match_method: default_ranking
+    Sched_Credit_Amt: 1.000000000
+    Phy_Pct_Expct_Amt: 1.00
+    Scheduled_Shift_Notes: 
+    exam_status: 
+    time_to_target_minutes: 
+    mammo_hold_flag: 
+    exam_group: 
+    noread_flag: 
+    edw_charge_id_list: 
+    billed_cpt_code_list: 
+    has_payor_bill_charges: 0
+    has_direct_bill_charges: 0
+    has_primary_bridge_data: 0
+    has_secondary_bridge_data: 0
+    payor_bill_charge_count: 0
+    direct_bill_charge_count: 0
+    total_charge_count: 0
+    most_recent_primary_allowed_amount: 
+    billed_trvu: 
+    charge_post_date: 
+    billing_npi: 
+    billing_radiologist_name_full: 
+    finance_carrier: 
+    carrier_type_level_1: 
+    carrier_type_level_2: 
+    carrier_type_level_3: 
+    primary_parent_payor: 
+    Billing_Site_MDM_ID: 
+    Billing_Workday_Site_ID: 
+    Billing_Source_Service_Location_Name: 
+    Billing_Source_Service_Location_Address1: 
+    Billing_Source_Service_Location_City: 
+    Billing_Source_Database_Code: 
+    Exclusion_Reason_ID: -3
+    Exclusion_Reason_Cd: N/A
+    Exclusion_Reason_Nm: NOT APPLICABLE
+    EDW_Source_Table: accum_exam_fact
+    dq_pillar_master_data: 100.0
+    dq_pillar_timestamps: 83.3
+    dq_pillar_billing: 33.3
+    dq_pillar_scheduling: 100.0
+    dq_pillar_outliers: 100.0
+    dq_overall_quality_score: 82.5
+    dq_trust_tier: MEDIUM
+    dq_site_location_matched: true
+    dq_site_master_matched: true
+    dq_provider_master_matched: true
+    dq_procedure_master_matched: true
+    dq_subspecialty_matched: true
+    dq_workday_matched: true
+    dq_mdm_roster_matched: true
+    dq_timestamps_logical_order: true
+    dq_local_practice_aligned: 
+  Row 2:
+    exam_id: 1705367521
+    source_exam_id: 35753629
+    accession_number: 23896169CHS
+    Source_Accession_Number: 23896169
+    Study_Status_Code: Final
+    Unread_Exam_Flag: false
+    Priority_Name: STAT
+    Source_Priority_Code: STAT IP
+    source_shift_name: 
+    Source_System_Code: rpceMidwest
+    mosaic_read_flag: false
+    mosaic_draft_flag: false
+    VRA_Flag: true
+    autonext_flag: false
+    patient_key: 170868546
+    patient_class_key: 21
+    patient_age_at_order: 75
+    care_setting: Inpatient
+    Hist_Imaging_Site_ID: 51693
+    Site_Current_ID: 51693
+    site_location_id: 470000
+    Site_MDM_ID: 2735
+    Workday_Site_ID: 1410002
+    Site_Type: Client
+    Site_Name: Catholic Health Saint Francis Hospital
+    Source_Site_Name: ESR-St. Francis Hospital
+    site_group: 
+    site_idn: Catholic Health (AKA Catholic Health Services of Long Island)
+    site_health_system: Independent Health System
+    managing_local_practice_name: ESR Long Island
+    managing_division_name: None
+    managing_region_name: Northeast
+    managing_area_name: Northeast
+    managing_local_name: Special Operations
+    managing_local_practice_name_curr: ESR Long Island
+    managing_division_name_curr: None
+    managing_region_name_curr: Northeast
+    managing_area_name_curr: Northeast
+    managing_local_name_curr: Special Operations
+    financial_division_flag: N
+    hist_reading_radiologist_id: 2365091
+    reading_radiologist_current_id: 2366220
+    reading_provider_npi: 1528341203
+    reading_provider_name_full: Greif, Eric
+    reading_provider_name_source: MDM
+    reading_provider_affiliation: RP_ROSTER
+    source_reading_radiologist_name: Eric Greif
+    reading_provider_first_name: Eric
+    reading_provider_last_name: Greif
+    reading_provider_credentials: DO
+    reading_provider_employee_id: 100014067
+    reading_provider_employment_type: EMP
+    reading_provider_fte_percentage: 1.0
+    reading_provider_employee_flag: Y
+    reading_provider_ic_flag: N
+    reading_provider_locum_flag: N
+    reading_provider_resident_flag: N
+    reading_provider_fellow_flag: N
+    provider_local_practice_name_curr: ESR Long Island
+    provider_division_name_curr: None
+    provider_region_name_curr: Northeast
+    provider_area_name_curr: Northeast
+    provider_local_name_curr: Special Operations
+    provider_local_practice_name: ESR Long Island
+    provider_division_name: None
+    provider_region_name: Northeast
+    provider_area_name: Northeast
+    provider_local_name: Special Operations
+    reading_provider_operating_entity_company: Empire State Radiology, P.C.
+    reading_provider_locum_agency_name: 
+    reading_provider_agency_name: 
+    provider_hierarchy_source: WORKDAY
+    provider_primary_subspecialty_curr: Neuroradiology
+    provider_secondary_subspecialty_curr: General
+    provider_tertiary_subspecialty_curr: Not Applicable
+    hist_signing_radiologist_id: 2365091
+    signing_radiologist_current_id: 2366220
+    signing_radiologist_npi: 1528341203
+    signing_radiologist_name_full: Greif, Eric
+    different_signer_flag: false
+    hist_rsdnt_radiologist_id: -2
+    resident_radiologist_npi: -2
+    resident_radiologist_name_full: Unknown, Unknown
+    Hist_Procedure_ID: 249096
+    Source_Procedure_Description: CT BRAIN WO CONTRAST
+    Source_Procedure_Code: 20002
+    RPID_Procedure_Code: RPID22
+    RPID_procedure_description: CT HEAD WITHOUT IV CONTRAST
+    exam_Body_Part_Name: Head
+    exam_Modality_Code: CT
+    exam_Modality_Description: Computed Tomography
+    exam_interventional_Ind: 0
+    exam_cpt_code_list: 70450
+    exam_subspecialty_code: GENERAL
+    exam_subspecialty_name: GENERAL
+    RPID_parent_code: RPID22
+    RPID_parent_code_description: CT HEAD WITHOUT IV CONTRAST
+    Radiology_Report_ID: 438481647
+    Combined_Exam_Src_Id: Unknown Combined Exam Source ID
+    exam_encounter_id: 3081927774CHS
+    draft_system_name: 
+    report_transcription_system_name: 
+    Worklist_Name: MY READING QUEUE
+    self_assigned_flag: 
+    source_wrvu: 0.8500
+    estimated_wrvu: 0.85
+    billed_wrvu: 0.85
+    best_wrvu: 0.85
+    source_tbwu: 0.6900
+    final_TBWU: 0.6900
+    base_tbwu_current: 0.6802
+    setting_multiplier_category_current: IP
+    setting_multiplier_value_current: 1.24
+    unassisted_tbwu_current: 0.8434
+    ai_read_time_change_pct_current: 0.0
+    empirical_tbwu_current: 0.8434
+    value_shared_with_rad_pct_current: 0.0
+    allocated_tbwu_current: 0.8434
+    base_tbwu: 0.6802
+    setting_multiplier_value: 1.24
+    unassisted_tbwu: 0.8434
+    ai_read_time_change_pct: 0.0
+    empirical_tbwu: 0.8434
+    value_shared_with_rad_pct: 0.0
+    allocated_tbwu: 0.8434
+    tbwu_version_effective_start: 1900-01-01T00:00:00.000Z
+    tbwu_version_effective_end: 2026-07-01T05:01:00.000Z
+    rpid_draftable_flag: false
+    practice_rpid_in_drafting_program_flag: false
+    rad_drafting_enabled_flag: false
+    exam_draftable_flag: false
+    exam_not_draftable_reason: exam_not_read_on_mosaic
+    billed_wrvu_variance: 0.00
+    Billing_Accession_Match_Flag: true
+    order_datetime_utc: 2025-05-16T10:00:00.000Z
+    completed_datetime_utc: 2025-05-16T10:29:00.000Z
+    on_pacs_datetime_utc: 2025-05-16T10:29:00.000Z
+    unread_datetime_utc: 2025-05-16T10:31:35.000Z
+    read_datetime_utc: 2025-05-16T10:26:00.000Z
+    preliminary_datetime_utc: 
+    dictation_start_datetime_utc: 2025-05-16T11:40:38.000Z
+    dictation_end_datetime_utc: 2025-05-16T11:50:49.000Z
+    final_datetime_utc: 2025-05-16T11:50:47.000Z
+    previous_final_datetime_utc: 2025-05-16T11:40:15.000Z
+    target_datetime_utc: 2025-05-16T11:14:00.000Z
+    on_ris_datetime_utc: 2025-05-16T10:27:00.000Z
+    available_to_physician_datetime_utc: 2025-05-16T10:29:00.000Z
+    addendum_datetime_utc: 
+    wet_read_datetime_utc: 
+    original_timezone_code: America/New_York
+    order_datetime: 2025-05-16T06:00:00.000Z
+    completed_datetime: 2025-05-16T06:29:00.000Z
+    on_pacs_datetime: 2025-05-16T06:29:00.000Z
+    unread_datetime: 2025-05-16T06:31:35.000Z
+    read_datetime: 2025-05-16T06:26:00.000Z
+    preliminary_datetime: 
+    dictation_start_datetime: 2025-05-16T07:40:38.000Z
+    dictation_end_datetime: 2025-05-16T07:50:49.000Z
+    final_datetime: 2025-05-16T07:50:47.000Z
+    previous_final_datetime: 2025-05-16T07:40:15.000Z
+    target_datetime: 2025-05-16T07:14:00.000Z
+    on_ris_datetime: 2025-05-16T06:27:00.000Z
+    available_to_physician_datetime: 2025-05-16T06:29:00.000Z
+    addendum_datetime: 
+    wet_read_datetime: 
+    RP_Standard_Target_Datetime: 2025-05-16T12:31:35.000Z
+    Best_Available_SLA_Target_Datetime: 2025-05-16T07:14:00.000Z
+    Time_of_Read_Bucket: Daytime: 7am-5pm
+    tat_category: IP Stat
+    unread_age_minutes: 
+    backlog_age_minutes: 
+    backlog_age_bucket: N/A
+    tat_order_to_complete_minutes: 29.00
+    tat_complete_to_unread_minutes: 2.58
+    tat_unread_to_final_minutes: 79.20
+    tat_order_to_final_minutes: 110.78
+    tat_exclusion_reason: 
+    tat_outlier_flag: false
+    tat_outlier_threshold_minutes: 1440.00
+    rp_sla_category: IP Stat
+    rp_sla_threshold_minutes: 360
+    local_sla_met_flag: false
+    rp_sla_met_flag: true
+    best_available_sla_met_flag: false
+    reading_efficiency_tbwu_per_min: 0.0680
+    reading_efficiency_wrvu_per_min: 0.0837
+    idle_time_category: Exam Transition (<3 min)
+    time_between_exams_flag: true
+    short_break_flag: false
+    long_break_flag: false
+    stacked_exam_adjusted_flag: false
+    rad_prod_seconds: 609
+    rad_idle_seconds: 23
+    rad_prod_duration: 0:10:09
+    rad_idle_duration: 0:00:23
+    internal_cross_read_flag: false
+    external_cross_read_flag: 
+    cross_read_type: 
+    scheduled_shift_id: 
+    scheduled_shift_flag: false
+    scheduling_local_practice_code: 
+    scheduling_local_practice_name: 
+    scheduling_division_name: 
+    scheduling_region_name: 
+    scheduling_area_name: 
+    scheduling_practice_source: 
+    scheduled_shift_start_datetime_utc: 
+    scheduled_shift_end_datetime_utc: 
+    scheduled_shift_start_datetime: 
+    scheduled_shift_end_datetime: 
+    scheduled_shift_location: 
+    scheduled_On_Off_Shift_Code: 
+    scheduled_task_category: 
+    scheduled_shift_type: 
+    Moonlight_Worklist_Flag: false
+    scheduled_shift_task_name: 
+    Shift_Target_1_Amount: 
+    Shift_Target_2_Amount: 
+    time_into_shift_minutes: 
+    shift_utilization_pct: 
+    total_matching_shifts: 1
+    shift_match_method: 
+    Sched_Credit_Amt: 
+    Phy_Pct_Expct_Amt: 
+    Scheduled_Shift_Notes: 
+    exam_status: 
+    time_to_target_minutes: 
+    mammo_hold_flag: 
+    exam_group: 
+    noread_flag: 
+    edw_charge_id_list: 2398391900
+    billed_cpt_code_list: 70450
+    has_payor_bill_charges: 1
+    has_direct_bill_charges: 0
+    has_primary_bridge_data: 1
+    has_secondary_bridge_data: 0
+    payor_bill_charge_count: 1
+    direct_bill_charge_count: 0
+    total_charge_count: 1
+    most_recent_primary_allowed_amount: 41.61
+    billed_trvu: 1.20
+    charge_post_date: 2025-05-21
+    billing_npi: 1528341203
+    billing_radiologist_name_full: Greif, Eric
+    finance_carrier: GOVERNMENT
+    carrier_type_level_1: MEDICARE ADVANTAGE
+    carrier_type_level_2: MEDICARE ADVANTAGE
+    carrier_type_level_3: MEDICARE ADVANTAGE
+    primary_parent_payor: UNKNOWN
+    Billing_Site_MDM_ID: 2735
+    Billing_Workday_Site_ID: 1410002
+    Billing_Source_Service_Location_Name: St Francis Hospital  CHS of Long Island
+    Billing_Source_Service_Location_Address1: 100 Port Washington Blvd
+    Billing_Source_Service_Location_City: ROSLYN
+    Billing_Source_Database_Code: ESR
+    Exclusion_Reason_ID: -3
+    Exclusion_Reason_Cd: N/A
+    Exclusion_Reason_Nm: NOT APPLICABLE
+    EDW_Source_Table: accum_exam_fact
+    dq_pillar_master_data: 100.0
+    dq_pillar_timestamps: 100.0
+    dq_pillar_billing: 100.0
+    dq_pillar_scheduling: 0.0
+    dq_pillar_outliers: 100.0
+    dq_overall_quality_score: 90.0
+    dq_trust_tier: HIGH
+    dq_site_location_matched: true
+    dq_site_master_matched: true
+    dq_provider_master_matched: true
+    dq_procedure_master_matched: true
+    dq_subspecialty_matched: true
+    dq_workday_matched: true
+    dq_mdm_roster_matched: true
+    dq_timestamps_logical_order: true
+    dq_local_practice_aligned: 
+  Row 3:
+    exam_id: 1705364033
+    source_exam_id: 35765171
+    accession_number: 23898235CHS
+    Source_Accession_Number: 23898235
+    Study_Status_Code: Final
+    Unread_Exam_Flag: false
+    Priority_Name: STAT
+    Source_Priority_Code: STAT ER
+    source_shift_name: 
+    Source_System_Code: rpceMidwest
+    mosaic_read_flag: false
+    mosaic_draft_flag: false
+    VRA_Flag: false
+    autonext_flag: true
+    patient_key: 154210386
+    patient_class_key: 23
+    patient_age_at_order: 55
+    care_setting: ED
+    Hist_Imaging_Site_ID: 47843
+    Site_Current_ID: 47843
+    site_location_id: 470005
+    Site_MDM_ID: 1143
+    Workday_Site_ID: 1410003
+    Site_Type: Client
+    Site_Name: Catholic Health Good Samaritan University Hospital
+    Source_Site_Name: ESR-Good Samaritan University Hospital
+    site_group: 
+    site_idn: Catholic Health (AKA Catholic Health Services of Long Island)
+    site_health_system: Independent Health System
+    managing_local_practice_name: ESR Long Island
+    managing_division_name: None
+    managing_region_name: Northeast
+    managing_area_name: Northeast
+    managing_local_name: Special Operations
+    managing_local_practice_name_curr: ESR Long Island
+    managing_division_name_curr: None
+    managing_region_name_curr: Northeast
+    managing_area_name_curr: Northeast
+    managing_local_name_curr: Special Operations
+    financial_division_flag: N
+    hist_reading_radiologist_id: 2382598
+    reading_radiologist_current_id: 2366768
+    reading_provider_npi: 1588862247
+    reading_provider_name_full: Tsai, Jason
+    reading_provider_name_source: MDM
+    reading_provider_affiliation: RP_ROSTER
+    source_reading_radiologist_name: Jason Tsai
+    reading_provider_first_name: Jason
+    reading_provider_last_name: Tsai
+    reading_provider_credentials: MD
+    reading_provider_employee_id: 100008982
+    reading_provider_employment_type: EMP
+    reading_provider_fte_percentage: 1.0
+    reading_provider_employee_flag: Y
+    reading_provider_ic_flag: N
+    reading_provider_locum_flag: N
+    reading_provider_resident_flag: N
+    reading_provider_fellow_flag: N
+    provider_local_practice_name_curr: ESR Long Island
+    provider_division_name_curr: None
+    provider_region_name_curr: Northeast
+    provider_area_name_curr: Northeast
+    provider_local_name_curr: Special Operations
+    provider_local_practice_name: ESR Long Island
+    provider_division_name: None
+    provider_region_name: Northeast
+    provider_area_name: Northeast
+    provider_local_name: Special Operations
+    reading_provider_operating_entity_company: Empire State Radiology, P.C.
+    reading_provider_locum_agency_name: 
+    reading_provider_agency_name: 
+    provider_hierarchy_source: WORKDAY
+    provider_primary_subspecialty_curr: Pediatric
+    provider_secondary_subspecialty_curr: General
+    provider_tertiary_subspecialty_curr: Not Applicable
+    hist_signing_radiologist_id: 2382598
+    signing_radiologist_current_id: 2366768
+    signing_radiologist_npi: 1588862247
+    signing_radiologist_name_full: Tsai, Jason
+    different_signer_flag: false
+    hist_rsdnt_radiologist_id: -2
+    resident_radiologist_npi: -2
+    resident_radiologist_name_full: Unknown, Unknown
+    Hist_Procedure_ID: 249068
+    Source_Procedure_Description: US RENAL
+    Source_Procedure_Code: 50016
+    RPID_Procedure_Code: RPID1993
+    RPID_procedure_description: US KIDNEY BILATERAL
+    exam_Body_Part_Name: Abdomen
+    exam_Modality_Code: US
+    exam_Modality_Description: Ultrasound
+    exam_interventional_Ind: 0
+    exam_cpt_code_list: 76770
+    exam_subspecialty_code: GENERAL
+    exam_subspecialty_name: MXGENERAL
+    RPID_parent_code: RPID1993
+    RPID_parent_code_description: US KIDNEY BILATERAL
+    Radiology_Report_ID: 438488440
+    Combined_Exam_Src_Id: Unknown Combined Exam Source ID
+    exam_encounter_id: 3081929277CHS
+    draft_system_name: 
+    report_transcription_system_name: 
+    Worklist_Name: MY READING QUEUE
+    self_assigned_flag: 
+    source_wrvu: 0.7400
+    estimated_wrvu: 0.74
+    billed_wrvu: 0.74
+    best_wrvu: 0.74
+    source_tbwu: 0.6300
+    final_TBWU: 0.6300
+    base_tbwu_current: 0.6282
+    setting_multiplier_category_current: ED
+    setting_multiplier_value_current: 1.11
+    unassisted_tbwu_current: 0.6973
+    ai_read_time_change_pct_current: 0.0
+    empirical_tbwu_current: 0.6973
+    value_shared_with_rad_pct_current: 0.0
+    allocated_tbwu_current: 0.6973
+    base_tbwu: 0.6282
+    setting_multiplier_value: 1.11
+    unassisted_tbwu: 0.6973
+    ai_read_time_change_pct: 0.0
+    empirical_tbwu: 0.6973
+    value_shared_with_rad_pct: 0.0
+    allocated_tbwu: 0.6973
+    tbwu_version_effective_start: 1900-01-01T00:00:00.000Z
+    tbwu_version_effective_end: 2026-07-01T05:01:00.000Z
+    rpid_draftable_flag: false
+    practice_rpid_in_drafting_program_flag: false
+    rad_drafting_enabled_flag: false
+    exam_draftable_flag: false
+    exam_not_draftable_reason: exam_not_read_on_mosaic
+    billed_wrvu_variance: 0.00
+    Billing_Accession_Match_Flag: true
+    order_datetime_utc: 2025-05-16T13:30:00.000Z
+    completed_datetime_utc: 2025-05-16T15:19:00.000Z
+    on_pacs_datetime_utc: 2025-05-16T14:46:00.000Z
+    unread_datetime_utc: 2025-05-16T15:19:56.000Z
+    read_datetime_utc: 2025-05-16T14:36:00.000Z
+    preliminary_datetime_utc: 
+    dictation_start_datetime_utc: 2025-05-16T15:36:40.000Z
+    dictation_end_datetime_utc: 2025-05-16T15:46:03.000Z
+    final_datetime_utc: 2025-05-16T15:46:01.000Z
+    previous_final_datetime_utc: 2025-05-16T15:36:11.000Z
+    target_datetime_utc: 2025-05-16T16:04:00.000Z
+    on_ris_datetime_utc: 2025-05-16T15:19:00.000Z
+    available_to_physician_datetime_utc: 2025-05-16T15:19:00.000Z
+    addendum_datetime_utc: 
+    wet_read_datetime_utc: 
+    original_timezone_code: America/New_York
+    order_datetime: 2025-05-16T09:30:00.000Z
+    completed_datetime: 2025-05-16T11:19:00.000Z
+    on_pacs_datetime: 2025-05-16T10:46:00.000Z
+    unread_datetime: 2025-05-16T11:19:56.000Z
+    read_datetime: 2025-05-16T10:36:00.000Z
+    preliminary_datetime: 
+    dictation_start_datetime: 2025-05-16T11:36:40.000Z
+    dictation_end_datetime: 2025-05-16T11:46:03.000Z
+    final_datetime: 2025-05-16T11:46:01.000Z
+    previous_final_datetime: 2025-05-16T11:36:11.000Z
+    target_datetime: 2025-05-16T12:04:00.000Z
+    on_ris_datetime: 2025-05-16T11:19:00.000Z
+    available_to_physician_datetime: 2025-05-16T11:19:00.000Z
+    addendum_datetime: 
+    wet_read_datetime: 
+    RP_Standard_Target_Datetime: 2025-05-16T11:49:56.000Z
+    Best_Available_SLA_Target_Datetime: 2025-05-16T12:04:00.000Z
+    Time_of_Read_Bucket: Daytime: 7am-5pm
+    tat_category: ED
+    unread_age_minutes: 
+    backlog_age_minutes: 
+    backlog_age_bucket: N/A
+    tat_order_to_complete_minutes: 109.00
+    tat_complete_to_unread_minutes: 0.93
+    tat_unread_to_final_minutes: 26.08
+    tat_order_to_final_minutes: 136.02
+    tat_exclusion_reason: 
+    tat_outlier_flag: false
+    tat_outlier_threshold_minutes: 1440.00
+    rp_sla_category: ED
+    rp_sla_threshold_minutes: 30
+    local_sla_met_flag: true
+    rp_sla_met_flag: true
+    best_available_sla_met_flag: true
+    reading_efficiency_tbwu_per_min: 0.0674
+    reading_efficiency_wrvu_per_min: 0.0791
+    idle_time_category: Exam Transition (<3 min)
+    time_between_exams_flag: true
+    short_break_flag: false
+    long_break_flag: false
+    stacked_exam_adjusted_flag: false
+    rad_prod_seconds: 561
+    rad_idle_seconds: 29
+    rad_prod_duration: 0:09:21
+    rad_idle_duration: 0:00:29
+    internal_cross_read_flag: false
+    external_cross_read_flag: 
+    cross_read_type: 
+    scheduled_shift_id: 8801766
+    scheduled_shift_flag: true
+    scheduling_local_practice_code: 
+    scheduling_local_practice_name: 
+    scheduling_division_name: 
+    scheduling_region_name: 
+    scheduling_area_name: 
+    scheduling_practice_source: UNKNOWN_TASK_PRACTICE
+    scheduled_shift_start_datetime_utc: 2025-05-16T12:00:00.000Z
+    scheduled_shift_end_datetime_utc: 2025-05-16T21:00:00.000Z
+    scheduled_shift_start_datetime: 2025-05-16T08:00:00.000Z
+    scheduled_shift_end_datetime: 2025-05-16T17:00:00.000Z
+    scheduled_shift_location: Onsite
+    scheduled_On_Off_Shift_Code: 
+    scheduled_task_category: Onsite Dx
+    scheduled_shift_type: Primary
+    Moonlight_Worklist_Flag: false
+    scheduled_shift_task_name: GSUH DX/Peds
+    Shift_Target_1_Amount: 54.00
+    Shift_Target_2_Amount: 
+    time_into_shift_minutes: 226
+    shift_utilization_pct: 41.85185185185185
+    total_matching_shifts: 1
+    shift_match_method: default_ranking
+    Sched_Credit_Amt: 1.000000000
+    Phy_Pct_Expct_Amt: 1.00
+    Scheduled_Shift_Notes: 
+    exam_status: 
+    time_to_target_minutes: 
+    mammo_hold_flag: 
+    exam_group: 
+    noread_flag: 
+    edw_charge_id_list: 2398398495
+    billed_cpt_code_list: 76770
+    has_payor_bill_charges: 1
+    has_direct_bill_charges: 0
+    has_primary_bridge_data: 1
+    has_secondary_bridge_data: 0
+    payor_bill_charge_count: 1
+    direct_bill_charge_count: 0
+    total_charge_count: 1
+    most_recent_primary_allowed_amount: 38.06
+    billed_trvu: 1.04
+    charge_post_date: 2025-05-21
+    billing_npi: 1588862247
+    billing_radiologist_name_full: Tsai, Jason
+    finance_carrier: COMMERCIAL
+    carrier_type_level_1: COMMERCIAL
+    carrier_type_level_2: BCBS
+    carrier_type_level_3: BCBS
+    primary_parent_payor: BCBS
+    Billing_Site_MDM_ID: 1143
+    Billing_Workday_Site_ID: 1410003
+    Billing_Source_Service_Location_Name: Good Samaritan Hospital Medical Center
+    Billing_Source_Service_Location_Address1: 1000 Montauk Highway
+    Billing_Source_Service_Location_City: WEST ISLIP
+    Billing_Source_Database_Code: ESR
+    Exclusion_Reason_ID: -3
+    Exclusion_Reason_Cd: N/A
+    Exclusion_Reason_Nm: NOT APPLICABLE
+    EDW_Source_Table: accum_exam_fact
+    dq_pillar_master_data: 100.0
+    dq_pillar_timestamps: 100.0
+    dq_pillar_billing: 100.0
+    dq_pillar_scheduling: 100.0
+    dq_pillar_outliers: 100.0
+    dq_overall_quality_score: 100.0
+    dq_trust_tier: HIGH
+    dq_site_location_matched: true
+    dq_site_master_matched: true
+    dq_provider_master_matched: true
+    dq_procedure_master_matched: true
+    dq_subspecialty_matched: true
+    dq_workday_matched: true
+    dq_mdm_roster_matched: true
+    dq_timestamps_logical_order: true
+    dq_local_practice_aligned: 
+  Row 4:
+    exam_id: 1666008166
+    source_exam_id: 31602534
+    accession_number: 23314914CHS
+    Source_Accession_Number: 23314914
+    Study_Status_Code: Final
+    Unread_Exam_Flag: false
+    Priority_Name: ROUTINE
+    Source_Priority_Code: Routine OP
+    source_shift_name: 
+    Source_System_Code: rpceMidwest
+    mosaic_read_flag: false
+    mosaic_draft_flag: false
+    VRA_Flag: false
+    autonext_flag: false
+    patient_key: 175164885
+    patient_class_key: 22
+    patient_age_at_order: 61
+    care_setting: Outpatient
+    Hist_Imaging_Site_ID: 47847
+    Site_Current_ID: 47847
+    site_location_id: 470009
+    Site_MDM_ID: 2721
+    Workday_Site_ID: 1410811
+    Site_Type: Client
+    Site_Name: St Catherine Diagnostic Imaging
+    Source_Site_Name: ESR-Commack
+    site_group: 
+    site_idn: 
+    site_health_system: 
+    managing_local_practice_name: ESR Long Island
+    managing_division_name: None
+    managing_region_name: Northeast
+    managing_area_name: Northeast
+    managing_local_name: Special Operations
+    managing_local_practice_name_curr: ESR Long Island
+    managing_division_name_curr: None
+    managing_region_name_curr: Northeast
+    managing_area_name_curr: Northeast
+    managing_local_name_curr: Special Operations
+    financial_division_flag: N
+    hist_reading_radiologist_id: 2371804
+    reading_radiologist_current_id: 2377502
+    reading_provider_npi: 1770825457
+    reading_provider_name_full: Jazbeh, Sammer
+    reading_provider_name_source: MDM
+    reading_provider_affiliation: RP_ROSTER
+    source_reading_radiologist_name: Sammer Jazbeh
+    reading_provider_first_name: Sammer
+    reading_provider_last_name: Jazbeh
+    reading_provider_credentials: MD
+    reading_provider_employee_id: 100011111
+    reading_provider_employment_type: EMP
+    reading_provider_fte_percentage: 1.0
+    reading_provider_employee_flag: Y
+    reading_provider_ic_flag: N
+    reading_provider_locum_flag: N
+    reading_provider_resident_flag: N
+    reading_provider_fellow_flag: N
+    provider_local_practice_name_curr: ESR Long Island
+    provider_division_name_curr: None
+    provider_region_name_curr: Northeast
+    provider_area_name_curr: Northeast
+    provider_local_name_curr: Special Operations
+    provider_local_practice_name: ESR Long Island
+    provider_division_name: None
+    provider_region_name: Northeast
+    provider_area_name: Northeast
+    provider_local_name: Special Operations
+    reading_provider_operating_entity_company: Empire State Radiology, P.C.
+    reading_provider_locum_agency_name: 
+    reading_provider_agency_name: 
+    provider_hierarchy_source: WORKDAY
+    provider_primary_subspecialty_curr: Neuroradiology
+    provider_secondary_subspecialty_curr: General
+    provider_tertiary_subspecialty_curr: Not Applicable
+    hist_signing_radiologist_id: 2371804
+    signing_radiologist_current_id: 2377502
+    signing_radiologist_npi: 1770825457
+    signing_radiologist_name_full: Jazbeh, Sammer
+    different_signer_flag: false
+    hist_rsdnt_radiologist_id: -2
+    resident_radiologist_npi: -2
+    resident_radiologist_name_full: Unknown, Unknown
+    Hist_Procedure_ID: 249834
+    Source_Procedure_Description: CT LUNG CANCER SCREENING 1 YEAR
+    Source_Procedure_Code: 20049A
+    RPID_Procedure_Code: RPID6891
+    RPID_procedure_description: CT LUNG SCREENING
+    exam_Body_Part_Name: Chest
+    exam_Modality_Code: CT
+    exam_Modality_Description: Computed Tomography
+    exam_interventional_Ind: 0
+    exam_cpt_code_list: 71271
+    exam_subspecialty_code: GENERAL
+    exam_subspecialty_name: GENERAL
+    RPID_parent_code: RPID6891
+    RPID_parent_code_description: CT LUNG SCREENING
+    Radiology_Report_ID: 410886481
+    Combined_Exam_Src_Id: Unknown Combined Exam Source ID
+    exam_encounter_id: 3078404500CHS
+    draft_system_name: 
+    report_transcription_system_name: 
+    Worklist_Name: CHS WEST AND EAST - UNREAD NO MAMMO
+    self_assigned_flag: 
+    source_wrvu: 1.0800
+    estimated_wrvu: 1.08
+    billed_wrvu: 1.08
+    best_wrvu: 1.08
+    source_tbwu: 1.4300
+    final_TBWU: 1.4300
+    base_tbwu_current: 1.3182
+    setting_multiplier_category_current: OP
+    setting_multiplier_value_current: 1.0
+    unassisted_tbwu_current: 1.3182
+    ai_read_time_change_pct_current: 0.0
+    empirical_tbwu_current: 1.3182
+    value_shared_with_rad_pct_current: 0.0
+    allocated_tbwu_current: 1.3182
+    base_tbwu: 1.3182
+    setting_multiplier_value: 1.0
+    unassisted_tbwu: 1.3182
+    ai_read_time_change_pct: 0.0
+    empirical_tbwu: 1.3182
+    value_shared_with_rad_pct: 0.0
+    allocated_tbwu: 1.3182
+    tbwu_version_effective_start: 1900-01-01T00:00:00.000Z
+    tbwu_version_effective_end: 2026-07-01T05:01:00.000Z
+    rpid_draftable_flag: false
+    practice_rpid_in_drafting_program_flag: false
+    rad_drafting_enabled_flag: false
+    exam_draftable_flag: false
+    exam_not_draftable_reason: exam_not_read_on_mosaic
+    billed_wrvu_variance: 0.00
+    Billing_Accession_Match_Flag: true
+    order_datetime_utc: 2025-03-03T21:57:00.000Z
+    completed_datetime_utc: 2025-03-03T22:21:00.000Z
+    on_pacs_datetime_utc: 2025-03-03T22:21:00.000Z
+    unread_datetime_utc: 2025-03-03T22:35:27.000Z
+    read_datetime_utc: 2025-03-03T22:17:00.000Z
+    preliminary_datetime_utc: 
+    dictation_start_datetime_utc: 2025-03-06T22:23:36.000Z
+    dictation_end_datetime_utc: 2025-03-06T22:30:06.000Z
+    final_datetime_utc: 2025-03-06T22:30:04.000Z
+    previous_final_datetime_utc: 2025-03-06T22:22:43.000Z
+    target_datetime_utc: 2025-03-04T22:21:00.000Z
+    on_ris_datetime_utc: 2025-03-03T22:21:00.000Z
+    available_to_physician_datetime_utc: 2025-03-03T22:21:00.000Z
+    addendum_datetime_utc: 
+    wet_read_datetime_utc: 
+    original_timezone_code: America/New_York
+    order_datetime: 2025-03-03T16:57:00.000Z
+    completed_datetime: 2025-03-03T17:21:00.000Z
+    on_pacs_datetime: 2025-03-03T17:21:00.000Z
+    unread_datetime: 2025-03-03T17:35:27.000Z
+    read_datetime: 2025-03-03T17:17:00.000Z
+    preliminary_datetime: 
+    dictation_start_datetime: 2025-03-06T17:23:36.000Z
+    dictation_end_datetime: 2025-03-06T17:30:06.000Z
+    final_datetime: 2025-03-06T17:30:04.000Z
+    previous_final_datetime: 2025-03-06T17:22:43.000Z
+    target_datetime: 2025-03-04T17:21:00.000Z
+    on_ris_datetime: 2025-03-03T17:21:00.000Z
+    available_to_physician_datetime: 2025-03-03T17:21:00.000Z
+    addendum_datetime: 
+    wet_read_datetime: 
+    RP_Standard_Target_Datetime: 2025-03-05T17:35:27.000Z
+    Best_Available_SLA_Target_Datetime: 2025-03-04T17:21:00.000Z
+    Time_of_Read_Bucket: Evening: 5pm-11pm
+    tat_category: OP Routine
+    unread_age_minutes: 
+    backlog_age_minutes: 
+    backlog_age_bucket: N/A
+    tat_order_to_complete_minutes: 24.00
+    tat_complete_to_unread_minutes: 14.45
+    tat_unread_to_final_minutes: 4314.62
+    tat_order_to_final_minutes: 4353.07
+    tat_exclusion_reason: 
+    tat_outlier_flag: false
+    tat_outlier_threshold_minutes: 14400.00
+    rp_sla_category: OP Routine
+    rp_sla_threshold_minutes: 2880
+    local_sla_met_flag: false
+    rp_sla_met_flag: false
+    best_available_sla_met_flag: false
+    reading_efficiency_tbwu_per_min: 0.2211
+    reading_efficiency_wrvu_per_min: 0.1670
+    idle_time_category: Exam Transition (<3 min)
+    time_between_exams_flag: true
+    short_break_flag: false
+    long_break_flag: false
+    stacked_exam_adjusted_flag: false
+    rad_prod_seconds: 388
+    rad_idle_seconds: 53
+    rad_prod_duration: 0:06:28
+    rad_idle_duration: 0:00:53
+    internal_cross_read_flag: false
+    external_cross_read_flag: 
+    cross_read_type: 
+    scheduled_shift_id: 8341069
+    scheduled_shift_flag: true
+    scheduling_local_practice_code: 
+    scheduling_local_practice_name: 
+    scheduling_division_name: 
+    scheduling_region_name: 
+    scheduling_area_name: 
+    scheduling_practice_source: UNKNOWN_TASK_PRACTICE
+    scheduled_shift_start_datetime_utc: 2025-03-06T17:00:00.000Z
+    scheduled_shift_end_datetime_utc: 2025-03-07T01:00:00.000Z
+    scheduled_shift_start_datetime: 2025-03-06T12:00:00.000Z
+    scheduled_shift_end_datetime: 2025-03-06T20:00:00.000Z
+    scheduled_shift_location: Remote
+    scheduled_On_Off_Shift_Code: 
+    scheduled_task_category: Remote Dx
+    scheduled_shift_type: Primary
+    Moonlight_Worklist_Flag: false
+    scheduled_shift_task_name: REMOTE WEST DX
+    Shift_Target_1_Amount: 76.00
+    Shift_Target_2_Amount: 
+    time_into_shift_minutes: 330
+    shift_utilization_pct: 68.75
+    total_matching_shifts: 1
+    shift_match_method: default_ranking
+    Sched_Credit_Amt: 1.000000000
+    Phy_Pct_Expct_Amt: 1.00
+    Scheduled_Shift_Notes: 
+    exam_status: 
+    time_to_target_minutes: 
+    mammo_hold_flag: 
+    exam_group: 
+    noread_flag: 
+    edw_charge_id_list: 2399205539
+    billed_cpt_code_list: 71271
+    has_payor_bill_charges: 0
+    has_direct_bill_charges: 1
+    has_primary_bridge_data: 1
+    has_secondary_bridge_data: 0
+    payor_bill_charge_count: 0
+    direct_bill_charge_count: 1
+    total_charge_count: 1
+    most_recent_primary_allowed_amount: 0.00
+    billed_trvu: 1.52
+    charge_post_date: 
+    billing_npi: 1770825457
+    billing_radiologist_name_full: Jazbeh, Sammer
+    finance_carrier: DIRECT BILL
+    carrier_type_level_1: DIRECT BILL
+    carrier_type_level_2: DIRECT BILL
+    carrier_type_level_3: DIRECT BILL
+    primary_parent_payor: UNKNOWN
+    Billing_Site_MDM_ID: 
+    Billing_Workday_Site_ID: 
+    Billing_Source_Service_Location_Name: 
+    Billing_Source_Service_Location_Address1: 
+    Billing_Source_Service_Location_City: 
+    Billing_Source_Database_Code: 
+    Exclusion_Reason_ID: -3
+    Exclusion_Reason_Cd: N/A
+    Exclusion_Reason_Nm: NOT APPLICABLE
+    EDW_Source_Table: accum_exam_fact
+    dq_pillar_master_data: 100.0
+    dq_pillar_timestamps: 100.0
+    dq_pillar_billing: 100.0
+    dq_pillar_scheduling: 100.0
+    dq_pillar_outliers: 100.0
+    dq_overall_quality_score: 100.0
+    dq_trust_tier: HIGH
+    dq_site_location_matched: true
+    dq_site_master_matched: true
+    dq_provider_master_matched: true
+    dq_procedure_master_matched: true
+    dq_subspecialty_matched: true
+    dq_workday_matched: true
+    dq_mdm_roster_matched: true
+    dq_timestamps_logical_order: true
+    dq_local_practice_aligned: 
+  Row 5:
+    exam_id: 1716101448
+    source_exam_id: 39093504
+    accession_number: 24371974CHS
+    Source_Accession_Number: 24371974
+    Study_Status_Code: Final
+    Unread_Exam_Flag: false
+    Priority_Name: ROUTINE
+    Source_Priority_Code: Routine IP
+    source_shift_name: 
+    Source_System_Code: rpceMidwest
+    mosaic_read_flag: false
+    mosaic_draft_flag: false
+    VRA_Flag: false
+    autonext_flag: true
+    patient_key: 303993808
+    patient_class_key: 21
+    patient_age_at_order: 55
+    care_setting: Inpatient
+    Hist_Imaging_Site_ID: 51693
+    Site_Current_ID: 51693
+    site_location_id: 470000
+    Site_MDM_ID: 2735
+    Workday_Site_ID: 1410002
+    Site_Type: Client
+    Site_Name: Catholic Health Saint Francis Hospital
+    Source_Site_Name: ESR-St. Francis Hospital
+    site_group: 
+    site_idn: Catholic Health (AKA Catholic Health Services of Long Island)
+    site_health_system: Independent Health System
+    managing_local_practice_name: ESR Long Island
+    managing_division_name: None
+    managing_region_name: Northeast
+    managing_area_name: Northeast
+    managing_local_name: Special Operations
+    managing_local_practice_name_curr: ESR Long Island
+    managing_division_name_curr: None
+    managing_region_name_curr: Northeast
+    managing_area_name_curr: Northeast
+    managing_local_name_curr: Special Operations
+    financial_division_flag: N
+    hist_reading_radiologist_id: 2371440
+    reading_radiologist_current_id: 2372687
+    reading_provider_npi: 1689832941
+    reading_provider_name_full: Abrams, Joseph
+    reading_provider_name_source: MDM
+    reading_provider_affiliation: RP_ROSTER
+    source_reading_radiologist_name: Joseph Abrams
+    reading_provider_first_name: Joseph
+    reading_provider_last_name: Abrams
+    reading_provider_credentials: MD
+    reading_provider_employee_id: 100015464
+    reading_provider_employment_type: EMP
+    reading_provider_fte_percentage: 1.0
+    reading_provider_employee_flag: Y
+    reading_provider_ic_flag: N
+    reading_provider_locum_flag: N
+    reading_provider_resident_flag: N
+    reading_provider_fellow_flag: N
+    provider_local_practice_name_curr: ESR Long Island
+    provider_division_name_curr: None
+    provider_region_name_curr: Northeast
+    provider_area_name_curr: Northeast
+    provider_local_name_curr: Special Operations
+    provider_local_practice_name: ESR Long Island
+    provider_division_name: None
+    provider_region_name: Northeast
+    provider_area_name: Northeast
+    provider_local_name: Special Operations
+    reading_provider_operating_entity_company: Empire State Radiology, P.C.
+    reading_provider_locum_agency_name: 
+    reading_provider_agency_name: 
+    provider_hierarchy_source: WORKDAY
+    provider_primary_subspecialty_curr: Body
+    provider_secondary_subspecialty_curr: General
+    provider_tertiary_subspecialty_curr: Mammography
+    hist_signing_radiologist_id: 2371440
+    signing_radiologist_current_id: 2372687
+    signing_radiologist_npi: 1689832941
+    signing_radiologist_name_full: Abrams, Joseph
+    different_signer_flag: false
+    hist_rsdnt_radiologist_id: -2
+    resident_radiologist_npi: -2
+    resident_radiologist_name_full: Unknown, Unknown
+    Hist_Procedure_ID: 249122
+    Source_Procedure_Description: DX CHEST PORTABLE (1 VIEW)
+    Source_Procedure_Code: 40035
+    RPID_Procedure_Code: RPID2502
+    RPID_procedure_description: XR CHEST 1 VIEW
+    exam_Body_Part_Name: Chest
+    exam_Modality_Code: CR
+    exam_Modality_Description: Computed Radiography
+    exam_interventional_Ind: 0
+    exam_cpt_code_list: 71045
+    exam_subspecialty_code: GENERAL
+    exam_subspecialty_name: MXGENERAL
+    RPID_parent_code: RPID2502
+    RPID_parent_code_description: XR CHEST 1 VIEW
+    Radiology_Report_ID: 448981512
+    Combined_Exam_Src_Id: Unknown Combined Exam Source ID
+    exam_encounter_id: 3084086020CHS
+    draft_system_name: 
+    report_transcription_system_name: 
+    Worklist_Name: ASSIGNED TO ME
+    self_assigned_flag: 
+    source_wrvu: 0.1800
+    estimated_wrvu: 0.18
+    billed_wrvu: 0.18
+    best_wrvu: 0.18
+    source_tbwu: 0.3200
+    final_TBWU: 0.3200
+    base_tbwu_current: 0.3171
+    setting_multiplier_category_current: IP
+    setting_multiplier_value_current: 1.24
+    unassisted_tbwu_current: 0.3932
+    ai_read_time_change_pct_current: 0.0
+    empirical_tbwu_current: 0.3932
+    value_shared_with_rad_pct_current: 0.0
+    allocated_tbwu_current: 0.3932
+    base_tbwu: 0.3171
+    setting_multiplier_value: 1.24
+    unassisted_tbwu: 0.3932
+    ai_read_time_change_pct: 0.0
+    empirical_tbwu: 0.3932
+    value_shared_with_rad_pct: 0.0
+    allocated_tbwu: 0.3932
+    tbwu_version_effective_start: 1900-01-01T00:00:00.000Z
+    tbwu_version_effective_end: 2026-07-01T05:01:00.000Z
+    rpid_draftable_flag: false
+    practice_rpid_in_drafting_program_flag: false
+    rad_drafting_enabled_flag: false
+    exam_draftable_flag: false
+    exam_not_draftable_reason: exam_not_read_on_mosaic
+    billed_wrvu_variance: 0.00
+    Billing_Accession_Match_Flag: true
+    order_datetime_utc: 2025-07-18T09:00:00.000Z
+    completed_datetime_utc: 2025-07-18T12:57:00.000Z
+    on_pacs_datetime_utc: 2025-07-18T12:57:00.000Z
+    unread_datetime_utc: 2025-07-18T12:58:30.000Z
+    read_datetime_utc: 2025-07-18T12:56:00.000Z
+    preliminary_datetime_utc: 
+    dictation_start_datetime_utc: 2025-07-18T18:46:55.000Z
+    dictation_end_datetime_utc: 2025-07-18T18:51:59.000Z
+    final_datetime_utc: 2025-07-18T18:51:57.000Z
+    previous_final_datetime_utc: 2025-07-18T18:46:52.000Z
+    target_datetime_utc: 2025-07-18T18:57:00.000Z
+    on_ris_datetime_utc: 2025-07-18T12:56:00.000Z
+    available_to_physician_datetime_utc: 2025-07-18T12:57:00.000Z
+    addendum_datetime_utc: 
+    wet_read_datetime_utc: 
+    original_timezone_code: America/New_York
+    order_datetime: 2025-07-18T05:00:00.000Z
+    completed_datetime: 2025-07-18T08:57:00.000Z
+    on_pacs_datetime: 2025-07-18T08:57:00.000Z
+    unread_datetime: 2025-07-18T08:58:30.000Z
+    read_datetime: 2025-07-18T08:56:00.000Z
+    preliminary_datetime: 
+    dictation_start_datetime: 2025-07-18T14:46:55.000Z
+    dictation_end_datetime: 2025-07-18T14:51:59.000Z
+    final_datetime: 2025-07-18T14:51:57.000Z
+    previous_final_datetime: 2025-07-18T14:46:52.000Z
+    target_datetime: 2025-07-18T14:57:00.000Z
+    on_ris_datetime: 2025-07-18T08:56:00.000Z
+    available_to_physician_datetime: 2025-07-18T08:57:00.000Z
+    addendum_datetime: 
+    wet_read_datetime: 
+    RP_Standard_Target_Datetime: 2025-07-18T16:58:30.000Z
+    Best_Available_SLA_Target_Datetime: 2025-07-18T14:57:00.000Z
+    Time_of_Read_Bucket: Daytime: 7am-5pm
+    tat_category: IP Routine
+    unread_age_minutes: 
+    backlog_age_minutes: 
+    backlog_age_bucket: N/A
+    tat_order_to_complete_minutes: 237.00
+    tat_complete_to_unread_minutes: 1.50
+    tat_unread_to_final_minutes: 353.45
+    tat_order_to_final_minutes: 591.95
+    tat_exclusion_reason: 
+    tat_outlier_flag: false
+    tat_outlier_threshold_minutes: 14400.00
+    rp_sla_category: IP Routine
+    rp_sla_threshold_minutes: 480
+    local_sla_met_flag: true
+    rp_sla_met_flag: true
+    best_available_sla_met_flag: true
+    reading_efficiency_tbwu_per_min: 0.0636
+    reading_efficiency_wrvu_per_min: 0.0358
+    idle_time_category: Exam Transition (<3 min)
+    time_between_exams_flag: true
+    short_break_flag: false
+    long_break_flag: false
+    stacked_exam_adjusted_flag: false
+    rad_prod_seconds: 302
+    rad_idle_seconds: 3
+    rad_prod_duration: 0:05:02
+    rad_idle_duration: 0:00:03
+    internal_cross_read_flag: false
+    external_cross_read_flag: 
+    cross_read_type: 
+    scheduled_shift_id: 10741696
+    scheduled_shift_flag: true
+    scheduling_local_practice_code: 
+    scheduling_local_practice_name: 
+    scheduling_division_name: 
+    scheduling_region_name: 
+    scheduling_area_name: 
+    scheduling_practice_source: UNKNOWN_TASK_PRACTICE
+    scheduled_shift_start_datetime_utc: 2025-07-18T12:00:00.000Z
+    scheduled_shift_end_datetime_utc: 2025-07-18T21:00:00.000Z
+    scheduled_shift_start_datetime: 2025-07-18T08:00:00.000Z
+    scheduled_shift_end_datetime: 2025-07-18T17:00:00.000Z
+    scheduled_shift_location: Onsite
+    scheduled_On_Off_Shift_Code: 
+    scheduled_task_category: Onsite Dx
+    scheduled_shift_type: Primary
+    Moonlight_Worklist_Flag: false
+    scheduled_shift_task_name: SFH DX 2
+    Shift_Target_1_Amount: 61.00
+    Shift_Target_2_Amount: 
+    time_into_shift_minutes: 411
+    shift_utilization_pct: 76.11111111111111
+    total_matching_shifts: 1
+    shift_match_method: default_ranking
+    Sched_Credit_Amt: 1.000000000
+    Phy_Pct_Expct_Amt: 1.25
+    Scheduled_Shift_Notes: 
+    exam_status: 
+    time_to_target_minutes: 
+    mammo_hold_flag: 
+    exam_group: 
+    noread_flag: 
+    edw_charge_id_list: 2487755677
+    billed_cpt_code_list: 71045
+    has_payor_bill_charges: 1
+    has_direct_bill_charges: 0
+    has_primary_bridge_data: 1
+    has_secondary_bridge_data: 0
+    payor_bill_charge_count: 1
+    direct_bill_charge_count: 0
+    total_charge_count: 1
+    most_recent_primary_allowed_amount: 9.00
+    billed_trvu: 0.26
+    charge_post_date: 2025-07-24
+    billing_npi: 1689832941
+    billing_radiologist_name_full: Abrams, Joseph
+    finance_carrier: COMMERCIAL
+    carrier_type_level_1: COMMERCIAL
+    carrier_type_level_2: COMMERCIAL - OTHER
+    carrier_type_level_3: OTHER - COMM.
+    primary_parent_payor: UNKNOWN
+    Billing_Site_MDM_ID: 2735
+    Billing_Workday_Site_ID: 1410002
+    Billing_Source_Service_Location_Name: St Francis Hospital  CHS of Long Island
+    Billing_Source_Service_Location_Address1: 100 Port Washington Blvd
+    Billing_Source_Service_Location_City: ROSLYN
+    Billing_Source_Database_Code: ESR
+    Exclusion_Reason_ID: -3
+    Exclusion_Reason_Cd: N/A
+    Exclusion_Reason_Nm: NOT APPLICABLE
+    EDW_Source_Table: accum_exam_fact
+    dq_pillar_master_data: 100.0
+    dq_pillar_timestamps: 100.0
+    dq_pillar_billing: 100.0
+    dq_pillar_scheduling: 100.0
+    dq_pillar_outliers: 100.0
+    dq_overall_quality_score: 100.0
+    dq_trust_tier: HIGH
+    dq_site_location_matched: true
+    dq_site_master_matched: true
+    dq_provider_master_matched: true
+    dq_procedure_master_matched: true
+    dq_subspecialty_matched: true
+    dq_workday_matched: true
+    dq_mdm_roster_matched: true
+    dq_timestamps_logical_order: true
+    dq_local_practice_aligned: 
+
+NULL COUNTS:
+  total_rows: 148756091
+  exam_id_nulls: 0
+  source_exam_id_nulls: 0
+  accession_number_nulls: 0
+  Source_Accession_Number_nulls: 0
+  Study_Status_Code_nulls: 0
+  Unread_Exam_Flag_nulls: 0
+  Priority_Name_nulls: 7351
+  Source_Priority_Code_nulls: 10282727
+  source_shift_name_nulls: 101582919
+  Source_System_Code_nulls: 0
+  mosaic_read_flag_nulls: 0
+  mosaic_draft_flag_nulls: 0
+  VRA_Flag_nulls: 0
+  autonext_flag_nulls: 0
+  patient_key_nulls: 0
+  patient_class_key_nulls: 0
+  patient_age_at_order_nulls: 7497054
+  care_setting_nulls: 6410840
+  Hist_Imaging_Site_ID_nulls: 0
+  Site_Current_ID_nulls: 0
+  site_location_id_nulls: 2897
+  Site_MDM_ID_nulls: 1865556
+  Workday_Site_ID_nulls: 4684278
+  Site_Type_nulls: 1865556
+  Site_Name_nulls: 1865556
+  Source_Site_Name_nulls: 10373106
+  site_group_nulls: 115358247
+  site_idn_nulls: 42410296
+  site_health_system_nulls: 42657012
+  managing_local_practice_name_nulls: 1759722
+  managing_division_name_nulls: 1759722
+  managing_region_name_nulls: 1759722
+  managing_area_name_nulls: 1759722
+  managing_local_name_nulls: 2088224
+  managing_local_practice_name_curr_nulls: 1865556
+  managing_division_name_curr_nulls: 1865556
+  managing_region_name_curr_nulls: 1865556
+  managing_area_name_curr_nulls: 1865556
+  managing_local_name_curr_nulls: 2372312
+  financial_division_flag_nulls: 1865556
+  hist_reading_radiologist_id_nulls: 0
+  reading_radiologist_current_id_nulls: 0
+  reading_provider_npi_nulls: 66816
+  reading_provider_name_full_nulls: 25293474
+  reading_provider_name_source_nulls: 0
+  reading_provider_affiliation_nulls: 0
+  source_reading_radiologist_name_nulls: 49874313
+  reading_provider_first_name_nulls: 30167925
+  reading_provider_last_name_nulls: 30167925
+  reading_provider_credentials_nulls: 30191919
+  reading_provider_employee_id_nulls: 44974945
+  reading_provider_employment_type_nulls: 30760876
+  reading_provider_fte_percentage_nulls: 30959137
+  reading_provider_employee_flag_nulls: 30760876
+  reading_provider_ic_flag_nulls: 30760876
+  reading_provider_locum_flag_nulls: 30760876
+  reading_provider_resident_flag_nulls: 30760876
+  reading_provider_fellow_flag_nulls: 30760876
+  provider_local_practice_name_curr_nulls: 30167925
+  provider_division_name_curr_nulls: 30167925
+  provider_region_name_curr_nulls: 30747163
+  provider_area_name_curr_nulls: 30747163
+  provider_local_name_curr_nulls: 30747163
+  provider_local_practice_name_nulls: 30760876
+  provider_division_name_nulls: 30760876
+  provider_region_name_nulls: 30875171
+  provider_area_name_nulls: 30875171
+  provider_local_name_nulls: 30875171
+  reading_provider_operating_entity_company_nulls: 47248964
+  reading_provider_locum_agency_name_nulls: 146252460
+  reading_provider_agency_name_nulls: 145894054
+  provider_hierarchy_source_nulls: 30760876
+  provider_primary_subspecialty_curr_nulls: 35009509
+  provider_secondary_subspecialty_curr_nulls: 40051838
+  provider_tertiary_subspecialty_curr_nulls: 44341096
+  hist_signing_radiologist_id_nulls: 7351
+  signing_radiologist_current_id_nulls: 7351
+  signing_radiologist_npi_nulls: 74167
+  signing_radiologist_name_full_nulls: 74167
+  different_signer_flag_nulls: 0
+  hist_rsdnt_radiologist_id_nulls: 7351
+  resident_radiologist_npi_nulls: 7641
+  resident_radiologist_name_full_nulls: 7641
+  Hist_Procedure_ID_nulls: 7351
+  Source_Procedure_Description_nulls: 1310830
+  Source_Procedure_Code_nulls: 1310830
+  RPID_Procedure_Code_nulls: 7351
+  RPID_procedure_description_nulls: 7351
+  exam_Body_Part_Name_nulls: 7351
+  exam_Modality_Code_nulls: 7351
+  exam_Modality_Description_nulls: 7351
+  exam_interventional_Ind_nulls: 7351
+  exam_cpt_code_list_nulls: 7351
+  exam_subspecialty_code_nulls: 7351
+  exam_subspecialty_name_nulls: 7351
+  RPID_parent_code_nulls: 1635118
+  RPID_parent_code_description_nulls: 2235478
+  Radiology_Report_ID_nulls: 7351
+  Combined_Exam_Src_Id_nulls: 7351
+  exam_encounter_id_nulls: 54055243
+  draft_system_name_nulls: 140135361
+  report_transcription_system_name_nulls: 127958472
+  Worklist_Name_nulls: 70189747
+  self_assigned_flag_nulls: 131013054
+  source_wrvu_nulls: 0
+  estimated_wrvu_nulls: 1017392
+  billed_wrvu_nulls: 56967741
+  best_wrvu_nulls: 626657
+  source_tbwu_nulls: 7351
+  final_TBWU_nulls: 7351
+  base_tbwu_current_nulls: 1366176
+  setting_multiplier_category_current_nulls: 6679059
+  setting_multiplier_value_current_nulls: 899829
+  unassisted_tbwu_current_nulls: 1366176
+  ai_read_time_change_pct_current_nulls: 0
+  empirical_tbwu_current_nulls: 1366176
+  value_shared_with_rad_pct_current_nulls: 0
+  allocated_tbwu_current_nulls: 1366176
+  base_tbwu_nulls: 1366192
+  setting_multiplier_value_nulls: 899843
+  unassisted_tbwu_nulls: 1366192
+  ai_read_time_change_pct_nulls: 0
+  empirical_tbwu_nulls: 1366192
+  value_shared_with_rad_pct_nulls: 0
+  allocated_tbwu_nulls: 1366192
+  tbwu_version_effective_start_nulls: 1366192
+  tbwu_version_effective_end_nulls: 1366192
+  rpid_draftable_flag_nulls: 0
+  practice_rpid_in_drafting_program_flag_nulls: 0
+  rad_drafting_enabled_flag_nulls: 0
+  exam_draftable_flag_nulls: 0
+  exam_not_draftable_reason_nulls: 0
+  billed_wrvu_variance_nulls: 390735
+  Billing_Accession_Match_Flag_nulls: 0
+  order_datetime_utc_nulls: 14626267
+  completed_datetime_utc_nulls: 24192693
+  on_pacs_datetime_utc_nulls: 72808321
+  unread_datetime_utc_nulls: 41469348
+  read_datetime_utc_nulls: 59354820
+  preliminary_datetime_utc_nulls: 113749152
+  dictation_start_datetime_utc_nulls: 63653931
+  dictation_end_datetime_utc_nulls: 62683543
+  final_datetime_utc_nulls: 22549742
+  previous_final_datetime_utc_nulls: 22566668
+  target_datetime_utc_nulls: 67751703
+  on_ris_datetime_utc_nulls: 53480007
+  available_to_physician_datetime_utc_nulls: 31199016
+  addendum_datetime_utc_nulls: 146989553
+  wet_read_datetime_utc_nulls: 142900238
+  original_timezone_code_nulls: 8061
+  order_datetime_nulls: 14625620
+  completed_datetime_nulls: 24192329
+  on_pacs_datetime_nulls: 72808167
+  unread_datetime_nulls: 41468785
+  read_datetime_nulls: 59354651
+  preliminary_datetime_nulls: 113749049
+  dictation_start_datetime_nulls: 63653916
+  dictation_end_datetime_nulls: 62683522
+  final_datetime_nulls: 22549489
+  previous_final_datetime_nulls: 22566663
+  target_datetime_nulls: 67751600
+  on_ris_datetime_nulls: 53479818
+  available_to_physician_datetime_nulls: 31198453
+  addendum_datetime_nulls: 146989553
+  wet_read_datetime_nulls: 142900238
+  RP_Standard_Target_Datetime_nulls: 51041683
+  Best_Available_SLA_Target_Datetime_nulls: 43750516
+  Time_of_Read_Bucket_nulls: 22549489
+  tat_category_nulls: 15466585
+  unread_age_minutes_nulls: 148558926
+  backlog_age_minutes_nulls: 148580217
+  backlog_age_bucket_nulls: 0
+  tat_order_to_complete_minutes_nulls: 30887876
+  tat_complete_to_unread_minutes_nulls: 46216484
+  tat_unread_to_final_minutes_nulls: 44771142
+  tat_order_to_final_minutes_nulls: 37175264
+  tat_exclusion_reason_nulls: 103595336
+  tat_outlier_flag_nulls: 0
+  tat_outlier_threshold_minutes_nulls: 5738587
+  rp_sla_category_nulls: 0
+  rp_sla_threshold_minutes_nulls: 15466585
+  local_sla_met_flag_nulls: 68316329
+  rp_sla_met_flag_nulls: 54030004
+  best_available_sla_met_flag_nulls: 31333776
+  reading_efficiency_tbwu_per_min_nulls: 71968639
+  reading_efficiency_wrvu_per_min_nulls: 71992112
+  idle_time_category_nulls: 81989857
+  time_between_exams_flag_nulls: 0
+  short_break_flag_nulls: 0
+  long_break_flag_nulls: 0
+  stacked_exam_adjusted_flag_nulls: 0
+  rad_prod_seconds_nulls: 64211783
+  rad_idle_seconds_nulls: 81989857
+  rad_prod_duration_nulls: 65230884
+  rad_idle_duration_nulls: 81989857
+  internal_cross_read_flag_nulls: 105946
+  external_cross_read_flag_nulls: 148756091
+  cross_read_type_nulls: 148756091
+  scheduled_shift_id_nulls: 50599070
+  scheduled_shift_flag_nulls: 0
+  scheduling_local_practice_code_nulls: 53705444
+  scheduling_local_practice_name_nulls: 53705444
+  scheduling_division_name_nulls: 53705444
+  scheduling_region_name_nulls: 55261528
+  scheduling_area_name_nulls: 55261528
+  scheduling_practice_source_nulls: 50599070
+  scheduled_shift_start_datetime_utc_nulls: 50599070
+  scheduled_shift_end_datetime_utc_nulls: 50599070
+  scheduled_shift_start_datetime_nulls: 50599070
+  scheduled_shift_end_datetime_nulls: 50599070
+  scheduled_shift_location_nulls: 50599070
+  scheduled_On_Off_Shift_Code_nulls: 148747099
+  scheduled_task_category_nulls: 58369891
+  scheduled_shift_type_nulls: 50599070
+  Moonlight_Worklist_Flag_nulls: 0
+  scheduled_shift_task_name_nulls: 50601340
+  Shift_Target_1_Amount_nulls: 99584453
+  Shift_Target_2_Amount_nulls: 133118256
+  time_into_shift_minutes_nulls: 50599070
+  shift_utilization_pct_nulls: 50599070
+  total_matching_shifts_nulls: 0
+  shift_match_method_nulls: 50599070
+  Sched_Credit_Amt_nulls: 50599070
+  Phy_Pct_Expct_Amt_nulls: 50599070
+  Scheduled_Shift_Notes_nulls: 71454107
+  exam_status_nulls: 148756091
+  time_to_target_minutes_nulls: 148756091
+  mammo_hold_flag_nulls: 148756091
+  exam_group_nulls: 148756091
+  noread_flag_nulls: 148756091
+  edw_charge_id_list_nulls: 56967741
+  billed_cpt_code_list_nulls: 56967741
+  has_payor_bill_charges_nulls: 0
+  has_direct_bill_charges_nulls: 0
+  has_primary_bridge_data_nulls: 0
+  has_secondary_bridge_data_nulls: 0
+  payor_bill_charge_count_nulls: 0
+  direct_bill_charge_count_nulls: 0
+  total_charge_count_nulls: 0
+  most_recent_primary_allowed_amount_nulls: 56967741
+  billed_trvu_nulls: 56967741
+  charge_post_date_nulls: 61390328
+  billing_npi_nulls: 56975092
+  billing_radiologist_name_full_nulls: 56975092
+  finance_carrier_nulls: 57020400
+  carrier_type_level_1_nulls: 57020400
+  carrier_type_level_2_nulls: 57020400
+  carrier_type_level_3_nulls: 57020400
+  primary_parent_payor_nulls: 56967741
+  Billing_Site_MDM_ID_nulls: 61387066
+  Billing_Workday_Site_ID_nulls: 61698869
+  Billing_Source_Service_Location_Name_nulls: 61387066
+  Billing_Source_Service_Location_Address1_nulls: 61387066
+  Billing_Source_Service_Location_City_nulls: 61387066
+  Billing_Source_Database_Code_nulls: 61387066
+  Exclusion_Reason_ID_nulls: 0
+  Exclusion_Reason_Cd_nulls: 0
+  Exclusion_Reason_Nm_nulls: 0
+  EDW_Source_Table_nulls: 0
+  dq_pillar_master_data_nulls: 0
+  dq_pillar_timestamps_nulls: 0
+  dq_pillar_billing_nulls: 0
+  dq_pillar_scheduling_nulls: 0
+  dq_pillar_outliers_nulls: 0
+  dq_overall_quality_score_nulls: 0
+  dq_trust_tier_nulls: 0
+  dq_site_location_matched_nulls: 0
+  dq_site_master_matched_nulls: 0
+  dq_provider_master_matched_nulls: 0
+  dq_procedure_master_matched_nulls: 0
+  dq_subspecialty_matched_nulls: 0
+  dq_workday_matched_nulls: 0
+  dq_mdm_roster_matched_nulls: 0
+  dq_timestamps_logical_order_nulls: 0
+  dq_local_practice_aligned_nulls: 53705444
+  final_datetime_utc_nulls: 22549742
+  reading_provider_npi_nulls: 66816
+  managing_local_practice_name_nulls: 1759722
+

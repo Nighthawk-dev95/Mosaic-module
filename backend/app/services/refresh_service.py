@@ -6,9 +6,9 @@ from datetime import datetime, timezone
 from pydantic import BaseModel
 
 from app.db import cache_store, efficiency_store, postgres_client
-from app.services import baseline_overrides
+from app.services import ai_context_service, baseline_overrides
 from app.services import mosaic_service as edw
-from app.services import reconciliation_service as recon
+from app.services import volume_service
 
 REFRESH_INTERVAL_SECONDS = 30 * 60  # 30 minutes
 
@@ -45,17 +45,18 @@ DATASETS: list[tuple[str, object, object]] = [
     ("rad_summary_stats", lambda: edw.get_rad_summary_stats(), None),
     ("radiologist_roster", lambda: edw.get_radiologist_roster(limit=5000), None),
     ("utilization_by_practice", lambda: edw.get_utilization_by_practice(days_back=30), None),
-    ("deployment_by_radiologist", lambda: edw.get_deployment_by_radiologist(limit=5000), None),
-    ("deployment_by_practice", lambda: edw.get_deployment_by_practice(), None),
-    ("deployment_funnel_reporting", lambda: edw.get_deployment_funnel_reporting(), None),
-    ("deployment_funnel_drafting", lambda: edw.get_deployment_funnel_drafting(), None),
     ("drafting_blockers_by_practice", lambda: edw.get_drafting_blockers_by_practice(), None),
-    ("deployment_funnel_ct_abdpel", lambda: edw.get_deployment_funnel_ct_abdpel(), None),
     ("ct_abdpel_blockers_by_practice", lambda: edw.get_ct_abdpel_blockers_by_practice(), None),
     ("efficiency_matrix", lambda: edw.get_efficiency_matrix(), _store_efficiency_matrix),
     ("efficiency_trend_by_category", lambda: edw.get_efficiency_trend_by_category(), None),
-    ("mvp_efficiency_by_radiologist", lambda: edw.get_mvp_efficiency_by_radiologist(), None),
-    ("mvp_capacity_by_radiologist", lambda: edw.get_mvp_capacity_by_radiologist(), None),
+    ("mvp_rad_onboarding_raw", lambda: edw.get_mvp_rad_onboarding(), None),
+    # Depends on mvp_rad_onboarding_raw above having just been refreshed in this same cycle
+    # (DATASETS runs sequentially in refresh_all) - reads it straight back from cache_store
+    # rather than re-querying EDW, since this is a pure computation over that same data.
+    ("mvp_program_narrative", lambda: ai_context_service.generate_mvp_program_narrative(cache_store.load("mvp_rad_onboarding_raw")[0] or []), None),
+    ("mvp_overview_narrative", lambda: ai_context_service.generate_mvp_overview_narrative(cache_store.load("mvp_rad_onboarding_raw")[0] or []), None),
+    ("mvp_mammo_narrative", lambda: ai_context_service.generate_mvp_mammo_narrative(cache_store.load("mvp_rad_onboarding_raw")[0] or []), None),
+    ("mammo_screening_trend", lambda: edw.get_mammo_screening_trend(), None),
     ("efficiency_trend_by_practice_category", lambda: edw.get_efficiency_trend_by_practice_category(), None),
     ("efficiency_trend_rp_avg", lambda: edw.get_efficiency_trend_rp_avg(), None),
     ("capture_overview", lambda: edw.get_capture_overview(), None),
@@ -77,7 +78,13 @@ DATASETS: list[tuple[str, object, object]] = [
     ("capacity_with_baseline_raw", lambda: edw.get_capacity_with_baseline(), None),
     ("baseline_proxy_detail_raw", lambda: edw.get_baseline_proxy_detail(), None),
     ("baseline_proxy_candidates_raw", lambda: edw.get_baseline_proxy_candidates(), None),
-    ("reconciliation_findings", lambda: recon.get_all_findings(), None),
+    ("shift_utilization_by_radiologist", lambda: edw.get_shift_utilization_by_radiologist(), None),
+    ("volume_summary", lambda: volume_service.get_volume_summary(), None),
+    ("volume_by_practice", lambda: volume_service.get_volume_by_practice(), None),
+    ("volume_by_team", lambda: volume_service.get_volume_by_team(), None),
+    ("volume_by_local_region", lambda: volume_service.get_volume_by_local_region(), None),
+    ("volume_trend", lambda: volume_service.get_volume_trend(), None),
+    ("volume_filter_options", lambda: volume_service.get_volume_filter_options(), None),
 ]
 
 _refresh_lock = threading.Lock()

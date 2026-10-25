@@ -1,0 +1,1813 @@
+table Mode_Lines
+	lineageTag: d624a5ce-91a4-44ee-91f5-f6e5602dcc91
+
+	measure Efficiency_Change_By_Mode_Line = ```
+			
+			VAR _modeLine = SELECTEDVALUE(Mode_Lines[ModeLine])
+			VAR _minExams = SELECTEDVALUE('Mosaic Min Exams'[MinExams], 0)
+			VAR _rtView = SELECTEDVALUE(Readtimeview[RT View], "All")
+			VAR _draftingVisible =
+			    COUNTROWS(FILTER(VALUES(radiologist_metrics[Modality_Code]), radiologist_metrics[Modality_Code] IN {"CR","CT"})) > 0
+			VAR _captureVisible =
+			    COUNTROWS(FILTER(VALUES(radiologist_metrics[Modality_Code]), radiologist_metrics[Modality_Code] IN {"US","BD"})) > 0
+			VAR _draftingCaptureVisible =
+			    COUNTROWS(FILTER(VALUES(radiologist_metrics[Modality_Code]), radiologist_metrics[Modality_Code] IN {"CR","CT","US","BD"})) > 0
+			
+			// ===== DRAFTING ONLY (CR + CT only) =====
+			VAR _qualifyingRadsDrafting = 
+			    FILTER(
+			        CALCULATETABLE(
+			            DISTINCT(radiologist_metrics[Radiologist]),
+			            radiologist_metrics[Is_Drafting_Row] = 1,
+			            KEEPFILTERS(radiologist_metrics[Modality_Code] IN {"CR","CT"}),
+			            radiologist_metrics[Outliers] = "Excluded",
+			            ALLSELECTED(radiologist_metrics[Exam_Date], radiologist_metrics[Beginning_of_Month], radiologist_metrics[Week_Date])
+			        ),
+			        VAR _currentRad = [Radiologist]
+			        VAR _radExamsAllTime = 
+			            CALCULATE(
+			                SUM(radiologist_metrics[ExamCount]),
+			                FILTER(ALL(radiologist_metrics),
+			                    radiologist_metrics[Radiologist] = _currentRad &&
+			                    radiologist_metrics[Is_Drafting_Row] = 1 &&
+			                    radiologist_metrics[Modality_Code] IN {"CR","CT"} &&
+			                    radiologist_metrics[Outliers] = "Excluded"
+			                )
+			            )
+			        VAR _radTBWUAllTime = 
+			            CALCULATE(
+			                SUM(radiologist_metrics[TotalTBWU]),
+			                FILTER(ALL(radiologist_metrics),
+			                    radiologist_metrics[Radiologist] = _currentRad &&
+			                    radiologist_metrics[Is_Drafting_Row] = 1 &&
+			                    radiologist_metrics[Modality_Code] IN {"CR","CT"} &&
+			                    radiologist_metrics[Outliers] = "Excluded"
+			                )
+			            )
+			        VAR _radTimeAllTime = 
+			            CALCULATE(
+			                SUM(radiologist_metrics[TotalTime]),
+			                FILTER(ALL(radiologist_metrics),
+			                    radiologist_metrics[Radiologist] = _currentRad &&
+			                    radiologist_metrics[Is_Drafting_Row] = 1 &&
+			                    radiologist_metrics[Modality_Code] IN {"CR","CT"} &&
+			                    radiologist_metrics[Outliers] = "Excluded"
+			                )
+			            )
+			        VAR _radMosaicEffAllTime = DIVIDE(_radTBWUAllTime, _radTimeAllTime / 60)
+			        VAR _radBaselineContribAllTime = 
+			            CALCULATE(
+			                SUM(radiologist_metrics[Weighted_Baseline_Contrib_Excl]),
+			                FILTER(ALL(radiologist_metrics),
+			                    radiologist_metrics[Radiologist] = _currentRad &&
+			                    radiologist_metrics[Is_Drafting_Row] = 1 &&
+			                    radiologist_metrics[Modality_Code] IN {"CR","CT"} &&
+			                    radiologist_metrics[Outliers] = "Excluded"
+			                )
+			            )
+			        VAR _radBaselineEffAllTime = DIVIDE(_radBaselineContribAllTime, _radTimeAllTime)
+			        VAR _pctChangeAllTime = DIVIDE(_radMosaicEffAllTime - _radBaselineEffAllTime, _radBaselineEffAllTime)
+			        VAR _isPositive = _pctChangeAllTime > 0
+			        VAR _isNegative = _pctChangeAllTime <= 0
+			        VAR _hasBoth = NOT ISBLANK(_radMosaicEffAllTime) && NOT ISBLANK(_radBaselineEffAllTime)
+			        VAR _passesRTFilter = 
+			            SWITCH(_rtView,
+			                "Positive", _hasBoth && _isPositive,
+			                "Negative", _hasBoth && _isNegative,
+			                _hasBoth)
+			        RETURN _radExamsAllTime >= _minExams && _passesRTFilter
+			    )
+			
+			VAR _totalTBWUDrafting = 
+			    SUMX(_qualifyingRadsDrafting,
+			        VAR _currentRad = [Radiologist]
+			        RETURN CALCULATE(SUM(radiologist_metrics[TotalTBWU]),
+			            radiologist_metrics[Radiologist] = _currentRad,
+			            radiologist_metrics[Is_Drafting_Row] = 1,
+			            KEEPFILTERS(radiologist_metrics[Modality_Code] IN {"CR","CT"}),
+			            radiologist_metrics[Outliers] = "Excluded"))
+			
+			VAR _totalTimeDrafting = 
+			    SUMX(_qualifyingRadsDrafting,
+			        VAR _currentRad = [Radiologist]
+			        RETURN CALCULATE(SUM(radiologist_metrics[TotalTime]),
+			            radiologist_metrics[Radiologist] = _currentRad,
+			            radiologist_metrics[Is_Drafting_Row] = 1,
+			            KEEPFILTERS(radiologist_metrics[Modality_Code] IN {"CR","CT"}),
+			            radiologist_metrics[Outliers] = "Excluded"))
+			
+			VAR _totalBaselineContribDrafting = 
+			    SUMX(_qualifyingRadsDrafting,
+			        VAR _currentRad = [Radiologist]
+			        RETURN CALCULATE(SUM(radiologist_metrics[Weighted_Baseline_Contrib_Excl]),
+			            radiologist_metrics[Radiologist] = _currentRad,
+			            radiologist_metrics[Is_Drafting_Row] = 1,
+			            KEEPFILTERS(radiologist_metrics[Modality_Code] IN {"CR","CT"}),
+			            radiologist_metrics[Outliers] = "Excluded"))
+			
+			VAR _mosaicEffDrafting = DIVIDE(_totalTBWUDrafting, _totalTimeDrafting / 60)
+			VAR _baselineEffDrafting = DIVIDE(_totalBaselineContribDrafting, _totalTimeDrafting)
+			VAR _effChangeDrafting = DIVIDE(_mosaicEffDrafting - _baselineEffDrafting, _baselineEffDrafting)
+			
+			// ===== REPORTING ONLY =====
+			VAR _qualifyingRadsReporting = 
+			    FILTER(
+			        CALCULATETABLE(
+			            DISTINCT(radiologist_metrics[Radiologist]),
+			            radiologist_metrics[Is_Reporting_Row] = 1,
+			            radiologist_metrics[Outliers] = "Excluded",
+			            ALLSELECTED(radiologist_metrics[Exam_Date], radiologist_metrics[Beginning_of_Month], radiologist_metrics[Week_Date])
+			        ),
+			        VAR _currentRad = [Radiologist]
+			        VAR _radExamsAllTime = 
+			            CALCULATE(SUM(radiologist_metrics[ExamCount]),
+			                FILTER(ALL(radiologist_metrics),
+			                    radiologist_metrics[Radiologist] = _currentRad &&
+			                    radiologist_metrics[Is_Reporting_Row] = 1 &&
+			                    radiologist_metrics[Outliers] = "Excluded"))
+			        VAR _radTBWUAllTime = 
+			            CALCULATE(SUM(radiologist_metrics[TotalTBWU]),
+			                FILTER(ALL(radiologist_metrics),
+			                    radiologist_metrics[Radiologist] = _currentRad &&
+			                    radiologist_metrics[Is_Reporting_Row] = 1 &&
+			                    radiologist_metrics[Outliers] = "Excluded"))
+			        VAR _radTimeAllTime = 
+			            CALCULATE(SUM(radiologist_metrics[TotalTime]),
+			                FILTER(ALL(radiologist_metrics),
+			                    radiologist_metrics[Radiologist] = _currentRad &&
+			                    radiologist_metrics[Is_Reporting_Row] = 1 &&
+			                    radiologist_metrics[Outliers] = "Excluded"))
+			        VAR _radMosaicEffAllTime = DIVIDE(_radTBWUAllTime, _radTimeAllTime / 60)
+			        VAR _radBaselineContribAllTime = 
+			            CALCULATE(SUM(radiologist_metrics[Weighted_Baseline_Contrib_Excl]),
+			                FILTER(ALL(radiologist_metrics),
+			                    radiologist_metrics[Radiologist] = _currentRad &&
+			                    radiologist_metrics[Is_Reporting_Row] = 1 &&
+			                    radiologist_metrics[Outliers] = "Excluded"))
+			        VAR _radBaselineEffAllTime = DIVIDE(_radBaselineContribAllTime, _radTimeAllTime)
+			        VAR _pctChangeAllTime = DIVIDE(_radMosaicEffAllTime - _radBaselineEffAllTime, _radBaselineEffAllTime)
+			        VAR _isPositive = _pctChangeAllTime > 0
+			        VAR _isNegative = _pctChangeAllTime <= 0
+			        VAR _hasBoth = NOT ISBLANK(_radMosaicEffAllTime) && NOT ISBLANK(_radBaselineEffAllTime)
+			        VAR _passesRTFilter = 
+			            SWITCH(_rtView,
+			                "Positive", _hasBoth && _isPositive,
+			                "Negative", _hasBoth && _isNegative,
+			                _hasBoth)
+			        RETURN _radExamsAllTime >= _minExams && _passesRTFilter
+			    )
+			
+			VAR _totalTBWUReporting = 
+			    SUMX(_qualifyingRadsReporting,
+			        VAR _currentRad = [Radiologist]
+			        RETURN CALCULATE(SUM(radiologist_metrics[TotalTBWU]),
+			            radiologist_metrics[Radiologist] = _currentRad,
+			            radiologist_metrics[Is_Reporting_Row] = 1,
+			            radiologist_metrics[Outliers] = "Excluded"))
+			
+			VAR _totalTimeReporting = 
+			    SUMX(_qualifyingRadsReporting,
+			        VAR _currentRad = [Radiologist]
+			        RETURN CALCULATE(SUM(radiologist_metrics[TotalTime]),
+			            radiologist_metrics[Radiologist] = _currentRad,
+			            radiologist_metrics[Is_Reporting_Row] = 1,
+			            radiologist_metrics[Outliers] = "Excluded"))
+			
+			VAR _totalBaselineContribReporting = 
+			    SUMX(_qualifyingRadsReporting,
+			        VAR _currentRad = [Radiologist]
+			        RETURN CALCULATE(SUM(radiologist_metrics[Weighted_Baseline_Contrib_Excl]),
+			            radiologist_metrics[Radiologist] = _currentRad,
+			            radiologist_metrics[Is_Reporting_Row] = 1,
+			            radiologist_metrics[Outliers] = "Excluded"))
+			
+			VAR _mosaicEffReporting = DIVIDE(_totalTBWUReporting, _totalTimeReporting / 60)
+			VAR _baselineEffReporting = DIVIDE(_totalBaselineContribReporting, _totalTimeReporting)
+			VAR _effChangeReporting = DIVIDE(_mosaicEffReporting - _baselineEffReporting, _baselineEffReporting)
+			
+			// ===== FULL MOSAIC =====
+			VAR _qualifyingRadsFullMosaic = 
+			    FILTER(
+			        CALCULATETABLE(
+			            DISTINCT(radiologist_metrics[Radiologist]),
+			            radiologist_metrics[Is_Mosaic_Row] = 1,
+			            radiologist_metrics[Outliers] = "Excluded",
+			            ALLSELECTED(radiologist_metrics[Exam_Date], radiologist_metrics[Beginning_of_Month], radiologist_metrics[Week_Date])
+			        ),
+			        VAR _currentRad = [Radiologist]
+			        VAR _radExamsAllTime = 
+			            CALCULATE(SUM(radiologist_metrics[ExamCount]),
+			                FILTER(ALL(radiologist_metrics),
+			                    radiologist_metrics[Radiologist] = _currentRad &&
+			                    radiologist_metrics[Is_Mosaic_Row] = 1 &&
+			                    radiologist_metrics[Outliers] = "Excluded"))
+			        VAR _radTBWUAllTime = 
+			            CALCULATE(SUM(radiologist_metrics[TotalTBWU]),
+			                FILTER(ALL(radiologist_metrics),
+			                    radiologist_metrics[Radiologist] = _currentRad &&
+			                    radiologist_metrics[Is_Mosaic_Row] = 1 &&
+			                    radiologist_metrics[Outliers] = "Excluded"))
+			        VAR _radTimeAllTime = 
+			            CALCULATE(SUM(radiologist_metrics[TotalTime]),
+			                FILTER(ALL(radiologist_metrics),
+			                    radiologist_metrics[Radiologist] = _currentRad &&
+			                    radiologist_metrics[Is_Mosaic_Row] = 1 &&
+			                    radiologist_metrics[Outliers] = "Excluded"))
+			        VAR _radMosaicEffAllTime = DIVIDE(_radTBWUAllTime, _radTimeAllTime / 60)
+			        VAR _radBaselineContribAllTime = 
+			            CALCULATE(SUM(radiologist_metrics[Weighted_Baseline_Contrib_Excl]),
+			                FILTER(ALL(radiologist_metrics),
+			                    radiologist_metrics[Radiologist] = _currentRad &&
+			                    radiologist_metrics[Is_Mosaic_Row] = 1 &&
+			                    radiologist_metrics[Outliers] = "Excluded"))
+			        VAR _radBaselineEffAllTime = DIVIDE(_radBaselineContribAllTime, _radTimeAllTime)
+			        VAR _pctChangeAllTime = DIVIDE(_radMosaicEffAllTime - _radBaselineEffAllTime, _radBaselineEffAllTime)
+			        VAR _isPositive = _pctChangeAllTime > 0
+			        VAR _isNegative = _pctChangeAllTime <= 0
+			        VAR _hasBoth = NOT ISBLANK(_radMosaicEffAllTime) && NOT ISBLANK(_radBaselineEffAllTime)
+			        VAR _passesRTFilter = 
+			            SWITCH(_rtView,
+			                "Positive", _hasBoth && _isPositive,
+			                "Negative", _hasBoth && _isNegative,
+			                _hasBoth)
+			        RETURN _radExamsAllTime >= _minExams && _passesRTFilter
+			    )
+			
+			VAR _totalTBWUFullMosaic = 
+			    SUMX(_qualifyingRadsFullMosaic,
+			        VAR _currentRad = [Radiologist]
+			        RETURN CALCULATE(SUM(radiologist_metrics[TotalTBWU]),
+			            radiologist_metrics[Radiologist] = _currentRad,
+			            radiologist_metrics[Is_Mosaic_Row] = 1,
+			            radiologist_metrics[Outliers] = "Excluded"))
+			
+			VAR _totalTimeFullMosaic = 
+			    SUMX(_qualifyingRadsFullMosaic,
+			        VAR _currentRad = [Radiologist]
+			        RETURN CALCULATE(SUM(radiologist_metrics[TotalTime]),
+			            radiologist_metrics[Radiologist] = _currentRad,
+			            radiologist_metrics[Is_Mosaic_Row] = 1,
+			            radiologist_metrics[Outliers] = "Excluded"))
+			
+			VAR _totalBaselineContribFullMosaic = 
+			    SUMX(_qualifyingRadsFullMosaic,
+			        VAR _currentRad = [Radiologist]
+			        RETURN CALCULATE(SUM(radiologist_metrics[Weighted_Baseline_Contrib_Excl]),
+			            radiologist_metrics[Radiologist] = _currentRad,
+			            radiologist_metrics[Is_Mosaic_Row] = 1,
+			            radiologist_metrics[Outliers] = "Excluded"))
+			
+			VAR _mosaicEffFullMosaic = DIVIDE(_totalTBWUFullMosaic, _totalTimeFullMosaic / 60)
+			VAR _baselineEffFullMosaic = DIVIDE(_totalBaselineContribFullMosaic, _totalTimeFullMosaic)
+			VAR _effChangeFullMosaic = DIVIDE(_mosaicEffFullMosaic - _baselineEffFullMosaic, _baselineEffFullMosaic)
+			
+			// ===== DRAFTING + CAPTURE (CR, CT, US, BD) =====
+			VAR _qualifyingRadsDraftingCapture = 
+			    FILTER(
+			        CALCULATETABLE(
+			            DISTINCT(radiologist_metrics[Radiologist]),
+			            KEEPFILTERS(
+			                (radiologist_metrics[Is_Drafting_Row] = 1
+			                    && radiologist_metrics[Modality_Code] IN {"CR","CT"})
+			                || (radiologist_metrics[Is_Capture_Row] = 1
+			                    && radiologist_metrics[Modality_Code] IN {"US","BD"})
+			            ),
+			            radiologist_metrics[Outliers] = "Excluded",
+			            ALLSELECTED(radiologist_metrics[Exam_Date], radiologist_metrics[Beginning_of_Month], radiologist_metrics[Week_Date])
+			        ),
+			        VAR _currentRad = [Radiologist]
+			        VAR _radExamsAllTime = 
+			            CALCULATE(SUM(radiologist_metrics[ExamCount]),
+			                FILTER(ALL(radiologist_metrics),
+			                    radiologist_metrics[Radiologist] = _currentRad &&
+			                    (
+			                        (radiologist_metrics[Is_Drafting_Row] = 1
+			                            && radiologist_metrics[Modality_Code] IN {"CR","CT"})
+			                        || (radiologist_metrics[Is_Capture_Row] = 1
+			                            && radiologist_metrics[Modality_Code] IN {"US","BD"})
+			                    ) &&
+			                    radiologist_metrics[Outliers] = "Excluded"))
+			        VAR _radTBWUAllTime = 
+			            CALCULATE(SUM(radiologist_metrics[TotalTBWU]),
+			                FILTER(ALL(radiologist_metrics),
+			                    radiologist_metrics[Radiologist] = _currentRad &&
+			                    (
+			                        (radiologist_metrics[Is_Drafting_Row] = 1
+			                            && radiologist_metrics[Modality_Code] IN {"CR","CT"})
+			                        || (radiologist_metrics[Is_Capture_Row] = 1
+			                            && radiologist_metrics[Modality_Code] IN {"US","BD"})
+			                    ) &&
+			                    radiologist_metrics[Outliers] = "Excluded"))
+			        VAR _radTimeAllTime = 
+			            CALCULATE(SUM(radiologist_metrics[TotalTime]),
+			                FILTER(ALL(radiologist_metrics),
+			                    radiologist_metrics[Radiologist] = _currentRad &&
+			                    (
+			                        (radiologist_metrics[Is_Drafting_Row] = 1
+			                            && radiologist_metrics[Modality_Code] IN {"CR","CT"})
+			                        || (radiologist_metrics[Is_Capture_Row] = 1
+			                            && radiologist_metrics[Modality_Code] IN {"US","BD"})
+			                    ) &&
+			                    radiologist_metrics[Outliers] = "Excluded"))
+			        VAR _radMosaicEffAllTime = DIVIDE(_radTBWUAllTime, _radTimeAllTime / 60)
+			        VAR _radBaselineContribAllTime = 
+			            CALCULATE(SUM(radiologist_metrics[Weighted_Baseline_Contrib_Excl]),
+			                FILTER(ALL(radiologist_metrics),
+			                    radiologist_metrics[Radiologist] = _currentRad &&
+			                    (
+			                        (radiologist_metrics[Is_Drafting_Row] = 1
+			                            && radiologist_metrics[Modality_Code] IN {"CR","CT"})
+			                        || (radiologist_metrics[Is_Capture_Row] = 1
+			                            && radiologist_metrics[Modality_Code] IN {"US","BD"})
+			                    ) &&
+			                    radiologist_metrics[Outliers] = "Excluded"))
+			        VAR _radBaselineEffAllTime = DIVIDE(_radBaselineContribAllTime, _radTimeAllTime)
+			        VAR _pctChangeAllTime = DIVIDE(_radMosaicEffAllTime - _radBaselineEffAllTime, _radBaselineEffAllTime)
+			        VAR _isPositive = _pctChangeAllTime > 0
+			        VAR _isNegative = _pctChangeAllTime <= 0
+			        VAR _hasBoth = NOT ISBLANK(_radMosaicEffAllTime) && NOT ISBLANK(_radBaselineEffAllTime)
+			        VAR _passesRTFilter = 
+			            SWITCH(_rtView,
+			                "Positive", _hasBoth && _isPositive,
+			                "Negative", _hasBoth && _isNegative,
+			                _hasBoth)
+			        RETURN _radExamsAllTime >= _minExams && _passesRTFilter
+			    )
+			
+			VAR _totalTBWUDraftingCapture = 
+			    SUMX(_qualifyingRadsDraftingCapture,
+			        VAR _currentRad = [Radiologist]
+			        RETURN CALCULATE(SUM(radiologist_metrics[TotalTBWU]),
+			            radiologist_metrics[Radiologist] = _currentRad,
+			            KEEPFILTERS(
+			                (radiologist_metrics[Is_Drafting_Row] = 1
+			                    && radiologist_metrics[Modality_Code] IN {"CR","CT"})
+			                || (radiologist_metrics[Is_Capture_Row] = 1
+			                    && radiologist_metrics[Modality_Code] IN {"US","BD"})
+			            ),
+			            radiologist_metrics[Outliers] = "Excluded"))
+			
+			VAR _totalTimeDraftingCapture = 
+			    SUMX(_qualifyingRadsDraftingCapture,
+			        VAR _currentRad = [Radiologist]
+			        RETURN CALCULATE(SUM(radiologist_metrics[TotalTime]),
+			            radiologist_metrics[Radiologist] = _currentRad,
+			            KEEPFILTERS(
+			                (radiologist_metrics[Is_Drafting_Row] = 1
+			                    && radiologist_metrics[Modality_Code] IN {"CR","CT"})
+			                || (radiologist_metrics[Is_Capture_Row] = 1
+			                    && radiologist_metrics[Modality_Code] IN {"US","BD"})
+			            ),
+			            radiologist_metrics[Outliers] = "Excluded"))
+			
+			VAR _totalBaselineContribDraftingCapture = 
+			    SUMX(_qualifyingRadsDraftingCapture,
+			        VAR _currentRad = [Radiologist]
+			        RETURN CALCULATE(SUM(radiologist_metrics[Weighted_Baseline_Contrib_Excl]),
+			            radiologist_metrics[Radiologist] = _currentRad,
+			            KEEPFILTERS(
+			                (radiologist_metrics[Is_Drafting_Row] = 1
+			                    && radiologist_metrics[Modality_Code] IN {"CR","CT"})
+			                || (radiologist_metrics[Is_Capture_Row] = 1
+			                    && radiologist_metrics[Modality_Code] IN {"US","BD"})
+			            ),
+			            radiologist_metrics[Outliers] = "Excluded"))
+			
+			VAR _mosaicEffDraftingCapture = DIVIDE(_totalTBWUDraftingCapture, _totalTimeDraftingCapture / 60)
+			VAR _baselineEffDraftingCapture = DIVIDE(_totalBaselineContribDraftingCapture, _totalTimeDraftingCapture)
+			VAR _effChangeDraftingCapture = DIVIDE(_mosaicEffDraftingCapture - _baselineEffDraftingCapture, _baselineEffDraftingCapture)
+			
+			// ===== CAPTURE ONLY (US + BD) =====
+			VAR _qualifyingRadsCaptureOnly = 
+			    FILTER(
+			        CALCULATETABLE(
+			            DISTINCT(radiologist_metrics[Radiologist]),
+			            radiologist_metrics[Is_Capture_Row] = 1,
+			            KEEPFILTERS(radiologist_metrics[Modality_Code] IN {"US","BD"}),
+			            radiologist_metrics[Outliers] = "Excluded",
+			            ALLSELECTED(radiologist_metrics[Exam_Date], radiologist_metrics[Beginning_of_Month], radiologist_metrics[Week_Date])
+			        ),
+			        VAR _currentRad = [Radiologist]
+			        VAR _radExamsAllTime = 
+			            CALCULATE(SUM(radiologist_metrics[ExamCount]),
+			                FILTER(ALL(radiologist_metrics),
+			                    radiologist_metrics[Radiologist] = _currentRad &&
+			                    radiologist_metrics[Is_Capture_Row] = 1 &&
+			                    radiologist_metrics[Modality_Code] IN {"US","BD"} &&
+			                    radiologist_metrics[Outliers] = "Excluded"))
+			        VAR _radTBWUAllTime = 
+			            CALCULATE(SUM(radiologist_metrics[TotalTBWU]),
+			                FILTER(ALL(radiologist_metrics),
+			                    radiologist_metrics[Radiologist] = _currentRad &&
+			                    radiologist_metrics[Is_Capture_Row] = 1 &&
+			                    radiologist_metrics[Modality_Code] IN {"US","BD"} &&
+			                    radiologist_metrics[Outliers] = "Excluded"))
+			        VAR _radTimeAllTime = 
+			            CALCULATE(SUM(radiologist_metrics[TotalTime]),
+			                FILTER(ALL(radiologist_metrics),
+			                    radiologist_metrics[Radiologist] = _currentRad &&
+			                    radiologist_metrics[Is_Capture_Row] = 1 &&
+			                    radiologist_metrics[Modality_Code] IN {"US","BD"} &&
+			                    radiologist_metrics[Outliers] = "Excluded"))
+			        VAR _radMosaicEffAllTime = DIVIDE(_radTBWUAllTime, _radTimeAllTime / 60)
+			        VAR _radBaselineContribAllTime = 
+			            CALCULATE(SUM(radiologist_metrics[Weighted_Baseline_Contrib_Excl]),
+			                FILTER(ALL(radiologist_metrics),
+			                    radiologist_metrics[Radiologist] = _currentRad &&
+			                    radiologist_metrics[Is_Capture_Row] = 1 &&
+			                    radiologist_metrics[Modality_Code] IN {"US","BD"} &&
+			                    radiologist_metrics[Outliers] = "Excluded"))
+			        VAR _radBaselineEffAllTime = DIVIDE(_radBaselineContribAllTime, _radTimeAllTime)
+			        VAR _pctChangeAllTime = DIVIDE(_radMosaicEffAllTime - _radBaselineEffAllTime, _radBaselineEffAllTime)
+			        VAR _isPositive = _pctChangeAllTime > 0
+			        VAR _isNegative = _pctChangeAllTime <= 0
+			        VAR _hasBoth = NOT ISBLANK(_radMosaicEffAllTime) && NOT ISBLANK(_radBaselineEffAllTime)
+			        VAR _passesRTFilter = 
+			            SWITCH(_rtView,
+			                "Positive", _hasBoth && _isPositive,
+			                "Negative", _hasBoth && _isNegative,
+			                _hasBoth)
+			        RETURN _radExamsAllTime >= _minExams && _passesRTFilter
+			    )
+			
+			VAR _totalTBWUCaptureOnly = 
+			    SUMX(_qualifyingRadsCaptureOnly,
+			        VAR _currentRad = [Radiologist]
+			        RETURN CALCULATE(SUM(radiologist_metrics[TotalTBWU]),
+			            radiologist_metrics[Radiologist] = _currentRad,
+			            radiologist_metrics[Is_Capture_Row] = 1,
+			            KEEPFILTERS(radiologist_metrics[Modality_Code] IN {"US","BD"}),
+			            radiologist_metrics[Outliers] = "Excluded"))
+			
+			VAR _totalTimeCaptureOnly = 
+			    SUMX(_qualifyingRadsCaptureOnly,
+			        VAR _currentRad = [Radiologist]
+			        RETURN CALCULATE(SUM(radiologist_metrics[TotalTime]),
+			            radiologist_metrics[Radiologist] = _currentRad,
+			            radiologist_metrics[Is_Capture_Row] = 1,
+			            KEEPFILTERS(radiologist_metrics[Modality_Code] IN {"US","BD"}),
+			            radiologist_metrics[Outliers] = "Excluded"))
+			
+			VAR _totalBaselineContribCaptureOnly = 
+			    SUMX(_qualifyingRadsCaptureOnly,
+			        VAR _currentRad = [Radiologist]
+			        RETURN CALCULATE(SUM(radiologist_metrics[Weighted_Baseline_Contrib_Excl]),
+			            radiologist_metrics[Radiologist] = _currentRad,
+			            radiologist_metrics[Is_Capture_Row] = 1,
+			            KEEPFILTERS(radiologist_metrics[Modality_Code] IN {"US","BD"}),
+			            radiologist_metrics[Outliers] = "Excluded"))
+			
+			VAR _mosaicEffCaptureOnly = DIVIDE(_totalTBWUCaptureOnly, _totalTimeCaptureOnly / 60)
+			VAR _baselineEffCaptureOnly = DIVIDE(_totalBaselineContribCaptureOnly, _totalTimeCaptureOnly)
+			VAR _effChangeCaptureOnly = DIVIDE(_mosaicEffCaptureOnly - _baselineEffCaptureOnly, _baselineEffCaptureOnly)
+			
+			// ===== RETURN BASED ON LINE =====
+			RETURN
+			SWITCH(
+			    _modeLine,
+			    "Drafting Only",      IF(_draftingVisible, _effChangeDrafting),
+			    "Reporting Only",     _effChangeReporting,
+			    "Full Mosaic",        _effChangeFullMosaic,
+			    "Drafting + Capture", IF(_draftingCaptureVisible, _effChangeDraftingCapture),
+			    "Capture Only",       IF(_captureVisible, _effChangeCaptureOnly),
+			    BLANK()
+			)
+			```
+		formatString: 0%;-0%;0%
+		lineageTag: 366f3774-d9ec-4f94-9550-2a760832cbfb
+
+	measure Rad_EffChange_Line =
+			
+			VAR _modeLine = SELECTEDVALUE(Mode_Lines[ModeLine], "Full Mosaic")
+			VAR _minExams = SELECTEDVALUE('Mosaic Min Exams'[MinExams], 0)
+			VAR _rtView = SELECTEDVALUE(Readtimeview[RT View], "All")
+			VAR _currentRad = SELECTEDVALUE(radiologist_metrics[Radiologist])
+			VAR _draftingVisible =
+			    COUNTROWS(FILTER(VALUES(radiologist_metrics[Modality_Code]), radiologist_metrics[Modality_Code] IN {"CR","CT"})) > 0
+			VAR _captureVisible =
+			    COUNTROWS(FILTER(VALUES(radiologist_metrics[Modality_Code]), radiologist_metrics[Modality_Code] IN {"US","BD"})) > 0
+			VAR _draftingCaptureVisible =
+			    COUNTROWS(FILTER(VALUES(radiologist_metrics[Modality_Code]), radiologist_metrics[Modality_Code] IN {"CR","CT","US","BD"})) > 0
+			
+			// ===== DRAFTING ONLY (CR + CT only) =====
+			VAR _radExamsAllTime_Drafting =
+			    CALCULATE(SUM(radiologist_metrics[ExamCount]),
+			        FILTER(ALL(radiologist_metrics),
+			            radiologist_metrics[Radiologist] = _currentRad &&
+			            radiologist_metrics[Is_Drafting_Row] = 1 &&
+			            radiologist_metrics[Modality_Code] IN {"CR","CT"} &&
+			            radiologist_metrics[Outliers] = "Excluded"))
+			VAR _radTBWUAllTime_Drafting =
+			    CALCULATE(SUM(radiologist_metrics[TotalTBWU]),
+			        FILTER(ALL(radiologist_metrics),
+			            radiologist_metrics[Radiologist] = _currentRad &&
+			            radiologist_metrics[Is_Drafting_Row] = 1 &&
+			            radiologist_metrics[Modality_Code] IN {"CR","CT"} &&
+			            radiologist_metrics[Outliers] = "Excluded"))
+			VAR _radTimeAllTime_Drafting =
+			    CALCULATE(SUM(radiologist_metrics[TotalTime]),
+			        FILTER(ALL(radiologist_metrics),
+			            radiologist_metrics[Radiologist] = _currentRad &&
+			            radiologist_metrics[Is_Drafting_Row] = 1 &&
+			            radiologist_metrics[Modality_Code] IN {"CR","CT"} &&
+			            radiologist_metrics[Outliers] = "Excluded"))
+			VAR _radMosaicEffAllTime_Drafting = DIVIDE(_radTBWUAllTime_Drafting, _radTimeAllTime_Drafting / 60)
+			VAR _radBaselineContribAllTime_Drafting =
+			    CALCULATE(SUM(radiologist_metrics[Weighted_Baseline_Contrib_Excl]),
+			        FILTER(ALL(radiologist_metrics),
+			            radiologist_metrics[Radiologist] = _currentRad &&
+			            radiologist_metrics[Is_Drafting_Row] = 1 &&
+			            radiologist_metrics[Modality_Code] IN {"CR","CT"} &&
+			            radiologist_metrics[Outliers] = "Excluded"))
+			VAR _radBaselineEffAllTime_Drafting = DIVIDE(_radBaselineContribAllTime_Drafting, _radTimeAllTime_Drafting)
+			VAR _pctChangeAllTime_Drafting = DIVIDE(_radMosaicEffAllTime_Drafting - _radBaselineEffAllTime_Drafting, _radBaselineEffAllTime_Drafting)
+			VAR _isPositive_Drafting = _pctChangeAllTime_Drafting > 0
+			VAR _isNegative_Drafting = _pctChangeAllTime_Drafting <= 0
+			VAR _hasBoth_Drafting = NOT ISBLANK(_radMosaicEffAllTime_Drafting) && NOT ISBLANK(_radBaselineEffAllTime_Drafting)
+			VAR _passesRTFilter_Drafting =
+			    SWITCH(_rtView,
+			        "Positive", _hasBoth_Drafting && _isPositive_Drafting,
+			        "Negative", _hasBoth_Drafting && _isNegative_Drafting,
+			        _hasBoth_Drafting)
+			VAR _qualifiesDrafting = _radExamsAllTime_Drafting >= _minExams && _passesRTFilter_Drafting
+			
+			VAR _totalTBWUDrafting =
+			    CALCULATE(SUM(radiologist_metrics[TotalTBWU]),
+			        radiologist_metrics[Radiologist] = _currentRad,
+			        radiologist_metrics[Is_Drafting_Row] = 1,
+			        KEEPFILTERS(radiologist_metrics[Modality_Code] IN {"CR","CT"}),
+			        radiologist_metrics[Outliers] = "Excluded")
+			VAR _totalTimeDrafting =
+			    CALCULATE(SUM(radiologist_metrics[TotalTime]),
+			        radiologist_metrics[Radiologist] = _currentRad,
+			        radiologist_metrics[Is_Drafting_Row] = 1,
+			        KEEPFILTERS(radiologist_metrics[Modality_Code] IN {"CR","CT"}),
+			        radiologist_metrics[Outliers] = "Excluded")
+			VAR _totalBaselineContribDrafting =
+			    CALCULATE(SUM(radiologist_metrics[Weighted_Baseline_Contrib_Excl]),
+			        radiologist_metrics[Radiologist] = _currentRad,
+			        radiologist_metrics[Is_Drafting_Row] = 1,
+			        KEEPFILTERS(radiologist_metrics[Modality_Code] IN {"CR","CT"}),
+			        radiologist_metrics[Outliers] = "Excluded")
+			VAR _mosaicEffDrafting = DIVIDE(_totalTBWUDrafting, _totalTimeDrafting / 60)
+			VAR _baselineEffDrafting = DIVIDE(_totalBaselineContribDrafting, _totalTimeDrafting)
+			VAR _effChangeDrafting = DIVIDE(_mosaicEffDrafting - _baselineEffDrafting, _baselineEffDrafting)
+			
+			// ===== REPORTING ONLY =====
+			VAR _radExamsAllTime_Reporting =
+			    CALCULATE(SUM(radiologist_metrics[ExamCount]),
+			        FILTER(ALL(radiologist_metrics),
+			            radiologist_metrics[Radiologist] = _currentRad &&
+			            radiologist_metrics[Is_Reporting_Row] = 1 &&
+			            radiologist_metrics[Outliers] = "Excluded"))
+			VAR _radTBWUAllTime_Reporting =
+			    CALCULATE(SUM(radiologist_metrics[TotalTBWU]),
+			        FILTER(ALL(radiologist_metrics),
+			            radiologist_metrics[Radiologist] = _currentRad &&
+			            radiologist_metrics[Is_Reporting_Row] = 1 &&
+			            radiologist_metrics[Outliers] = "Excluded"))
+			VAR _radTimeAllTime_Reporting =
+			    CALCULATE(SUM(radiologist_metrics[TotalTime]),
+			        FILTER(ALL(radiologist_metrics),
+			            radiologist_metrics[Radiologist] = _currentRad &&
+			            radiologist_metrics[Is_Reporting_Row] = 1 &&
+			            radiologist_metrics[Outliers] = "Excluded"))
+			VAR _radMosaicEffAllTime_Reporting = DIVIDE(_radTBWUAllTime_Reporting, _radTimeAllTime_Reporting / 60)
+			VAR _radBaselineContribAllTime_Reporting =
+			    CALCULATE(SUM(radiologist_metrics[Weighted_Baseline_Contrib_Excl]),
+			        FILTER(ALL(radiologist_metrics),
+			            radiologist_metrics[Radiologist] = _currentRad &&
+			            radiologist_metrics[Is_Reporting_Row] = 1 &&
+			            radiologist_metrics[Outliers] = "Excluded"))
+			VAR _radBaselineEffAllTime_Reporting = DIVIDE(_radBaselineContribAllTime_Reporting, _radTimeAllTime_Reporting)
+			VAR _pctChangeAllTime_Reporting = DIVIDE(_radMosaicEffAllTime_Reporting - _radBaselineEffAllTime_Reporting, _radBaselineEffAllTime_Reporting)
+			VAR _isPositive_Reporting = _pctChangeAllTime_Reporting > 0
+			VAR _isNegative_Reporting = _pctChangeAllTime_Reporting <= 0
+			VAR _hasBoth_Reporting = NOT ISBLANK(_radMosaicEffAllTime_Reporting) && NOT ISBLANK(_radBaselineEffAllTime_Reporting)
+			VAR _passesRTFilter_Reporting =
+			    SWITCH(_rtView,
+			        "Positive", _hasBoth_Reporting && _isPositive_Reporting,
+			        "Negative", _hasBoth_Reporting && _isNegative_Reporting,
+			        _hasBoth_Reporting)
+			VAR _qualifiesReporting = _radExamsAllTime_Reporting >= _minExams && _passesRTFilter_Reporting
+			
+			VAR _totalTBWUReporting =
+			    CALCULATE(SUM(radiologist_metrics[TotalTBWU]),
+			        radiologist_metrics[Radiologist] = _currentRad,
+			        radiologist_metrics[Is_Reporting_Row] = 1,
+			        radiologist_metrics[Outliers] = "Excluded")
+			VAR _totalTimeReporting =
+			    CALCULATE(SUM(radiologist_metrics[TotalTime]),
+			        radiologist_metrics[Radiologist] = _currentRad,
+			        radiologist_metrics[Is_Reporting_Row] = 1,
+			        radiologist_metrics[Outliers] = "Excluded")
+			VAR _totalBaselineContribReporting =
+			    CALCULATE(SUM(radiologist_metrics[Weighted_Baseline_Contrib_Excl]),
+			        radiologist_metrics[Radiologist] = _currentRad,
+			        radiologist_metrics[Is_Reporting_Row] = 1,
+			        radiologist_metrics[Outliers] = "Excluded")
+			VAR _mosaicEffReporting = DIVIDE(_totalTBWUReporting, _totalTimeReporting / 60)
+			VAR _baselineEffReporting = DIVIDE(_totalBaselineContribReporting, _totalTimeReporting)
+			VAR _effChangeReporting = DIVIDE(_mosaicEffReporting - _baselineEffReporting, _baselineEffReporting)
+			
+			// ===== FULL MOSAIC =====
+			VAR _radExamsAllTime_FullMosaic =
+			    CALCULATE(SUM(radiologist_metrics[ExamCount]),
+			        FILTER(ALL(radiologist_metrics),
+			            radiologist_metrics[Radiologist] = _currentRad &&
+			            radiologist_metrics[Is_Mosaic_Row] = 1 &&
+			            radiologist_metrics[Outliers] = "Excluded"))
+			VAR _radTBWUAllTime_FullMosaic =
+			    CALCULATE(SUM(radiologist_metrics[TotalTBWU]),
+			        FILTER(ALL(radiologist_metrics),
+			            radiologist_metrics[Radiologist] = _currentRad &&
+			            radiologist_metrics[Is_Mosaic_Row] = 1 &&
+			            radiologist_metrics[Outliers] = "Excluded"))
+			VAR _radTimeAllTime_FullMosaic =
+			    CALCULATE(SUM(radiologist_metrics[TotalTime]),
+			        FILTER(ALL(radiologist_metrics),
+			            radiologist_metrics[Radiologist] = _currentRad &&
+			            radiologist_metrics[Is_Mosaic_Row] = 1 &&
+			            radiologist_metrics[Outliers] = "Excluded"))
+			VAR _radMosaicEffAllTime_FullMosaic = DIVIDE(_radTBWUAllTime_FullMosaic, _radTimeAllTime_FullMosaic / 60)
+			VAR _radBaselineContribAllTime_FullMosaic =
+			    CALCULATE(SUM(radiologist_metrics[Weighted_Baseline_Contrib_Excl]),
+			        FILTER(ALL(radiologist_metrics),
+			            radiologist_metrics[Radiologist] = _currentRad &&
+			            radiologist_metrics[Is_Mosaic_Row] = 1 &&
+			            radiologist_metrics[Outliers] = "Excluded"))
+			VAR _radBaselineEffAllTime_FullMosaic = DIVIDE(_radBaselineContribAllTime_FullMosaic, _radTimeAllTime_FullMosaic)
+			VAR _pctChangeAllTime_FullMosaic = DIVIDE(_radMosaicEffAllTime_FullMosaic - _radBaselineEffAllTime_FullMosaic, _radBaselineEffAllTime_FullMosaic)
+			VAR _isPositive_FullMosaic = _pctChangeAllTime_FullMosaic > 0
+			VAR _isNegative_FullMosaic = _pctChangeAllTime_FullMosaic <= 0
+			VAR _hasBoth_FullMosaic = NOT ISBLANK(_radMosaicEffAllTime_FullMosaic) && NOT ISBLANK(_radBaselineEffAllTime_FullMosaic)
+			VAR _passesRTFilter_FullMosaic =
+			    SWITCH(_rtView,
+			        "Positive", _hasBoth_FullMosaic && _isPositive_FullMosaic,
+			        "Negative", _hasBoth_FullMosaic && _isNegative_FullMosaic,
+			        _hasBoth_FullMosaic)
+			VAR _qualifiesFullMosaic = _radExamsAllTime_FullMosaic >= _minExams && _passesRTFilter_FullMosaic
+			
+			VAR _totalTBWUFullMosaic =
+			    CALCULATE(SUM(radiologist_metrics[TotalTBWU]),
+			        radiologist_metrics[Radiologist] = _currentRad,
+			        radiologist_metrics[Is_Mosaic_Row] = 1,
+			        radiologist_metrics[Outliers] = "Excluded")
+			VAR _totalTimeFullMosaic =
+			    CALCULATE(SUM(radiologist_metrics[TotalTime]),
+			        radiologist_metrics[Radiologist] = _currentRad,
+			        radiologist_metrics[Is_Mosaic_Row] = 1,
+			        radiologist_metrics[Outliers] = "Excluded")
+			VAR _totalBaselineContribFullMosaic =
+			    CALCULATE(SUM(radiologist_metrics[Weighted_Baseline_Contrib_Excl]),
+			        radiologist_metrics[Radiologist] = _currentRad,
+			        radiologist_metrics[Is_Mosaic_Row] = 1,
+			        radiologist_metrics[Outliers] = "Excluded")
+			VAR _mosaicEffFullMosaic = DIVIDE(_totalTBWUFullMosaic, _totalTimeFullMosaic / 60)
+			VAR _baselineEffFullMosaic = DIVIDE(_totalBaselineContribFullMosaic, _totalTimeFullMosaic)
+			VAR _effChangeFullMosaic = DIVIDE(_mosaicEffFullMosaic - _baselineEffFullMosaic, _baselineEffFullMosaic)
+			
+			// ===== DRAFTING + CAPTURE (CR, CT, US, BD) =====
+			VAR _radExamsAllTime_DC =
+			    CALCULATE(SUM(radiologist_metrics[ExamCount]),
+			        FILTER(ALL(radiologist_metrics),
+			            radiologist_metrics[Radiologist] = _currentRad &&
+			            (
+			                (radiologist_metrics[Is_Drafting_Row] = 1
+			                    && radiologist_metrics[Modality_Code] IN {"CR","CT"})
+			                || (radiologist_metrics[Is_Capture_Row] = 1
+			                    && radiologist_metrics[Modality_Code] IN {"US","BD"})
+			            ) &&
+			            radiologist_metrics[Outliers] = "Excluded"))
+			VAR _radTBWUAllTime_DC =
+			    CALCULATE(SUM(radiologist_metrics[TotalTBWU]),
+			        FILTER(ALL(radiologist_metrics),
+			            radiologist_metrics[Radiologist] = _currentRad &&
+			            (
+			                (radiologist_metrics[Is_Drafting_Row] = 1
+			                    && radiologist_metrics[Modality_Code] IN {"CR","CT"})
+			                || (radiologist_metrics[Is_Capture_Row] = 1
+			                    && radiologist_metrics[Modality_Code] IN {"US","BD"})
+			            ) &&
+			            radiologist_metrics[Outliers] = "Excluded"))
+			VAR _radTimeAllTime_DC =
+			    CALCULATE(SUM(radiologist_metrics[TotalTime]),
+			        FILTER(ALL(radiologist_metrics),
+			            radiologist_metrics[Radiologist] = _currentRad &&
+			            (
+			                (radiologist_metrics[Is_Drafting_Row] = 1
+			                    && radiologist_metrics[Modality_Code] IN {"CR","CT"})
+			                || (radiologist_metrics[Is_Capture_Row] = 1
+			                    && radiologist_metrics[Modality_Code] IN {"US","BD"})
+			            ) &&
+			            radiologist_metrics[Outliers] = "Excluded"))
+			VAR _radMosaicEffAllTime_DC = DIVIDE(_radTBWUAllTime_DC, _radTimeAllTime_DC / 60)
+			VAR _radBaselineContribAllTime_DC =
+			    CALCULATE(SUM(radiologist_metrics[Weighted_Baseline_Contrib_Excl]),
+			        FILTER(ALL(radiologist_metrics),
+			            radiologist_metrics[Radiologist] = _currentRad &&
+			            (
+			                (radiologist_metrics[Is_Drafting_Row] = 1
+			                    && radiologist_metrics[Modality_Code] IN {"CR","CT"})
+			                || (radiologist_metrics[Is_Capture_Row] = 1
+			                    && radiologist_metrics[Modality_Code] IN {"US","BD"})
+			            ) &&
+			            radiologist_metrics[Outliers] = "Excluded"))
+			VAR _radBaselineEffAllTime_DC = DIVIDE(_radBaselineContribAllTime_DC, _radTimeAllTime_DC)
+			VAR _pctChangeAllTime_DC = DIVIDE(_radMosaicEffAllTime_DC - _radBaselineEffAllTime_DC, _radBaselineEffAllTime_DC)
+			VAR _isPositive_DC = _pctChangeAllTime_DC > 0
+			VAR _isNegative_DC = _pctChangeAllTime_DC <= 0
+			VAR _hasBoth_DC = NOT ISBLANK(_radMosaicEffAllTime_DC) && NOT ISBLANK(_radBaselineEffAllTime_DC)
+			VAR _passesRTFilter_DC =
+			    SWITCH(_rtView,
+			        "Positive", _hasBoth_DC && _isPositive_DC,
+			        "Negative", _hasBoth_DC && _isNegative_DC,
+			        _hasBoth_DC)
+			VAR _qualifiesDC = _radExamsAllTime_DC >= _minExams && _passesRTFilter_DC
+			
+			VAR _totalTBWUDC =
+			    CALCULATE(SUM(radiologist_metrics[TotalTBWU]),
+			        radiologist_metrics[Radiologist] = _currentRad,
+			        KEEPFILTERS(
+			            (radiologist_metrics[Is_Drafting_Row] = 1
+			                && radiologist_metrics[Modality_Code] IN {"CR","CT"})
+			            || (radiologist_metrics[Is_Capture_Row] = 1
+			                && radiologist_metrics[Modality_Code] IN {"US","BD"})
+			        ),
+			        radiologist_metrics[Outliers] = "Excluded")
+			VAR _totalTimeDC =
+			    CALCULATE(SUM(radiologist_metrics[TotalTime]),
+			        radiologist_metrics[Radiologist] = _currentRad,
+			        KEEPFILTERS(
+			            (radiologist_metrics[Is_Drafting_Row] = 1
+			                && radiologist_metrics[Modality_Code] IN {"CR","CT"})
+			            || (radiologist_metrics[Is_Capture_Row] = 1
+			                && radiologist_metrics[Modality_Code] IN {"US","BD"})
+			        ),
+			        radiologist_metrics[Outliers] = "Excluded")
+			VAR _totalBaselineContribDC =
+			    CALCULATE(SUM(radiologist_metrics[Weighted_Baseline_Contrib_Excl]),
+			        radiologist_metrics[Radiologist] = _currentRad,
+			        KEEPFILTERS(
+			            (radiologist_metrics[Is_Drafting_Row] = 1
+			                && radiologist_metrics[Modality_Code] IN {"CR","CT"})
+			            || (radiologist_metrics[Is_Capture_Row] = 1
+			                && radiologist_metrics[Modality_Code] IN {"US","BD"})
+			        ),
+			        radiologist_metrics[Outliers] = "Excluded")
+			VAR _mosaicEffDC = DIVIDE(_totalTBWUDC, _totalTimeDC / 60)
+			VAR _baselineEffDC = DIVIDE(_totalBaselineContribDC, _totalTimeDC)
+			VAR _effChangeDC = DIVIDE(_mosaicEffDC - _baselineEffDC, _baselineEffDC)
+			
+			// ===== CAPTURE ONLY (US + BD) =====
+			VAR _radExamsAllTime_CO =
+			    CALCULATE(SUM(radiologist_metrics[ExamCount]),
+			        FILTER(ALL(radiologist_metrics),
+			            radiologist_metrics[Radiologist] = _currentRad &&
+			            radiologist_metrics[Is_Capture_Row] = 1 &&
+			            radiologist_metrics[Modality_Code] IN {"US","BD"} &&
+			            radiologist_metrics[Outliers] = "Excluded"))
+			VAR _radTBWUAllTime_CO =
+			    CALCULATE(SUM(radiologist_metrics[TotalTBWU]),
+			        FILTER(ALL(radiologist_metrics),
+			            radiologist_metrics[Radiologist] = _currentRad &&
+			            radiologist_metrics[Is_Capture_Row] = 1 &&
+			            radiologist_metrics[Modality_Code] IN {"US","BD"} &&
+			            radiologist_metrics[Outliers] = "Excluded"))
+			VAR _radTimeAllTime_CO =
+			    CALCULATE(SUM(radiologist_metrics[TotalTime]),
+			        FILTER(ALL(radiologist_metrics),
+			            radiologist_metrics[Radiologist] = _currentRad &&
+			            radiologist_metrics[Is_Capture_Row] = 1 &&
+			            radiologist_metrics[Modality_Code] IN {"US","BD"} &&
+			            radiologist_metrics[Outliers] = "Excluded"))
+			VAR _radMosaicEffAllTime_CO = DIVIDE(_radTBWUAllTime_CO, _radTimeAllTime_CO / 60)
+			VAR _radBaselineContribAllTime_CO =
+			    CALCULATE(SUM(radiologist_metrics[Weighted_Baseline_Contrib_Excl]),
+			        FILTER(ALL(radiologist_metrics),
+			            radiologist_metrics[Radiologist] = _currentRad &&
+			            radiologist_metrics[Is_Capture_Row] = 1 &&
+			            radiologist_metrics[Modality_Code] IN {"US","BD"} &&
+			            radiologist_metrics[Outliers] = "Excluded"))
+			VAR _radBaselineEffAllTime_CO = DIVIDE(_radBaselineContribAllTime_CO, _radTimeAllTime_CO)
+			VAR _pctChangeAllTime_CO = DIVIDE(_radMosaicEffAllTime_CO - _radBaselineEffAllTime_CO, _radBaselineEffAllTime_CO)
+			VAR _isPositive_CO = _pctChangeAllTime_CO > 0
+			VAR _isNegative_CO = _pctChangeAllTime_CO <= 0
+			VAR _hasBoth_CO = NOT ISBLANK(_radMosaicEffAllTime_CO) && NOT ISBLANK(_radBaselineEffAllTime_CO)
+			VAR _passesRTFilter_CO =
+			    SWITCH(_rtView,
+			        "Positive", _hasBoth_CO && _isPositive_CO,
+			        "Negative", _hasBoth_CO && _isNegative_CO,
+			        _hasBoth_CO)
+			VAR _qualifiesCO = _radExamsAllTime_CO >= _minExams && _passesRTFilter_CO
+			
+			VAR _totalTBWUCO =
+			    CALCULATE(SUM(radiologist_metrics[TotalTBWU]),
+			        radiologist_metrics[Radiologist] = _currentRad,
+			        radiologist_metrics[Is_Capture_Row] = 1,
+			        KEEPFILTERS(radiologist_metrics[Modality_Code] IN {"US","BD"}),
+			        radiologist_metrics[Outliers] = "Excluded")
+			VAR _totalTimeCO =
+			    CALCULATE(SUM(radiologist_metrics[TotalTime]),
+			        radiologist_metrics[Radiologist] = _currentRad,
+			        radiologist_metrics[Is_Capture_Row] = 1,
+			        KEEPFILTERS(radiologist_metrics[Modality_Code] IN {"US","BD"}),
+			        radiologist_metrics[Outliers] = "Excluded")
+			VAR _totalBaselineContribCO =
+			    CALCULATE(SUM(radiologist_metrics[Weighted_Baseline_Contrib_Excl]),
+			        radiologist_metrics[Radiologist] = _currentRad,
+			        radiologist_metrics[Is_Capture_Row] = 1,
+			        KEEPFILTERS(radiologist_metrics[Modality_Code] IN {"US","BD"}),
+			        radiologist_metrics[Outliers] = "Excluded")
+			VAR _mosaicEffCO = DIVIDE(_totalTBWUCO, _totalTimeCO / 60)
+			VAR _baselineEffCO = DIVIDE(_totalBaselineContribCO, _totalTimeCO)
+			VAR _effChangeCO = DIVIDE(_mosaicEffCO - _baselineEffCO, _baselineEffCO)
+			
+			// ===== RETURN BASED ON LINE =====
+			RETURN
+			SWITCH(
+			    _modeLine,
+			    "Drafting Only",      IF(_qualifiesDrafting && _draftingVisible, _effChangeDrafting),
+			    "Reporting Only",     IF(_qualifiesReporting, _effChangeReporting),
+			    "Full Mosaic",        IF(_qualifiesFullMosaic, _effChangeFullMosaic),
+			    "Drafting + Capture", IF(_qualifiesDC && _draftingCaptureVisible, _effChangeDC),
+			    "Capture Only",       IF(_qualifiesCO && _captureVisible, _effChangeCO),
+			    BLANK()
+			)
+		formatString: 0%;-0%;0%
+		lineageTag: a98fd36e-8024-4032-9358-06147bb0eb85
+
+	measure Rad_MosaicExams_Line =
+			
+			VAR _modeLine = SELECTEDVALUE(Mode_Lines[ModeLine], "Full Mosaic")
+			VAR _minExams = SELECTEDVALUE('Mosaic Min Exams'[MinExams], 0)
+			VAR _rtView = SELECTEDVALUE(Readtimeview[RT View], "All")
+			VAR _currentRad = SELECTEDVALUE(radiologist_metrics[Radiologist])
+			VAR _draftingVisible =
+			    COUNTROWS(FILTER(VALUES(radiologist_metrics[Modality_Code]), radiologist_metrics[Modality_Code] IN {"CR","CT"})) > 0
+			VAR _captureVisible =
+			    COUNTROWS(FILTER(VALUES(radiologist_metrics[Modality_Code]), radiologist_metrics[Modality_Code] IN {"US","BD"})) > 0
+			VAR _draftingCaptureVisible =
+			    COUNTROWS(FILTER(VALUES(radiologist_metrics[Modality_Code]), radiologist_metrics[Modality_Code] IN {"CR","CT","US","BD"})) > 0
+			
+			// ===== DRAFTING ONLY (CR + CT only) =====
+			VAR _radExamsAllTime_Drafting =
+			    CALCULATE(SUM(radiologist_metrics[ExamCount]),
+			        FILTER(ALL(radiologist_metrics),
+			            radiologist_metrics[Radiologist] = _currentRad &&
+			            radiologist_metrics[Is_Drafting_Row] = 1 &&
+			            radiologist_metrics[Modality_Code] IN {"CR","CT"} &&
+			            radiologist_metrics[Outliers] = "Excluded"))
+			VAR _radTBWUAllTime_Drafting =
+			    CALCULATE(SUM(radiologist_metrics[TotalTBWU]),
+			        FILTER(ALL(radiologist_metrics),
+			            radiologist_metrics[Radiologist] = _currentRad &&
+			            radiologist_metrics[Is_Drafting_Row] = 1 &&
+			            radiologist_metrics[Modality_Code] IN {"CR","CT"} &&
+			            radiologist_metrics[Outliers] = "Excluded"))
+			VAR _radTimeAllTime_Drafting =
+			    CALCULATE(SUM(radiologist_metrics[TotalTime]),
+			        FILTER(ALL(radiologist_metrics),
+			            radiologist_metrics[Radiologist] = _currentRad &&
+			            radiologist_metrics[Is_Drafting_Row] = 1 &&
+			            radiologist_metrics[Modality_Code] IN {"CR","CT"} &&
+			            radiologist_metrics[Outliers] = "Excluded"))
+			VAR _radMosaicEffAllTime_Drafting = DIVIDE(_radTBWUAllTime_Drafting, _radTimeAllTime_Drafting / 60)
+			VAR _radBaselineContribAllTime_Drafting =
+			    CALCULATE(SUM(radiologist_metrics[Weighted_Baseline_Contrib_Excl]),
+			        FILTER(ALL(radiologist_metrics),
+			            radiologist_metrics[Radiologist] = _currentRad &&
+			            radiologist_metrics[Is_Drafting_Row] = 1 &&
+			            radiologist_metrics[Modality_Code] IN {"CR","CT"} &&
+			            radiologist_metrics[Outliers] = "Excluded"))
+			VAR _radBaselineEffAllTime_Drafting = DIVIDE(_radBaselineContribAllTime_Drafting, _radTimeAllTime_Drafting)
+			VAR _pctChangeAllTime_Drafting = DIVIDE(_radMosaicEffAllTime_Drafting - _radBaselineEffAllTime_Drafting, _radBaselineEffAllTime_Drafting)
+			VAR _isPositive_Drafting = _pctChangeAllTime_Drafting > 0
+			VAR _isNegative_Drafting = _pctChangeAllTime_Drafting <= 0
+			VAR _hasBoth_Drafting = NOT ISBLANK(_radMosaicEffAllTime_Drafting) && NOT ISBLANK(_radBaselineEffAllTime_Drafting)
+			VAR _passesRTFilter_Drafting =
+			    SWITCH(_rtView,
+			        "Positive", _hasBoth_Drafting && _isPositive_Drafting,
+			        "Negative", _hasBoth_Drafting && _isNegative_Drafting,
+			        _hasBoth_Drafting)
+			VAR _qualifiesDrafting = _radExamsAllTime_Drafting >= _minExams && _passesRTFilter_Drafting
+			
+			VAR _totalExamsDrafting =
+			    CALCULATE(SUM(radiologist_metrics[ExamCount]),
+			        radiologist_metrics[Radiologist] = _currentRad,
+			        radiologist_metrics[Is_Drafting_Row] = 1,
+			        KEEPFILTERS(radiologist_metrics[Modality_Code] IN {"CR","CT"}),
+			        radiologist_metrics[Outliers] = "Excluded")
+			
+			// ===== REPORTING ONLY =====
+			VAR _radExamsAllTime_Reporting =
+			    CALCULATE(SUM(radiologist_metrics[ExamCount]),
+			        FILTER(ALL(radiologist_metrics),
+			            radiologist_metrics[Radiologist] = _currentRad &&
+			            radiologist_metrics[Is_Reporting_Row] = 1 &&
+			            radiologist_metrics[Outliers] = "Excluded"))
+			VAR _radTBWUAllTime_Reporting =
+			    CALCULATE(SUM(radiologist_metrics[TotalTBWU]),
+			        FILTER(ALL(radiologist_metrics),
+			            radiologist_metrics[Radiologist] = _currentRad &&
+			            radiologist_metrics[Is_Reporting_Row] = 1 &&
+			            radiologist_metrics[Outliers] = "Excluded"))
+			VAR _radTimeAllTime_Reporting =
+			    CALCULATE(SUM(radiologist_metrics[TotalTime]),
+			        FILTER(ALL(radiologist_metrics),
+			            radiologist_metrics[Radiologist] = _currentRad &&
+			            radiologist_metrics[Is_Reporting_Row] = 1 &&
+			            radiologist_metrics[Outliers] = "Excluded"))
+			VAR _radMosaicEffAllTime_Reporting = DIVIDE(_radTBWUAllTime_Reporting, _radTimeAllTime_Reporting / 60)
+			VAR _radBaselineContribAllTime_Reporting =
+			    CALCULATE(SUM(radiologist_metrics[Weighted_Baseline_Contrib_Excl]),
+			        FILTER(ALL(radiologist_metrics),
+			            radiologist_metrics[Radiologist] = _currentRad &&
+			            radiologist_metrics[Is_Reporting_Row] = 1 &&
+			            radiologist_metrics[Outliers] = "Excluded"))
+			VAR _radBaselineEffAllTime_Reporting = DIVIDE(_radBaselineContribAllTime_Reporting, _radTimeAllTime_Reporting)
+			VAR _pctChangeAllTime_Reporting = DIVIDE(_radMosaicEffAllTime_Reporting - _radBaselineEffAllTime_Reporting, _radBaselineEffAllTime_Reporting)
+			VAR _isPositive_Reporting = _pctChangeAllTime_Reporting > 0
+			VAR _isNegative_Reporting = _pctChangeAllTime_Reporting <= 0
+			VAR _hasBoth_Reporting = NOT ISBLANK(_radMosaicEffAllTime_Reporting) && NOT ISBLANK(_radBaselineEffAllTime_Reporting)
+			VAR _passesRTFilter_Reporting =
+			    SWITCH(_rtView,
+			        "Positive", _hasBoth_Reporting && _isPositive_Reporting,
+			        "Negative", _hasBoth_Reporting && _isNegative_Reporting,
+			        _hasBoth_Reporting)
+			VAR _qualifiesReporting = _radExamsAllTime_Reporting >= _minExams && _passesRTFilter_Reporting
+			
+			VAR _totalExamsReporting =
+			    CALCULATE(SUM(radiologist_metrics[ExamCount]),
+			        radiologist_metrics[Radiologist] = _currentRad,
+			        radiologist_metrics[Is_Reporting_Row] = 1,
+			        radiologist_metrics[Outliers] = "Excluded")
+			
+			// ===== FULL MOSAIC =====
+			VAR _radExamsAllTime_FullMosaic =
+			    CALCULATE(SUM(radiologist_metrics[ExamCount]),
+			        FILTER(ALL(radiologist_metrics),
+			            radiologist_metrics[Radiologist] = _currentRad &&
+			            radiologist_metrics[Is_Mosaic_Row] = 1 &&
+			            radiologist_metrics[Outliers] = "Excluded"))
+			VAR _radTBWUAllTime_FullMosaic =
+			    CALCULATE(SUM(radiologist_metrics[TotalTBWU]),
+			        FILTER(ALL(radiologist_metrics),
+			            radiologist_metrics[Radiologist] = _currentRad &&
+			            radiologist_metrics[Is_Mosaic_Row] = 1 &&
+			            radiologist_metrics[Outliers] = "Excluded"))
+			VAR _radTimeAllTime_FullMosaic =
+			    CALCULATE(SUM(radiologist_metrics[TotalTime]),
+			        FILTER(ALL(radiologist_metrics),
+			            radiologist_metrics[Radiologist] = _currentRad &&
+			            radiologist_metrics[Is_Mosaic_Row] = 1 &&
+			            radiologist_metrics[Outliers] = "Excluded"))
+			VAR _radMosaicEffAllTime_FullMosaic = DIVIDE(_radTBWUAllTime_FullMosaic, _radTimeAllTime_FullMosaic / 60)
+			VAR _radBaselineContribAllTime_FullMosaic =
+			    CALCULATE(SUM(radiologist_metrics[Weighted_Baseline_Contrib_Excl]),
+			        FILTER(ALL(radiologist_metrics),
+			            radiologist_metrics[Radiologist] = _currentRad &&
+			            radiologist_metrics[Is_Mosaic_Row] = 1 &&
+			            radiologist_metrics[Outliers] = "Excluded"))
+			VAR _radBaselineEffAllTime_FullMosaic = DIVIDE(_radBaselineContribAllTime_FullMosaic, _radTimeAllTime_FullMosaic)
+			VAR _pctChangeAllTime_FullMosaic = DIVIDE(_radMosaicEffAllTime_FullMosaic - _radBaselineEffAllTime_FullMosaic, _radBaselineEffAllTime_FullMosaic)
+			VAR _isPositive_FullMosaic = _pctChangeAllTime_FullMosaic > 0
+			VAR _isNegative_FullMosaic = _pctChangeAllTime_FullMosaic <= 0
+			VAR _hasBoth_FullMosaic = NOT ISBLANK(_radMosaicEffAllTime_FullMosaic) && NOT ISBLANK(_radBaselineEffAllTime_FullMosaic)
+			VAR _passesRTFilter_FullMosaic =
+			    SWITCH(_rtView,
+			        "Positive", _hasBoth_FullMosaic && _isPositive_FullMosaic,
+			        "Negative", _hasBoth_FullMosaic && _isNegative_FullMosaic,
+			        _hasBoth_FullMosaic)
+			VAR _qualifiesFullMosaic = _radExamsAllTime_FullMosaic >= _minExams && _passesRTFilter_FullMosaic
+			
+			VAR _totalExamsFullMosaic =
+			    CALCULATE(SUM(radiologist_metrics[ExamCount]),
+			        radiologist_metrics[Radiologist] = _currentRad,
+			        radiologist_metrics[Is_Mosaic_Row] = 1,
+			        radiologist_metrics[Outliers] = "Excluded")
+			
+			// ===== DRAFTING + CAPTURE (CR, CT, US, BD) =====
+			VAR _radExamsAllTime_DC =
+			    CALCULATE(SUM(radiologist_metrics[ExamCount]),
+			        FILTER(ALL(radiologist_metrics),
+			            radiologist_metrics[Radiologist] = _currentRad &&
+			            (
+			                (radiologist_metrics[Is_Drafting_Row] = 1
+			                    && radiologist_metrics[Modality_Code] IN {"CR","CT"})
+			                || (radiologist_metrics[Is_Capture_Row] = 1
+			                    && radiologist_metrics[Modality_Code] IN {"US","BD"})
+			            ) &&
+			            radiologist_metrics[Outliers] = "Excluded"))
+			VAR _radTBWUAllTime_DC =
+			    CALCULATE(SUM(radiologist_metrics[TotalTBWU]),
+			        FILTER(ALL(radiologist_metrics),
+			            radiologist_metrics[Radiologist] = _currentRad &&
+			            (
+			                (radiologist_metrics[Is_Drafting_Row] = 1
+			                    && radiologist_metrics[Modality_Code] IN {"CR","CT"})
+			                || (radiologist_metrics[Is_Capture_Row] = 1
+			                    && radiologist_metrics[Modality_Code] IN {"US","BD"})
+			            ) &&
+			            radiologist_metrics[Outliers] = "Excluded"))
+			VAR _radTimeAllTime_DC =
+			    CALCULATE(SUM(radiologist_metrics[TotalTime]),
+			        FILTER(ALL(radiologist_metrics),
+			            radiologist_metrics[Radiologist] = _currentRad &&
+			            (
+			                (radiologist_metrics[Is_Drafting_Row] = 1
+			                    && radiologist_metrics[Modality_Code] IN {"CR","CT"})
+			                || (radiologist_metrics[Is_Capture_Row] = 1
+			                    && radiologist_metrics[Modality_Code] IN {"US","BD"})
+			            ) &&
+			            radiologist_metrics[Outliers] = "Excluded"))
+			VAR _radMosaicEffAllTime_DC = DIVIDE(_radTBWUAllTime_DC, _radTimeAllTime_DC / 60)
+			VAR _radBaselineContribAllTime_DC =
+			    CALCULATE(SUM(radiologist_metrics[Weighted_Baseline_Contrib_Excl]),
+			        FILTER(ALL(radiologist_metrics),
+			            radiologist_metrics[Radiologist] = _currentRad &&
+			            (
+			                (radiologist_metrics[Is_Drafting_Row] = 1
+			                    && radiologist_metrics[Modality_Code] IN {"CR","CT"})
+			                || (radiologist_metrics[Is_Capture_Row] = 1
+			                    && radiologist_metrics[Modality_Code] IN {"US","BD"})
+			            ) &&
+			            radiologist_metrics[Outliers] = "Excluded"))
+			VAR _radBaselineEffAllTime_DC = DIVIDE(_radBaselineContribAllTime_DC, _radTimeAllTime_DC)
+			VAR _pctChangeAllTime_DC = DIVIDE(_radMosaicEffAllTime_DC - _radBaselineEffAllTime_DC, _radBaselineEffAllTime_DC)
+			VAR _isPositive_DC = _pctChangeAllTime_DC > 0
+			VAR _isNegative_DC = _pctChangeAllTime_DC <= 0
+			VAR _hasBoth_DC = NOT ISBLANK(_radMosaicEffAllTime_DC) && NOT ISBLANK(_radBaselineEffAllTime_DC)
+			VAR _passesRTFilter_DC =
+			    SWITCH(_rtView,
+			        "Positive", _hasBoth_DC && _isPositive_DC,
+			        "Negative", _hasBoth_DC && _isNegative_DC,
+			        _hasBoth_DC)
+			VAR _qualifiesDC = _radExamsAllTime_DC >= _minExams && _passesRTFilter_DC
+			
+			VAR _totalExamsDC =
+			    CALCULATE(SUM(radiologist_metrics[ExamCount]),
+			        radiologist_metrics[Radiologist] = _currentRad,
+			        KEEPFILTERS(
+			            (radiologist_metrics[Is_Drafting_Row] = 1
+			                && radiologist_metrics[Modality_Code] IN {"CR","CT"})
+			            || (radiologist_metrics[Is_Capture_Row] = 1
+			                && radiologist_metrics[Modality_Code] IN {"US","BD"})
+			        ),
+			        radiologist_metrics[Outliers] = "Excluded")
+			
+			// ===== CAPTURE ONLY (US + BD) =====
+			VAR _radExamsAllTime_CO =
+			    CALCULATE(SUM(radiologist_metrics[ExamCount]),
+			        FILTER(ALL(radiologist_metrics),
+			            radiologist_metrics[Radiologist] = _currentRad &&
+			            radiologist_metrics[Is_Capture_Row] = 1 &&
+			            radiologist_metrics[Modality_Code] IN {"US","BD"} &&
+			            radiologist_metrics[Outliers] = "Excluded"))
+			VAR _radTBWUAllTime_CO =
+			    CALCULATE(SUM(radiologist_metrics[TotalTBWU]),
+			        FILTER(ALL(radiologist_metrics),
+			            radiologist_metrics[Radiologist] = _currentRad &&
+			            radiologist_metrics[Is_Capture_Row] = 1 &&
+			            radiologist_metrics[Modality_Code] IN {"US","BD"} &&
+			            radiologist_metrics[Outliers] = "Excluded"))
+			VAR _radTimeAllTime_CO =
+			    CALCULATE(SUM(radiologist_metrics[TotalTime]),
+			        FILTER(ALL(radiologist_metrics),
+			            radiologist_metrics[Radiologist] = _currentRad &&
+			            radiologist_metrics[Is_Capture_Row] = 1 &&
+			            radiologist_metrics[Modality_Code] IN {"US","BD"} &&
+			            radiologist_metrics[Outliers] = "Excluded"))
+			VAR _radMosaicEffAllTime_CO = DIVIDE(_radTBWUAllTime_CO, _radTimeAllTime_CO / 60)
+			VAR _radBaselineContribAllTime_CO =
+			    CALCULATE(SUM(radiologist_metrics[Weighted_Baseline_Contrib_Excl]),
+			        FILTER(ALL(radiologist_metrics),
+			            radiologist_metrics[Radiologist] = _currentRad &&
+			            radiologist_metrics[Is_Capture_Row] = 1 &&
+			            radiologist_metrics[Modality_Code] IN {"US","BD"} &&
+			            radiologist_metrics[Outliers] = "Excluded"))
+			VAR _radBaselineEffAllTime_CO = DIVIDE(_radBaselineContribAllTime_CO, _radTimeAllTime_CO)
+			VAR _pctChangeAllTime_CO = DIVIDE(_radMosaicEffAllTime_CO - _radBaselineEffAllTime_CO, _radBaselineEffAllTime_CO)
+			VAR _isPositive_CO = _pctChangeAllTime_CO > 0
+			VAR _isNegative_CO = _pctChangeAllTime_CO <= 0
+			VAR _hasBoth_CO = NOT ISBLANK(_radMosaicEffAllTime_CO) && NOT ISBLANK(_radBaselineEffAllTime_CO)
+			VAR _passesRTFilter_CO =
+			    SWITCH(_rtView,
+			        "Positive", _hasBoth_CO && _isPositive_CO,
+			        "Negative", _hasBoth_CO && _isNegative_CO,
+			        _hasBoth_CO)
+			VAR _qualifiesCO = _radExamsAllTime_CO >= _minExams && _passesRTFilter_CO
+			
+			VAR _totalExamsCO =
+			    CALCULATE(SUM(radiologist_metrics[ExamCount]),
+			        radiologist_metrics[Radiologist] = _currentRad,
+			        radiologist_metrics[Is_Capture_Row] = 1,
+			        KEEPFILTERS(radiologist_metrics[Modality_Code] IN {"US","BD"}),
+			        radiologist_metrics[Outliers] = "Excluded")
+			
+			// ===== RETURN BASED ON LINE =====
+			RETURN
+			SWITCH(
+			    _modeLine,
+			    "Drafting Only",      IF(_qualifiesDrafting && _draftingVisible, _totalExamsDrafting),
+			    "Reporting Only",     IF(_qualifiesReporting, _totalExamsReporting),
+			    "Full Mosaic",        IF(_qualifiesFullMosaic, _totalExamsFullMosaic),
+			    "Drafting + Capture", IF(_qualifiesDC && _draftingCaptureVisible, _totalExamsDC),
+			    "Capture Only",       IF(_qualifiesCO && _captureVisible, _totalExamsCO),
+			    BLANK()
+			)
+		formatString: 0
+		lineageTag: 07980217-facb-40ad-ac4f-1d837d1fc3f4
+
+	measure Rad_Qualifies_Line =
+			
+			VAR _effChange = [Rad_EffChange_Line]
+			RETURN IF(NOT ISBLANK(_effChange), 1, 0)
+		formatString: 0
+		lineageTag: 42613cf2-690b-4911-aa7a-d7dd0f12bc2f
+
+	measure Tooltip_RadCount_Line =
+			
+			VAR _modeLine = SELECTEDVALUE(Mode_Lines[ModeLine], "Full Mosaic")
+			VAR _minExams = SELECTEDVALUE('Mosaic Min Exams'[MinExams], 0)
+			VAR _rtView = SELECTEDVALUE(Readtimeview[RT View], "All")
+			VAR _draftingVisible =
+			    COUNTROWS(FILTER(VALUES(radiologist_metrics[Modality_Code]), radiologist_metrics[Modality_Code] IN {"CR","CT"})) > 0
+			VAR _captureVisible =
+			    COUNTROWS(FILTER(VALUES(radiologist_metrics[Modality_Code]), radiologist_metrics[Modality_Code] IN {"US","BD"})) > 0
+			VAR _draftingCaptureVisible =
+			    COUNTROWS(FILTER(VALUES(radiologist_metrics[Modality_Code]), radiologist_metrics[Modality_Code] IN {"CR","CT","US","BD"})) > 0
+			
+			RETURN
+			SWITCH(
+			    _modeLine,
+			
+			    "Drafting Only",
+			        IF(
+			            _draftingVisible,
+			            COUNTROWS(
+			                FILTER(
+			                    CALCULATETABLE(
+			                        DISTINCT(radiologist_metrics[Radiologist]),
+			                        radiologist_metrics[Is_Drafting_Row] = 1,
+			                        KEEPFILTERS(radiologist_metrics[Modality_Code] IN {"CR","CT"}),
+			                        radiologist_metrics[Outliers] = "Excluded",
+			                        ALLSELECTED(radiologist_metrics[Exam_Date], radiologist_metrics[Beginning_of_Month], radiologist_metrics[Week_Date])
+			                    ),
+			                    VAR _currentRad = [Radiologist]
+			                    VAR _radExamsAllTime =
+			                        CALCULATE(SUM(radiologist_metrics[ExamCount]),
+			                            FILTER(ALL(radiologist_metrics),
+			                                radiologist_metrics[Radiologist] = _currentRad &&
+			                                radiologist_metrics[Is_Drafting_Row] = 1 &&
+			                                radiologist_metrics[Modality_Code] IN {"CR","CT"} &&
+			                                radiologist_metrics[Outliers] = "Excluded"))
+			                    VAR _radTBWU =
+			                        CALCULATE(SUM(radiologist_metrics[TotalTBWU]),
+			                            FILTER(ALL(radiologist_metrics),
+			                                radiologist_metrics[Radiologist] = _currentRad &&
+			                                radiologist_metrics[Is_Drafting_Row] = 1 &&
+			                                radiologist_metrics[Modality_Code] IN {"CR","CT"} &&
+			                                radiologist_metrics[Outliers] = "Excluded"))
+			                    VAR _radTime =
+			                        CALCULATE(SUM(radiologist_metrics[TotalTime]),
+			                            FILTER(ALL(radiologist_metrics),
+			                                radiologist_metrics[Radiologist] = _currentRad &&
+			                                radiologist_metrics[Is_Drafting_Row] = 1 &&
+			                                radiologist_metrics[Modality_Code] IN {"CR","CT"} &&
+			                                radiologist_metrics[Outliers] = "Excluded"))
+			                    VAR _radBaseline =
+			                        CALCULATE(SUM(radiologist_metrics[Weighted_Baseline_Contrib_Excl]),
+			                            FILTER(ALL(radiologist_metrics),
+			                                radiologist_metrics[Radiologist] = _currentRad &&
+			                                radiologist_metrics[Is_Drafting_Row] = 1 &&
+			                                radiologist_metrics[Modality_Code] IN {"CR","CT"} &&
+			                                radiologist_metrics[Outliers] = "Excluded"))
+			                    VAR _mosaicEff = DIVIDE(_radTBWU, _radTime / 60)
+			                    VAR _baselineEff = DIVIDE(_radBaseline, _radTime)
+			                    VAR _pctChange = DIVIDE(_mosaicEff - _baselineEff, _baselineEff)
+			                    VAR _hasBoth = NOT ISBLANK(_mosaicEff) && NOT ISBLANK(_baselineEff)
+			                    VAR _passesRT =
+			                        SWITCH(_rtView,
+			                            "Positive", _hasBoth && _pctChange > 0,
+			                            "Negative", _hasBoth && _pctChange <= 0,
+			                            _hasBoth)
+			                    RETURN _radExamsAllTime >= _minExams && _passesRT
+			                )
+			            )
+			        ),
+			
+			    "Reporting Only",
+			        COUNTROWS(
+			            FILTER(
+			                CALCULATETABLE(
+			                    DISTINCT(radiologist_metrics[Radiologist]),
+			                    radiologist_metrics[Is_Reporting_Row] = 1,
+			                    radiologist_metrics[Outliers] = "Excluded",
+			                    ALLSELECTED(radiologist_metrics[Exam_Date], radiologist_metrics[Beginning_of_Month], radiologist_metrics[Week_Date])
+			                ),
+			                VAR _currentRad = [Radiologist]
+			                VAR _radExamsAllTime =
+			                    CALCULATE(SUM(radiologist_metrics[ExamCount]),
+			                        FILTER(ALL(radiologist_metrics),
+			                            radiologist_metrics[Radiologist] = _currentRad &&
+			                            radiologist_metrics[Is_Reporting_Row] = 1 &&
+			                            radiologist_metrics[Outliers] = "Excluded"))
+			                VAR _radTBWU =
+			                    CALCULATE(SUM(radiologist_metrics[TotalTBWU]),
+			                        FILTER(ALL(radiologist_metrics),
+			                            radiologist_metrics[Radiologist] = _currentRad &&
+			                            radiologist_metrics[Is_Reporting_Row] = 1 &&
+			                            radiologist_metrics[Outliers] = "Excluded"))
+			                VAR _radTime =
+			                    CALCULATE(SUM(radiologist_metrics[TotalTime]),
+			                        FILTER(ALL(radiologist_metrics),
+			                            radiologist_metrics[Radiologist] = _currentRad &&
+			                            radiologist_metrics[Is_Reporting_Row] = 1 &&
+			                            radiologist_metrics[Outliers] = "Excluded"))
+			                VAR _radBaseline =
+			                    CALCULATE(SUM(radiologist_metrics[Weighted_Baseline_Contrib_Excl]),
+			                        FILTER(ALL(radiologist_metrics),
+			                            radiologist_metrics[Radiologist] = _currentRad &&
+			                            radiologist_metrics[Is_Reporting_Row] = 1 &&
+			                            radiologist_metrics[Outliers] = "Excluded"))
+			                VAR _mosaicEff = DIVIDE(_radTBWU, _radTime / 60)
+			                VAR _baselineEff = DIVIDE(_radBaseline, _radTime)
+			                VAR _pctChange = DIVIDE(_mosaicEff - _baselineEff, _baselineEff)
+			                VAR _hasBoth = NOT ISBLANK(_mosaicEff) && NOT ISBLANK(_baselineEff)
+			                VAR _passesRT =
+			                    SWITCH(_rtView,
+			                        "Positive", _hasBoth && _pctChange > 0,
+			                        "Negative", _hasBoth && _pctChange <= 0,
+			                        _hasBoth)
+			                RETURN _radExamsAllTime >= _minExams && _passesRT
+			            )
+			        ),
+			
+			    "Full Mosaic",
+			        COUNTROWS(
+			            FILTER(
+			                CALCULATETABLE(
+			                    DISTINCT(radiologist_metrics[Radiologist]),
+			                    radiologist_metrics[Is_Mosaic_Row] = 1,
+			                    radiologist_metrics[Outliers] = "Excluded",
+			                    ALLSELECTED(radiologist_metrics[Exam_Date], radiologist_metrics[Beginning_of_Month], radiologist_metrics[Week_Date])
+			                ),
+			                VAR _currentRad = [Radiologist]
+			                VAR _radExamsAllTime =
+			                    CALCULATE(SUM(radiologist_metrics[ExamCount]),
+			                        FILTER(ALL(radiologist_metrics),
+			                            radiologist_metrics[Radiologist] = _currentRad &&
+			                            radiologist_metrics[Is_Mosaic_Row] = 1 &&
+			                            radiologist_metrics[Outliers] = "Excluded"))
+			                VAR _radTBWU =
+			                    CALCULATE(SUM(radiologist_metrics[TotalTBWU]),
+			                        FILTER(ALL(radiologist_metrics),
+			                            radiologist_metrics[Radiologist] = _currentRad &&
+			                            radiologist_metrics[Is_Mosaic_Row] = 1 &&
+			                            radiologist_metrics[Outliers] = "Excluded"))
+			                VAR _radTime =
+			                    CALCULATE(SUM(radiologist_metrics[TotalTime]),
+			                        FILTER(ALL(radiologist_metrics),
+			                            radiologist_metrics[Radiologist] = _currentRad &&
+			                            radiologist_metrics[Is_Mosaic_Row] = 1 &&
+			                            radiologist_metrics[Outliers] = "Excluded"))
+			                VAR _radBaseline =
+			                    CALCULATE(SUM(radiologist_metrics[Weighted_Baseline_Contrib_Excl]),
+			                        FILTER(ALL(radiologist_metrics),
+			                            radiologist_metrics[Radiologist] = _currentRad &&
+			                            radiologist_metrics[Is_Mosaic_Row] = 1 &&
+			                            radiologist_metrics[Outliers] = "Excluded"))
+			                VAR _mosaicEff = DIVIDE(_radTBWU, _radTime / 60)
+			                VAR _baselineEff = DIVIDE(_radBaseline, _radTime)
+			                VAR _pctChange = DIVIDE(_mosaicEff - _baselineEff, _baselineEff)
+			                VAR _hasBoth = NOT ISBLANK(_mosaicEff) && NOT ISBLANK(_baselineEff)
+			                VAR _passesRT =
+			                    SWITCH(_rtView,
+			                        "Positive", _hasBoth && _pctChange > 0,
+			                        "Negative", _hasBoth && _pctChange <= 0,
+			                        _hasBoth)
+			                RETURN _radExamsAllTime >= _minExams && _passesRT
+			            )
+			        ),
+			
+			    "Drafting + Capture",
+			        IF(
+			            _draftingCaptureVisible,
+			            COUNTROWS(
+			                FILTER(
+			                    CALCULATETABLE(
+			                        DISTINCT(radiologist_metrics[Radiologist]),
+			                        KEEPFILTERS(
+			                            (radiologist_metrics[Is_Drafting_Row] = 1
+			                                && radiologist_metrics[Modality_Code] IN {"CR","CT"})
+			                            || (radiologist_metrics[Is_Capture_Row] = 1
+			                                && radiologist_metrics[Modality_Code] IN {"US","BD"})
+			                        ),
+			                        radiologist_metrics[Outliers] = "Excluded",
+			                        ALLSELECTED(radiologist_metrics[Exam_Date], radiologist_metrics[Beginning_of_Month], radiologist_metrics[Week_Date])
+			                    ),
+			                    VAR _currentRad = [Radiologist]
+			                    VAR _radExamsAllTime =
+			                        CALCULATE(SUM(radiologist_metrics[ExamCount]),
+			                            FILTER(ALL(radiologist_metrics),
+			                                radiologist_metrics[Radiologist] = _currentRad &&
+			                                (
+			                                    (radiologist_metrics[Is_Drafting_Row] = 1
+			                                        && radiologist_metrics[Modality_Code] IN {"CR","CT"})
+			                                    || (radiologist_metrics[Is_Capture_Row] = 1
+			                                        && radiologist_metrics[Modality_Code] IN {"US","BD"})
+			                                ) &&
+			                                radiologist_metrics[Outliers] = "Excluded"))
+			                    VAR _radTBWU =
+			                        CALCULATE(SUM(radiologist_metrics[TotalTBWU]),
+			                            FILTER(ALL(radiologist_metrics),
+			                                radiologist_metrics[Radiologist] = _currentRad &&
+			                                (
+			                                    (radiologist_metrics[Is_Drafting_Row] = 1
+			                                        && radiologist_metrics[Modality_Code] IN {"CR","CT"})
+			                                    || (radiologist_metrics[Is_Capture_Row] = 1
+			                                        && radiologist_metrics[Modality_Code] IN {"US","BD"})
+			                                ) &&
+			                                radiologist_metrics[Outliers] = "Excluded"))
+			                    VAR _radTime =
+			                        CALCULATE(SUM(radiologist_metrics[TotalTime]),
+			                            FILTER(ALL(radiologist_metrics),
+			                                radiologist_metrics[Radiologist] = _currentRad &&
+			                                (
+			                                    (radiologist_metrics[Is_Drafting_Row] = 1
+			                                        && radiologist_metrics[Modality_Code] IN {"CR","CT"})
+			                                    || (radiologist_metrics[Is_Capture_Row] = 1
+			                                        && radiologist_metrics[Modality_Code] IN {"US","BD"})
+			                                ) &&
+			                                radiologist_metrics[Outliers] = "Excluded"))
+			                    VAR _radBaseline =
+			                        CALCULATE(SUM(radiologist_metrics[Weighted_Baseline_Contrib_Excl]),
+			                            FILTER(ALL(radiologist_metrics),
+			                                radiologist_metrics[Radiologist] = _currentRad &&
+			                                (
+			                                    (radiologist_metrics[Is_Drafting_Row] = 1
+			                                        && radiologist_metrics[Modality_Code] IN {"CR","CT"})
+			                                    || (radiologist_metrics[Is_Capture_Row] = 1
+			                                        && radiologist_metrics[Modality_Code] IN {"US","BD"})
+			                                ) &&
+			                                radiologist_metrics[Outliers] = "Excluded"))
+			                    VAR _mosaicEff = DIVIDE(_radTBWU, _radTime / 60)
+			                    VAR _baselineEff = DIVIDE(_radBaseline, _radTime)
+			                    VAR _pctChange = DIVIDE(_mosaicEff - _baselineEff, _baselineEff)
+			                    VAR _hasBoth = NOT ISBLANK(_mosaicEff) && NOT ISBLANK(_baselineEff)
+			                    VAR _passesRT =
+			                        SWITCH(_rtView,
+			                            "Positive", _hasBoth && _pctChange > 0,
+			                            "Negative", _hasBoth && _pctChange <= 0,
+			                            _hasBoth)
+			                    RETURN _radExamsAllTime >= _minExams && _passesRT
+			                )
+			            )
+			        ),
+			
+			    "Capture Only",
+			        IF(
+			            _captureVisible,
+			            COUNTROWS(
+			                FILTER(
+			                    CALCULATETABLE(
+			                        DISTINCT(radiologist_metrics[Radiologist]),
+			                        radiologist_metrics[Is_Capture_Row] = 1,
+			                        KEEPFILTERS(radiologist_metrics[Modality_Code] IN {"US","BD"}),
+			                        radiologist_metrics[Outliers] = "Excluded",
+			                        ALLSELECTED(radiologist_metrics[Exam_Date], radiologist_metrics[Beginning_of_Month], radiologist_metrics[Week_Date])
+			                    ),
+			                    VAR _currentRad = [Radiologist]
+			                    VAR _radExamsAllTime =
+			                        CALCULATE(SUM(radiologist_metrics[ExamCount]),
+			                            FILTER(ALL(radiologist_metrics),
+			                                radiologist_metrics[Radiologist] = _currentRad &&
+			                                radiologist_metrics[Is_Capture_Row] = 1 &&
+			                                radiologist_metrics[Modality_Code] IN {"US","BD"} &&
+			                                radiologist_metrics[Outliers] = "Excluded"))
+			                    VAR _radTBWU =
+			                        CALCULATE(SUM(radiologist_metrics[TotalTBWU]),
+			                            FILTER(ALL(radiologist_metrics),
+			                                radiologist_metrics[Radiologist] = _currentRad &&
+			                                radiologist_metrics[Is_Capture_Row] = 1 &&
+			                                radiologist_metrics[Modality_Code] IN {"US","BD"} &&
+			                                radiologist_metrics[Outliers] = "Excluded"))
+			                    VAR _radTime =
+			                        CALCULATE(SUM(radiologist_metrics[TotalTime]),
+			                            FILTER(ALL(radiologist_metrics),
+			                                radiologist_metrics[Radiologist] = _currentRad &&
+			                                radiologist_metrics[Is_Capture_Row] = 1 &&
+			                                radiologist_metrics[Modality_Code] IN {"US","BD"} &&
+			                                radiologist_metrics[Outliers] = "Excluded"))
+			                    VAR _radBaseline =
+			                        CALCULATE(SUM(radiologist_metrics[Weighted_Baseline_Contrib_Excl]),
+			                            FILTER(ALL(radiologist_metrics),
+			                                radiologist_metrics[Radiologist] = _currentRad &&
+			                                radiologist_metrics[Is_Capture_Row] = 1 &&
+			                                radiologist_metrics[Modality_Code] IN {"US","BD"} &&
+			                                radiologist_metrics[Outliers] = "Excluded"))
+			                    VAR _mosaicEff = DIVIDE(_radTBWU, _radTime / 60)
+			                    VAR _baselineEff = DIVIDE(_radBaseline, _radTime)
+			                    VAR _pctChange = DIVIDE(_mosaicEff - _baselineEff, _baselineEff)
+			                    VAR _hasBoth = NOT ISBLANK(_mosaicEff) && NOT ISBLANK(_baselineEff)
+			                    VAR _passesRT =
+			                        SWITCH(_rtView,
+			                            "Positive", _hasBoth && _pctChange > 0,
+			                            "Negative", _hasBoth && _pctChange <= 0,
+			                            _hasBoth)
+			                    RETURN _radExamsAllTime >= _minExams && _passesRT
+			                )
+			            )
+			        ),
+			
+			    BLANK()
+			)
+		formatString: 0
+		lineageTag: 8b955e83-40ca-4d55-8d78-bb48ad54b8a2
+
+	measure Tooltip_ExamCount_Line =
+			
+			VAR _modeLine = SELECTEDVALUE(Mode_Lines[ModeLine], "Full Mosaic")
+			VAR _minExams = SELECTEDVALUE('Mosaic Min Exams'[MinExams], 0)
+			VAR _rtView = SELECTEDVALUE(Readtimeview[RT View], "All")
+			VAR _draftingVisible =
+			    COUNTROWS(FILTER(VALUES(radiologist_metrics[Modality_Code]), radiologist_metrics[Modality_Code] IN {"CR","CT"})) > 0
+			VAR _captureVisible =
+			    COUNTROWS(FILTER(VALUES(radiologist_metrics[Modality_Code]), radiologist_metrics[Modality_Code] IN {"US","BD"})) > 0
+			VAR _draftingCaptureVisible =
+			    COUNTROWS(FILTER(VALUES(radiologist_metrics[Modality_Code]), radiologist_metrics[Modality_Code] IN {"CR","CT","US","BD"})) > 0
+			
+			RETURN
+			SWITCH(
+			    _modeLine,
+			
+			    "Drafting Only",
+			        IF(
+			            _draftingVisible,
+			            SUMX(
+			                FILTER(
+			                    CALCULATETABLE(
+			                        DISTINCT(radiologist_metrics[Radiologist]),
+			                        radiologist_metrics[Is_Drafting_Row] = 1,
+			                        KEEPFILTERS(radiologist_metrics[Modality_Code] IN {"CR","CT"}),
+			                        radiologist_metrics[Outliers] = "Excluded",
+			                        ALLSELECTED(radiologist_metrics[Exam_Date], radiologist_metrics[Beginning_of_Month], radiologist_metrics[Week_Date])
+			                    ),
+			                    VAR _currentRad = [Radiologist]
+			                    VAR _radExamsAllTime =
+			                        CALCULATE(SUM(radiologist_metrics[ExamCount]),
+			                            FILTER(ALL(radiologist_metrics),
+			                                radiologist_metrics[Radiologist] = _currentRad &&
+			                                radiologist_metrics[Is_Drafting_Row] = 1 &&
+			                                radiologist_metrics[Modality_Code] IN {"CR","CT"} &&
+			                                radiologist_metrics[Outliers] = "Excluded"))
+			                    VAR _radTBWU =
+			                        CALCULATE(SUM(radiologist_metrics[TotalTBWU]),
+			                            FILTER(ALL(radiologist_metrics),
+			                                radiologist_metrics[Radiologist] = _currentRad &&
+			                                radiologist_metrics[Is_Drafting_Row] = 1 &&
+			                                radiologist_metrics[Modality_Code] IN {"CR","CT"} &&
+			                                radiologist_metrics[Outliers] = "Excluded"))
+			                    VAR _radTime =
+			                        CALCULATE(SUM(radiologist_metrics[TotalTime]),
+			                            FILTER(ALL(radiologist_metrics),
+			                                radiologist_metrics[Radiologist] = _currentRad &&
+			                                radiologist_metrics[Is_Drafting_Row] = 1 &&
+			                                radiologist_metrics[Modality_Code] IN {"CR","CT"} &&
+			                                radiologist_metrics[Outliers] = "Excluded"))
+			                    VAR _radBaseline =
+			                        CALCULATE(SUM(radiologist_metrics[Weighted_Baseline_Contrib_Excl]),
+			                            FILTER(ALL(radiologist_metrics),
+			                                radiologist_metrics[Radiologist] = _currentRad &&
+			                                radiologist_metrics[Is_Drafting_Row] = 1 &&
+			                                radiologist_metrics[Modality_Code] IN {"CR","CT"} &&
+			                                radiologist_metrics[Outliers] = "Excluded"))
+			                    VAR _mosaicEff = DIVIDE(_radTBWU, _radTime / 60)
+			                    VAR _baselineEff = DIVIDE(_radBaseline, _radTime)
+			                    VAR _pctChange = DIVIDE(_mosaicEff - _baselineEff, _baselineEff)
+			                    VAR _hasBoth = NOT ISBLANK(_mosaicEff) && NOT ISBLANK(_baselineEff)
+			                    VAR _passesRT =
+			                        SWITCH(_rtView,
+			                            "Positive", _hasBoth && _pctChange > 0,
+			                            "Negative", _hasBoth && _pctChange <= 0,
+			                            _hasBoth)
+			                    RETURN _radExamsAllTime >= _minExams && _passesRT
+			                ),
+			                VAR _currentRad = [Radiologist]
+			                RETURN
+			                CALCULATE(
+			                    SUM(radiologist_metrics[ExamCount]),
+			                    radiologist_metrics[Radiologist] = _currentRad,
+			                    radiologist_metrics[Is_Drafting_Row] = 1,
+			                    KEEPFILTERS(radiologist_metrics[Modality_Code] IN {"CR","CT"}),
+			                    radiologist_metrics[Outliers] = "Excluded"
+			                )
+			            )
+			        ),
+			
+			    "Reporting Only",
+			        SUMX(
+			            FILTER(
+			                CALCULATETABLE(
+			                    DISTINCT(radiologist_metrics[Radiologist]),
+			                    radiologist_metrics[Is_Reporting_Row] = 1,
+			                    radiologist_metrics[Outliers] = "Excluded",
+			                    ALLSELECTED(radiologist_metrics[Exam_Date], radiologist_metrics[Beginning_of_Month], radiologist_metrics[Week_Date])
+			                ),
+			                VAR _currentRad = [Radiologist]
+			                VAR _radExamsAllTime =
+			                    CALCULATE(SUM(radiologist_metrics[ExamCount]),
+			                        FILTER(ALL(radiologist_metrics),
+			                            radiologist_metrics[Radiologist] = _currentRad &&
+			                            radiologist_metrics[Is_Reporting_Row] = 1 &&
+			                            radiologist_metrics[Outliers] = "Excluded"))
+			                VAR _radTBWU =
+			                    CALCULATE(SUM(radiologist_metrics[TotalTBWU]),
+			                        FILTER(ALL(radiologist_metrics),
+			                            radiologist_metrics[Radiologist] = _currentRad &&
+			                            radiologist_metrics[Is_Reporting_Row] = 1 &&
+			                            radiologist_metrics[Outliers] = "Excluded"))
+			                VAR _radTime =
+			                    CALCULATE(SUM(radiologist_metrics[TotalTime]),
+			                        FILTER(ALL(radiologist_metrics),
+			                            radiologist_metrics[Radiologist] = _currentRad &&
+			                            radiologist_metrics[Is_Reporting_Row] = 1 &&
+			                            radiologist_metrics[Outliers] = "Excluded"))
+			                VAR _radBaseline =
+			                    CALCULATE(SUM(radiologist_metrics[Weighted_Baseline_Contrib_Excl]),
+			                        FILTER(ALL(radiologist_metrics),
+			                            radiologist_metrics[Radiologist] = _currentRad &&
+			                            radiologist_metrics[Is_Reporting_Row] = 1 &&
+			                            radiologist_metrics[Outliers] = "Excluded"))
+			                VAR _mosaicEff = DIVIDE(_radTBWU, _radTime / 60)
+			                VAR _baselineEff = DIVIDE(_radBaseline, _radTime)
+			                VAR _pctChange = DIVIDE(_mosaicEff - _baselineEff, _baselineEff)
+			                VAR _hasBoth = NOT ISBLANK(_mosaicEff) && NOT ISBLANK(_baselineEff)
+			                VAR _passesRT =
+			                    SWITCH(_rtView,
+			                        "Positive", _hasBoth && _pctChange > 0,
+			                        "Negative", _hasBoth && _pctChange <= 0,
+			                        _hasBoth)
+			                RETURN _radExamsAllTime >= _minExams && _passesRT
+			            ),
+			            VAR _currentRad = [Radiologist]
+			            RETURN
+			            CALCULATE(
+			                SUM(radiologist_metrics[ExamCount]),
+			                radiologist_metrics[Radiologist] = _currentRad,
+			                radiologist_metrics[Is_Reporting_Row] = 1,
+			                radiologist_metrics[Outliers] = "Excluded"
+			            )
+			        ),
+			
+			    "Full Mosaic",
+			        SUMX(
+			            FILTER(
+			                CALCULATETABLE(
+			                    DISTINCT(radiologist_metrics[Radiologist]),
+			                    radiologist_metrics[Is_Mosaic_Row] = 1,
+			                    radiologist_metrics[Outliers] = "Excluded",
+			                    ALLSELECTED(radiologist_metrics[Exam_Date], radiologist_metrics[Beginning_of_Month], radiologist_metrics[Week_Date])
+			                ),
+			                VAR _currentRad = [Radiologist]
+			                VAR _radExamsAllTime =
+			                    CALCULATE(SUM(radiologist_metrics[ExamCount]),
+			                        FILTER(ALL(radiologist_metrics),
+			                            radiologist_metrics[Radiologist] = _currentRad &&
+			                            radiologist_metrics[Is_Mosaic_Row] = 1 &&
+			                            radiologist_metrics[Outliers] = "Excluded"))
+			                VAR _radTBWU =
+			                    CALCULATE(SUM(radiologist_metrics[TotalTBWU]),
+			                        FILTER(ALL(radiologist_metrics),
+			                            radiologist_metrics[Radiologist] = _currentRad &&
+			                            radiologist_metrics[Is_Mosaic_Row] = 1 &&
+			                            radiologist_metrics[Outliers] = "Excluded"))
+			                VAR _radTime =
+			                    CALCULATE(SUM(radiologist_metrics[TotalTime]),
+			                        FILTER(ALL(radiologist_metrics),
+			                            radiologist_metrics[Radiologist] = _currentRad &&
+			                            radiologist_metrics[Is_Mosaic_Row] = 1 &&
+			                            radiologist_metrics[Outliers] = "Excluded"))
+			                VAR _radBaseline =
+			                    CALCULATE(SUM(radiologist_metrics[Weighted_Baseline_Contrib_Excl]),
+			                        FILTER(ALL(radiologist_metrics),
+			                            radiologist_metrics[Radiologist] = _currentRad &&
+			                            radiologist_metrics[Is_Mosaic_Row] = 1 &&
+			                            radiologist_metrics[Outliers] = "Excluded"))
+			                VAR _mosaicEff = DIVIDE(_radTBWU, _radTime / 60)
+			                VAR _baselineEff = DIVIDE(_radBaseline, _radTime)
+			                VAR _pctChange = DIVIDE(_mosaicEff - _baselineEff, _baselineEff)
+			                VAR _hasBoth = NOT ISBLANK(_mosaicEff) && NOT ISBLANK(_baselineEff)
+			                VAR _passesRT =
+			                    SWITCH(_rtView,
+			                        "Positive", _hasBoth && _pctChange > 0,
+			                        "Negative", _hasBoth && _pctChange <= 0,
+			                        _hasBoth)
+			                RETURN _radExamsAllTime >= _minExams && _passesRT
+			            ),
+			            VAR _currentRad = [Radiologist]
+			            RETURN
+			            CALCULATE(
+			                SUM(radiologist_metrics[ExamCount]),
+			                radiologist_metrics[Radiologist] = _currentRad,
+			                radiologist_metrics[Is_Mosaic_Row] = 1,
+			                radiologist_metrics[Outliers] = "Excluded"
+			            )
+			        ),
+			
+			    "Drafting + Capture",
+			        IF(
+			            _draftingCaptureVisible,
+			            SUMX(
+			                FILTER(
+			                    CALCULATETABLE(
+			                        DISTINCT(radiologist_metrics[Radiologist]),
+			                        KEEPFILTERS(
+			                            (radiologist_metrics[Is_Drafting_Row] = 1
+			                                && radiologist_metrics[Modality_Code] IN {"CR","CT"})
+			                            || (radiologist_metrics[Is_Capture_Row] = 1
+			                                && radiologist_metrics[Modality_Code] IN {"US","BD"})
+			                        ),
+			                        radiologist_metrics[Outliers] = "Excluded",
+			                        ALLSELECTED(radiologist_metrics[Exam_Date], radiologist_metrics[Beginning_of_Month], radiologist_metrics[Week_Date])
+			                    ),
+			                    VAR _currentRad = [Radiologist]
+			                    VAR _radExamsAllTime =
+			                        CALCULATE(SUM(radiologist_metrics[ExamCount]),
+			                            FILTER(ALL(radiologist_metrics),
+			                                radiologist_metrics[Radiologist] = _currentRad &&
+			                                (
+			                                    (radiologist_metrics[Is_Drafting_Row] = 1
+			                                        && radiologist_metrics[Modality_Code] IN {"CR","CT"})
+			                                    || (radiologist_metrics[Is_Capture_Row] = 1
+			                                        && radiologist_metrics[Modality_Code] IN {"US","BD"})
+			                                ) &&
+			                                radiologist_metrics[Outliers] = "Excluded"))
+			                    VAR _radTBWU =
+			                        CALCULATE(SUM(radiologist_metrics[TotalTBWU]),
+			                            FILTER(ALL(radiologist_metrics),
+			                                radiologist_metrics[Radiologist] = _currentRad &&
+			                                (
+			                                    (radiologist_metrics[Is_Drafting_Row] = 1
+			                                        && radiologist_metrics[Modality_Code] IN {"CR","CT"})
+			                                    || (radiologist_metrics[Is_Capture_Row] = 1
+			                                        && radiologist_metrics[Modality_Code] IN {"US","BD"})
+			                                ) &&
+			                                radiologist_metrics[Outliers] = "Excluded"))
+			                    VAR _radTime =
+			                        CALCULATE(SUM(radiologist_metrics[TotalTime]),
+			                            FILTER(ALL(radiologist_metrics),
+			                                radiologist_metrics[Radiologist] = _currentRad &&
+			                                (
+			                                    (radiologist_metrics[Is_Drafting_Row] = 1
+			                                        && radiologist_metrics[Modality_Code] IN {"CR","CT"})
+			                                    || (radiologist_metrics[Is_Capture_Row] = 1
+			                                        && radiologist_metrics[Modality_Code] IN {"US","BD"})
+			                                ) &&
+			                                radiologist_metrics[Outliers] = "Excluded"))
+			                    VAR _radBaseline =
+			                        CALCULATE(SUM(radiologist_metrics[Weighted_Baseline_Contrib_Excl]),
+			                            FILTER(ALL(radiologist_metrics),
+			                                radiologist_metrics[Radiologist] = _currentRad &&
+			                                (
+			                                    (radiologist_metrics[Is_Drafting_Row] = 1
+			                                        && radiologist_metrics[Modality_Code] IN {"CR","CT"})
+			                                    || (radiologist_metrics[Is_Capture_Row] = 1
+			                                        && radiologist_metrics[Modality_Code] IN {"US","BD"})
+			                                ) &&
+			                                radiologist_metrics[Outliers] = "Excluded"))
+			                    VAR _mosaicEff = DIVIDE(_radTBWU, _radTime / 60)
+			                    VAR _baselineEff = DIVIDE(_radBaseline, _radTime)
+			                    VAR _pctChange = DIVIDE(_mosaicEff - _baselineEff, _baselineEff)
+			                    VAR _hasBoth = NOT ISBLANK(_mosaicEff) && NOT ISBLANK(_baselineEff)
+			                    VAR _passesRT =
+			                        SWITCH(_rtView,
+			                            "Positive", _hasBoth && _pctChange > 0,
+			                            "Negative", _hasBoth && _pctChange <= 0,
+			                            _hasBoth)
+			                    RETURN _radExamsAllTime >= _minExams && _passesRT
+			                ),
+			                VAR _currentRad = [Radiologist]
+			                RETURN
+			                CALCULATE(
+			                    SUM(radiologist_metrics[ExamCount]),
+			                    radiologist_metrics[Radiologist] = _currentRad,
+			                    KEEPFILTERS(
+			                        (radiologist_metrics[Is_Drafting_Row] = 1
+			                            && radiologist_metrics[Modality_Code] IN {"CR","CT"})
+			                        || (radiologist_metrics[Is_Capture_Row] = 1
+			                            && radiologist_metrics[Modality_Code] IN {"US","BD"})
+			                    ),
+			                    radiologist_metrics[Outliers] = "Excluded"
+			                )
+			            )
+			        ),
+			
+			    "Capture Only",
+			        IF(
+			            _captureVisible,
+			            SUMX(
+			                FILTER(
+			                    CALCULATETABLE(
+			                        DISTINCT(radiologist_metrics[Radiologist]),
+			                        radiologist_metrics[Is_Capture_Row] = 1,
+			                        KEEPFILTERS(radiologist_metrics[Modality_Code] IN {"US","BD"}),
+			                        radiologist_metrics[Outliers] = "Excluded",
+			                        ALLSELECTED(radiologist_metrics[Exam_Date], radiologist_metrics[Beginning_of_Month], radiologist_metrics[Week_Date])
+			                    ),
+			                    VAR _currentRad = [Radiologist]
+			                    VAR _radExamsAllTime =
+			                        CALCULATE(SUM(radiologist_metrics[ExamCount]),
+			                            FILTER(ALL(radiologist_metrics),
+			                                radiologist_metrics[Radiologist] = _currentRad &&
+			                                radiologist_metrics[Is_Capture_Row] = 1 &&
+			                                radiologist_metrics[Modality_Code] IN {"US","BD"} &&
+			                                radiologist_metrics[Outliers] = "Excluded"))
+			                    VAR _radTBWU =
+			                        CALCULATE(SUM(radiologist_metrics[TotalTBWU]),
+			                            FILTER(ALL(radiologist_metrics),
+			                                radiologist_metrics[Radiologist] = _currentRad &&
+			                                radiologist_metrics[Is_Capture_Row] = 1 &&
+			                                radiologist_metrics[Modality_Code] IN {"US","BD"} &&
+			                                radiologist_metrics[Outliers] = "Excluded"))
+			                    VAR _radTime =
+			                        CALCULATE(SUM(radiologist_metrics[TotalTime]),
+			                            FILTER(ALL(radiologist_metrics),
+			                                radiologist_metrics[Radiologist] = _currentRad &&
+			                                radiologist_metrics[Is_Capture_Row] = 1 &&
+			                                radiologist_metrics[Modality_Code] IN {"US","BD"} &&
+			                                radiologist_metrics[Outliers] = "Excluded"))
+			                    VAR _radBaseline =
+			                        CALCULATE(SUM(radiologist_metrics[Weighted_Baseline_Contrib_Excl]),
+			                            FILTER(ALL(radiologist_metrics),
+			                                radiologist_metrics[Radiologist] = _currentRad &&
+			                                radiologist_metrics[Is_Capture_Row] = 1 &&
+			                                radiologist_metrics[Modality_Code] IN {"US","BD"} &&
+			                                radiologist_metrics[Outliers] = "Excluded"))
+			                    VAR _mosaicEff = DIVIDE(_radTBWU, _radTime / 60)
+			                    VAR _baselineEff = DIVIDE(_radBaseline, _radTime)
+			                    VAR _pctChange = DIVIDE(_mosaicEff - _baselineEff, _baselineEff)
+			                    VAR _hasBoth = NOT ISBLANK(_mosaicEff) && NOT ISBLANK(_baselineEff)
+			                    VAR _passesRT =
+			                        SWITCH(_rtView,
+			                            "Positive", _hasBoth && _pctChange > 0,
+			                            "Negative", _hasBoth && _pctChange <= 0,
+			                            _hasBoth)
+			                    RETURN _radExamsAllTime >= _minExams && _passesRT
+			                ),
+			                VAR _currentRad = [Radiologist]
+			                RETURN
+			                CALCULATE(
+			                    SUM(radiologist_metrics[ExamCount]),
+			                    radiologist_metrics[Radiologist] = _currentRad,
+			                    radiologist_metrics[Is_Capture_Row] = 1,
+			                    KEEPFILTERS(radiologist_metrics[Modality_Code] IN {"US","BD"}),
+			                    radiologist_metrics[Outliers] = "Excluded"
+			                )
+			            )
+			        ),
+			
+			    BLANK()
+			)
+		formatString: 0
+		lineageTag: f8c81dba-7654-40d7-9c9c-a37031962cc3
+
+	column ModeLine
+		lineageTag: abf7acb5-ed1f-47cb-abb8-a2168661bdb8
+		summarizeBy: none
+		isNameInferred
+		sourceColumn: [ModeLine]
+		sortByColumn: ModeOrder
+
+		annotation SummarizationSetBy = Automatic
+
+	column ModeOrder
+		formatString: 0
+		lineageTag: fa780aa3-5014-4b96-8948-6dc8d0d38092
+		summarizeBy: sum
+		isNameInferred
+		sourceColumn: [ModeOrder]
+
+		annotation SummarizationSetBy = Automatic
+
+	partition Mode_Lines = calculated
+		mode: import
+		source = ```
+				
+				DATATABLE(
+				    "ModeLine", STRING,
+				    "ModeOrder", INTEGER,
+				    {
+				        {"Drafting Only", 1},
+				        {"Capture Only", 2},
+				        {"Drafting + Capture", 3}, 
+				        {"Full Mosaic",4}, 
+				        {"Reporting Only",5}
+				
+				    }
+				)
+				```
+
+	annotation PBI_Id = 519e8538ddf4499c997e19a48d5b3105
+

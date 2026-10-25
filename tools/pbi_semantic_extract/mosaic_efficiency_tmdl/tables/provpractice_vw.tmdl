@@ -1,0 +1,47 @@
+table provpractice_vw
+	lineageTag: f3a02713-cb0a-4040-9196-d523c1ec9542
+
+	column NPI
+		dataType: double
+		lineageTag: f159f907-23f5-4816-88cd-fb895f1370eb
+		summarizeBy: none
+		sourceColumn: NPI
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column Radiologist
+		dataType: string
+		lineageTag: e73c7090-32e3-444d-81ec-b9a129e4aa34
+		summarizeBy: none
+		sourceColumn: Radiologist
+
+		annotation SummarizationSetBy = Automatic
+
+	column Team
+		dataType: string
+		lineageTag: deb57df4-6b5a-4dd2-9a5b-5fa1ea975c59
+		summarizeBy: none
+		sourceColumn: Team
+
+		annotation SummarizationSetBy = Automatic
+
+	partition provpractice_vw = m
+		mode: import
+		source =
+				let
+				    Source = Databricks.Catalogs("adb-7306149455716415.15.azuredatabricks.net", "/sql/1.0/warehouses/fe0ad987563c672a", [Catalog=null, Database=null, EnableAutomaticProxyDiscovery=null, Implementation=null]),
+				    edw_dev_Database = Source{[Name="edw_dev",Kind="Database"]}[Data],
+				    bipa_analytics_Schema = edw_dev_Database{[Name="bipa_analytics",Kind="Schema"]}[Data],
+				    provpractice_vw_View = bipa_analytics_Schema{[Name="provpractice_vw",Kind="View"]}[Data],
+				    #"Renamed Columns" = Table.RenameColumns(provpractice_vw_View,{{"signing_radiologist_npi", "NPI"}, {"signing_radiologist_name_full", "Radiologist"}, {"provider_local_practice_name_curr", "Team"}}),
+				    #"Removed Duplicates" = Table.Distinct(#"Renamed Columns", {"NPI"}),
+				    #"Filtered Rows" = Table.SelectRows(#"Removed Duplicates", each [NPI] <> null and [NPI] <> "")
+				in
+				    #"Filtered Rows"
+
+	annotation PBI_NavigationStepName = Navigation
+
+	annotation PBI_ResultType = Table
+

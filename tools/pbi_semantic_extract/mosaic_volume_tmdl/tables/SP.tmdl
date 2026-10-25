@@ -1,0 +1,243 @@
+table SP
+	lineageTag: ac1ebfeb-7e5b-4135-be02-b25ce5a44d6d
+
+	measure Pctmwow = ```
+			
+			 
+			 
+			 
+			VAR WeekStartDate = MIN('SP'[Weekstart])
+			VAR WeekEndDate   = WeekStartDate + 6
+			VAR EligibilityCutoffDate = WeekEndDate - 2
+			 
+			-- Eligible providers: FirstCase_Provider must be at least 14 days before every day in the week
+			VAR EligibleProvidersWeek =
+			    DISTINCT(
+			        SELECTCOLUMNS(
+			            FILTER(
+			                'SP',
+			                'SP'[Go-live] <= EligibilityCutoffDate
+			            ),
+			            "NPI", 'SP'[NPI]
+			        )
+			    )
+			 
+			-- Denominator: eligible providers with total cases > 0 in that week
+			VAR DenominatorProviders =
+			    FILTER(
+			        'SP',
+			        'SP'[NPI] IN SELECTCOLUMNS(EligibleProvidersWeek, "NPI", [NPI]) &&
+			        'SP'[Totalcases] > 0 &&
+			        'SP'[Weekstart] >= WeekStartDate &&
+			        'SP'[Weekstart] <= WeekEndDate
+			    )
+			 
+			-- Numerator: mosaic cases for these providers
+			VAR MosaicCases =
+			    CALCULATE(
+			        SUM('SP'[Mosaiccases]),
+			        TREATAS(SELECTCOLUMNS(ADDCOLUMNS(DenominatorProviders, "StartDate", MAX('SP'[Go-live] , WeekEndDate - 13)
+			        ),
+			         "NPI", [NPI]), 'SP'[NPI])
+			    )
+			 
+			-- Total cases for these providers
+			VAR TotalCases =
+			    CALCULATE(
+			        SUM('SP'[Totalcases]),
+			        TREATAS(SELECTCOLUMNS(ADDCOLUMNS(DenominatorProviders, "StartDate" , MAX('SP'[Go-live] , WeekEndDate - 13)
+			        ),
+			         "NPI", [NPI]), 'SP'[NPI])
+			    )
+			 
+			RETURN
+			DIVIDE(MosaicCases, TotalCases, 0)
+			```
+		lineageTag: ab39a03d-595f-4474-9b46-e1bdb6352ae9
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	measure Pctprovbuc =
+			
+			DIVIDE(DISTINCTCOUNT(SP[NPI]),
+			CALCULATE(DISTINCTCOUNT(SP[NPI]), ALL(SP[AB]))
+			)
+		lineageTag: 9f8c28e0-7e12-428a-af3c-b8e916cdb683
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	measure totalprov =
+			
+			
+			CALCULATE(DISTINCTCOUNT(SP[NPI]),
+			
+			ALLEXCEPT(SP, SP[Weekstart],SP[Team],SP[Team_Name],SP[Is Eligible],SP[Mosaicdraftingeligible])
+			
+			)
+		formatString: 0
+		lineageTag: d14c55f1-bc62-40ae-a517-09bea496158a
+
+	column NPI
+		lineageTag: 365ce8e3-e1f1-4ab6-9291-5fb93168d776
+		summarizeBy: none
+		isNameInferred
+		sourceColumn: Daily_Extract[NPI]
+		columnOrigin: Daily_Extract.NPI
+
+		annotation SummarizationSetBy = Automatic
+
+	column Weekstart
+		formatString: Short Date
+		lineageTag: ba67cdb0-bc03-4f68-b4b3-ad06461b06c9
+		summarizeBy: none
+		isNameInferred
+		sourceColumn: Daily_Extract[Weekstart]
+		columnOrigin: Daily_Extract.Weekstart
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation UnderlyingDateTimeDataType = Date
+
+	column Team
+		lineageTag: cb91711e-6386-442b-81ab-9bf44478dd12
+		summarizeBy: none
+		isNameInferred
+		sourceColumn: Daily_Extract[Team]
+		columnOrigin: Daily_Extract.Team
+
+		annotation SummarizationSetBy = Automatic
+
+	column Provider
+		lineageTag: fa0df830-4c8d-45df-97f0-1efec0257fc9
+		summarizeBy: none
+		isNameInferred
+		sourceColumn: Daily_Extract[Provider]
+		columnOrigin: Daily_Extract.Provider
+
+		annotation SummarizationSetBy = Automatic
+
+	column Totalcases
+		formatString: 0
+		lineageTag: bf741a16-5e82-46e3-91dd-28904fdd6120
+		summarizeBy: sum
+		isNameInferred
+		sourceColumn: [Totalcases]
+
+		annotation SummarizationSetBy = Automatic
+
+	column Mosaiccases
+		formatString: 0
+		lineageTag: 6eebed0c-7985-4283-b9c6-2406b122057c
+		summarizeBy: sum
+		isNameInferred
+		sourceColumn: [Mosaiccases]
+
+		annotation SummarizationSetBy = Automatic
+
+	column Weeklabel
+		lineageTag: bbab8ceb-6c9d-4eee-b3f3-115abe112e88
+		summarizeBy: none
+		isNameInferred
+		sourceColumn: [Weeklabel]
+
+		annotation SummarizationSetBy = Automatic
+
+	column Go-live
+		formatString: Short Date
+		lineageTag: e8e6ece8-1a79-491d-88ad-df608fa5e594
+		summarizeBy: none
+		isNameInferred
+		sourceColumn: [Go-live]
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation UnderlyingDateTimeDataType = Date
+
+	column AB =
+			
+			SWITCH (
+			    TRUE(),
+			    SP[Pctmwow] <= 0, "6 - Rads not using Mosaic   ",
+			    SP[Pctmwow] > 0 && SP[Pctmwow] <= 0.2, "5 - 1-20%   ",
+			    SP[Pctmwow] > 0.2 && SP[Pctmwow] <= 0.4, "4 - 20-40%   ",
+			    SP[Pctmwow] > 0.4 && SP[Pctmwow] <= 0.6, "3 - 40-60%   ",
+			    SP[Pctmwow] > 0.6 && SP[Pctmwow] <= 0.8, "2 - 60-80%   ",
+			    SP[Pctmwow] > 0.8, "1 - Fully Adopted on Mosaic   "
+			)
+		lineageTag: 75bbff29-7f7e-4d54-a10c-92ee08193451
+		summarizeBy: none
+
+		annotation SummarizationSetBy = Automatic
+
+	column Team_Name
+		lineageTag: c84c166a-a4d6-469e-b887-2747d1d12e93
+		summarizeBy: none
+		isNameInferred
+		sourceColumn: Daily_Extract[Team_Name]
+		columnOrigin: Daily_Extract.Team_Name
+
+		annotation SummarizationSetBy = Automatic
+
+	column 'Is Eligible'
+		lineageTag: a92b3454-2537-4cca-b3f9-4bc1feb8a178
+		summarizeBy: none
+		isNameInferred
+		sourceColumn: Daily_Extract[Is Eligible]
+		columnOrigin: Daily_Extract.'Is Eligible'
+
+		annotation SummarizationSetBy = Automatic
+
+	column Mosaicdraftingeligible
+		formatString: 0
+		lineageTag: 7cdbba02-79b3-48b6-9933-1ecf4ca4223b
+		summarizeBy: sum
+		isNameInferred
+		sourceColumn: Daily_Extract[Mosaicdraftingeligible]
+		columnOrigin: Daily_Extract.Mosaicdraftingeligible
+
+		annotation SummarizationSetBy = Automatic
+
+	partition SP = calculated
+		mode: import
+		source = ```
+				
+				FILTER(
+				ADDCOLUMNS(
+				SUMMARIZE('Daily_Extract',
+				 
+				'Daily_Extract'[NPI],'Daily_Extract'[WeekStart] , 'Daily_Extract'[Team], 'Daily_Extract'[Provider],'Daily_Extract'[Team_Name],'Daily_Extract'[Is Eligible],'Daily_Extract'[Mosaicdraftingeligible]),
+				 
+				 
+				"Totalcases", CALCULATE(COUNTROWS('Daily_Extract'), 'Daily_Extract'[Date] >=DATE(2025,4,8)),
+				 
+				"Mosaiccases",CALCULATE(COUNTROWS('Daily_Extract'), 'Daily_Extract'[Mosaic Exam Flag] =1 , 'Daily_Extract'[Date] >=DATE( 2025,4,8)),
+				 
+				   "Weeklabel",
+				    FORMAT( 'Daily_Extract'[WeekStart] , "MMM dd") & " - " &
+				    FORMAT('Daily_Extract'[WeekStart] +6 , "MMM dd"),
+				 
+				    "Go-live",
+				calculate( MIN('Daily_Extract'[Final_DateTime - Date]),
+				 'Daily_Extract'[Mosaic Exam Flag] = 1, ALLEXCEPT('Daily_Extract', 'Daily_Extract'[NPI]))
+				),
+				 
+				NOT ISBLANK([Go-live]) &&
+				'Daily_Extract'[WeekStart] >=DATE(2025,4,6) &&
+				 
+				[Go-live] <= MAXX(CALENDAR('Daily_Extract'[WeekStart], 'Daily_Extract'[WeekStart]+6),
+				[Date] -2
+				)
+				 
+				 
+				 
+				 
+				 
+				 
+				 
+				 
+				)
+				 
+				```
+
+	annotation PBI_Id = dc0a677b119245f1b244c89bcc150d76
+

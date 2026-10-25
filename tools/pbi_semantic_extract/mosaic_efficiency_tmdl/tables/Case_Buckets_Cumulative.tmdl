@@ -1,0 +1,261 @@
+table Case_Buckets_Cumulative
+	lineageTag: 76a1f12a-0987-48d1-a52b-3f482e961a41
+
+	measure Count_Rads_In_Bucket_Cumulative = ```
+			
+			VAR _mode = SELECTEDVALUE('Mosaic Mode Selector'[Mode], "Full Mosaic")
+			VAR _minBucket = SELECTEDVALUE(Case_Buckets_Cumulative[MinExams], 0)
+			VAR _maxBucket = SELECTEDVALUE(Case_Buckets_Cumulative[MaxExams], 999999)
+			VAR _currentMonthEnd = EOMONTH(MAX(radiologist_metrics[Exam_Date]), 0)
+			
+			VAR _activeRadsDrafting = 
+			    CALCULATETABLE(
+			        DISTINCT(radiologist_metrics[Radiologist]),
+			        radiologist_metrics[Is_Drafting_Row] = 1,
+			        radiologist_metrics[Modality_Code] IN {"CR","CT"},
+			        radiologist_metrics[Outliers] = "Excluded"
+			    )
+			
+			VAR _activeRadsReporting = 
+			    CALCULATETABLE(
+			        DISTINCT(radiologist_metrics[Radiologist]),
+			        radiologist_metrics[Is_Reporting_Row] = 1,
+			        radiologist_metrics[Outliers] = "Excluded"
+			    )
+			
+			VAR _activeRadsFullMosaic = 
+			    CALCULATETABLE(
+			        DISTINCT(radiologist_metrics[Radiologist]),
+			        radiologist_metrics[Is_Mosaic_Row] = 1,
+			        radiologist_metrics[Outliers] = "Excluded"
+			    )
+			
+			VAR _activeRadsCaptureOnly = 
+			    CALCULATETABLE(
+			        DISTINCT(radiologist_metrics[Radiologist]),
+			        radiologist_metrics[Is_Capture_Row] = 1,
+			        radiologist_metrics[Outliers] = "Excluded",
+			        radiologist_metrics[Modality_Code] IN {"US","BD"}
+			    )
+			
+			VAR _activeRadsDraftingCapture = 
+			    CALCULATETABLE(
+			        DISTINCT(radiologist_metrics[Radiologist]),
+			        (
+			            (radiologist_metrics[Is_Drafting_Row] = 1
+			                && radiologist_metrics[Modality_Code] IN {"CR","CT"})
+			            || (radiologist_metrics[Is_Capture_Row] = 1
+			                && radiologist_metrics[Modality_Code] IN {"US","BD"})
+			        ),
+			        radiologist_metrics[Outliers] = "Excluded"
+			    )
+			
+			-- Drafting Only (CR + CT only)
+			VAR _resultDraftingOnly = 
+			    COUNTROWS(
+			        FILTER(
+			            _activeRadsDrafting,
+			            VAR _currentRad = [Radiologist]
+			            VAR _cumulativeExams = 
+			                CALCULATE(
+			                    SUM(radiologist_metrics[ExamCount]),
+			                    FILTER(
+			                        ALL(radiologist_metrics),
+			                        radiologist_metrics[Radiologist] = _currentRad &&
+			                        radiologist_metrics[Is_Drafting_Row] = 1 &&
+			                        radiologist_metrics[Modality_Code] IN {"CR","CT"} &&
+			                        radiologist_metrics[Outliers] = "Excluded" &&
+			                        radiologist_metrics[Exam_Date] <= _currentMonthEnd
+			                    )
+			                )
+			            RETURN _cumulativeExams >= _minBucket && _cumulativeExams <= _maxBucket
+			        )
+			    )
+			
+			-- Reporting Only (unchanged)
+			VAR _resultReportingOnly = 
+			    COUNTROWS(
+			        FILTER(
+			            _activeRadsReporting,
+			            VAR _currentRad = [Radiologist]
+			            VAR _cumulativeExams = 
+			                CALCULATE(
+			                    SUM(radiologist_metrics[ExamCount]),
+			                    FILTER(
+			                        ALL(radiologist_metrics),
+			                        radiologist_metrics[Radiologist] = _currentRad &&
+			                        radiologist_metrics[Is_Reporting_Row] = 1 &&
+			                        radiologist_metrics[Outliers] = "Excluded" &&
+			                        radiologist_metrics[Exam_Date] <= _currentMonthEnd
+			                    )
+			                )
+			            RETURN _cumulativeExams >= _minBucket && _cumulativeExams <= _maxBucket
+			        )
+			    )
+			
+			-- Full Mosaic (unchanged)
+			VAR _resultFullMosaic = 
+			    COUNTROWS(
+			        FILTER(
+			            _activeRadsFullMosaic,
+			            VAR _currentRad = [Radiologist]
+			            VAR _cumulativeExams = 
+			                CALCULATE(
+			                    SUM(radiologist_metrics[ExamCount]),
+			                    FILTER(
+			                        ALL(radiologist_metrics),
+			                        radiologist_metrics[Radiologist] = _currentRad &&
+			                        radiologist_metrics[Is_Mosaic_Row] = 1 &&
+			                        radiologist_metrics[Outliers] = "Excluded" &&
+			                        radiologist_metrics[Exam_Date] <= _currentMonthEnd
+			                    )
+			                )
+			            RETURN _cumulativeExams >= _minBucket && _cumulativeExams <= _maxBucket
+			        )
+			    )
+			
+			-- Capture Only (unchanged)
+			VAR _resultCaptureOnly = 
+			    COUNTROWS(
+			        FILTER(
+			            _activeRadsCaptureOnly,
+			            VAR _currentRad = [Radiologist]
+			            VAR _cumulativeExams = 
+			                CALCULATE(
+			                    SUM(radiologist_metrics[ExamCount]),
+			                    FILTER(
+			                        ALL(radiologist_metrics),
+			                        radiologist_metrics[Radiologist] = _currentRad &&
+			                        radiologist_metrics[Is_Capture_Row] = 1 &&
+			                        radiologist_metrics[Outliers] = "Excluded" &&
+			                        radiologist_metrics[Modality_Code] IN {"US","BD"} &&
+			                        radiologist_metrics[Exam_Date] <= _currentMonthEnd
+			                    )
+			                )
+			            RETURN _cumulativeExams >= _minBucket && _cumulativeExams <= _maxBucket
+			        )
+			    )
+			
+			-- Drafting + Capture (new)
+			VAR _resultDraftingCapture = 
+			    COUNTROWS(
+			        FILTER(
+			            _activeRadsDraftingCapture,
+			            VAR _currentRad = [Radiologist]
+			            VAR _cumulativeExams = 
+			                CALCULATE(
+			                    SUM(radiologist_metrics[ExamCount]),
+			                    FILTER(
+			                        ALL(radiologist_metrics),
+			                        radiologist_metrics[Radiologist] = _currentRad &&
+			                        (
+			                            (radiologist_metrics[Is_Drafting_Row] = 1
+			                                && radiologist_metrics[Modality_Code] IN {"CR","CT"})
+			                            || (radiologist_metrics[Is_Capture_Row] = 1
+			                                && radiologist_metrics[Modality_Code] IN {"US","BD"})
+			                        ) &&
+			                        radiologist_metrics[Outliers] = "Excluded" &&
+			                        radiologist_metrics[Exam_Date] <= _currentMonthEnd
+			                    )
+			                )
+			            RETURN _cumulativeExams >= _minBucket && _cumulativeExams <= _maxBucket
+			        )
+			    )
+			
+			RETURN
+			SWITCH(
+			    _mode,
+			    "Capture Only",       _resultCaptureOnly,
+			    "Drafting Only",      _resultDraftingOnly,
+			    "Reporting Only",     _resultReportingOnly,
+			    "Drafting + Capture", _resultDraftingCapture,
+			    _resultFullMosaic
+			)
+			```
+		formatString: 0
+		lineageTag: 7825bf92-db5f-4414-98bb-f26de04dc29e
+
+	measure Debug_Cumulative_Exams =
+			
+			VAR _currentMonthEnd = EOMONTH(MAX(radiologist_metrics[Exam_Date]), 0)
+			
+			RETURN
+			CALCULATE(
+			    SUM(radiologist_metrics[ExamCount]),
+			    radiologist_metrics[Is_Mosaic_Row] = 1,
+			    radiologist_metrics[Outliers] = "Excluded",
+			    FILTER(
+			        ALL(radiologist_metrics[Exam_Date]),
+			        radiologist_metrics[Exam_Date] <= _currentMonthEnd
+			    )
+			)
+		formatString: 0
+		lineageTag: 6f2b2989-0a01-4f3c-b226-fe4b1fc238cd
+
+	column Bucket
+		lineageTag: f86ff9cb-7a28-482b-bd4e-3e46c3459496
+		summarizeBy: none
+		isNameInferred
+		sourceColumn: [Bucket]
+		sortByColumn: StackOrder
+
+		annotation SummarizationSetBy = Automatic
+
+	column BucketOrder
+		formatString: 0
+		lineageTag: 61d06219-e3b0-4be2-b3db-ff3a6de5ed4f
+		summarizeBy: sum
+		isNameInferred
+		sourceColumn: [BucketOrder]
+
+		annotation SummarizationSetBy = Automatic
+
+	column MinExams
+		formatString: 0
+		lineageTag: 66bfcf08-1db6-4ce7-bf61-43f4ce07ac97
+		summarizeBy: sum
+		isNameInferred
+		sourceColumn: [MinExams]
+
+		annotation SummarizationSetBy = Automatic
+
+	column MaxExams
+		formatString: 0
+		lineageTag: 49eaf35a-c2b7-4c88-98e6-e0ee1aa4c228
+		summarizeBy: sum
+		isNameInferred
+		sourceColumn: [MaxExams]
+
+		annotation SummarizationSetBy = Automatic
+
+	column StackOrder
+		formatString: 0
+		lineageTag: f5a0eadd-fe68-4c18-abfb-fb057308f60e
+		summarizeBy: sum
+		isNameInferred
+		sourceColumn: [StackOrder]
+
+		annotation SummarizationSetBy = Automatic
+
+	partition Case_Buckets_Cumulative = calculated
+		mode: import
+		source =
+				
+				DATATABLE(
+				    "Bucket", STRING,
+				    "BucketOrder", INTEGER,
+				    "StackOrder", INTEGER,
+				    "MinExams", INTEGER,
+				    "MaxExams", INTEGER,
+				    {
+				        {"0-500", 1, 6, 0, 500},
+				        {"501-1000", 2, 5, 501, 1000},
+				        {"1001-2000", 3, 4, 1001, 2000},
+				        {"2001-3000", 4, 3, 2001, 3000},
+				        {"3001-5000", 5, 2, 3001, 5000},
+				        {"5001+", 6, 1, 5001, 999999}
+				    }
+				)
+
+	annotation PBI_Id = 25cb809b6f8a459a887406aa76317fa5
+

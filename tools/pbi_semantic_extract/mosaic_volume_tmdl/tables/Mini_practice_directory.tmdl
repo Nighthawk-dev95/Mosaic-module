@@ -1,0 +1,346 @@
+table Mini_practice_directory
+	lineageTag: ba1b08d8-a4a9-46c6-a1f0-81ffc7f14878
+
+	column Sub_Practice_ID
+		dataType: string
+		lineageTag: dc3d8f47-7e13-4815-87ee-380e08f0b9c5
+		summarizeBy: none
+		sourceColumn: Sub_Practice_ID
+
+		changedProperty = IsHidden
+
+		annotation SummarizationSetBy = Automatic
+
+	column Sub_Practice_Code
+		dataType: string
+		lineageTag: 59ff0196-59b9-42b0-99bc-82ec5aa591c6
+		summarizeBy: none
+		sourceColumn: Sub_Practice_Code
+
+		changedProperty = IsHidden
+
+		annotation SummarizationSetBy = Automatic
+
+	column Sub_Practice_Short_Name
+		dataType: string
+		lineageTag: 95cca032-55c3-4e26-ba02-917f7454f3ee
+		summarizeBy: none
+		sourceColumn: Sub_Practice_Short_Name
+
+		changedProperty = IsHidden
+
+		annotation SummarizationSetBy = Automatic
+
+	column Practice_ID
+		dataType: string
+		lineageTag: b3357787-e8de-4901-baee-d9a7b2e728e8
+		summarizeBy: none
+		sourceColumn: Practice_ID
+
+		changedProperty = IsHidden
+
+		annotation SummarizationSetBy = Automatic
+
+	column Practice_Short_Name
+		dataType: string
+		lineageTag: ad722a29-59e3-4094-917d-d8cc23a356a7
+		summarizeBy: none
+		sourceColumn: Practice_Short_Name
+
+		changedProperty = IsHidden
+
+		annotation SummarizationSetBy = Automatic
+
+	column SVP
+		dataType: string
+		lineageTag: af9981d0-f211-4d21-9ead-0a9778859a43
+		summarizeBy: none
+		sourceColumn: SVP
+
+		changedProperty = IsHidden
+
+		annotation SummarizationSetBy = Automatic
+
+	column Practice_Region
+		dataType: string
+		lineageTag: d6421b03-a927-4e05-9797-b20717a27005
+		summarizeBy: none
+		sourceColumn: Practice_Region
+
+		changedProperty = IsHidden
+
+		annotation SummarizationSetBy = Automatic
+
+	column Region
+		dataType: string
+		lineageTag: eed6b40b-9e05-4cbf-bb57-6d7cb418d3ca
+		summarizeBy: none
+		sourceColumn: Region
+
+		changedProperty = IsHidden
+
+		annotation SummarizationSetBy = Automatic
+
+	column sub_practice_for_mapping
+		dataType: string
+		lineageTag: ad38b9ec-0d16-4436-aa0e-8160aa60f27d
+		summarizeBy: none
+		sourceColumn: sub_practice_for_mapping
+
+		changedProperty = IsHidden
+
+		annotation SummarizationSetBy = Automatic
+
+	column Rad_teams
+		dataType: string
+		lineageTag: bb874f68-fa51-4dde-9b08-6ed8a8b59e66
+		summarizeBy: none
+		sourceColumn: Rad_teams
+
+		changedProperty = IsHidden
+
+		annotation SummarizationSetBy = Automatic
+
+	column Taleo
+		dataType: string
+		lineageTag: 8c7b142a-9deb-4ab2-862f-919971b0c6d9
+		summarizeBy: none
+		sourceColumn: Taleo
+
+		changedProperty = IsHidden
+
+		annotation SummarizationSetBy = Automatic
+
+	column PhysicianPE_Roster_Term
+		dataType: string
+		lineageTag: e6187377-89a2-4a73-8e3b-a9abeb9c041f
+		summarizeBy: none
+		sourceColumn: PhysicianPE_Roster_Term
+
+		changedProperty = IsHidden
+
+		annotation SummarizationSetBy = Automatic
+
+	column Rad_Tracker
+		dataType: string
+		lineageTag: ae7417d4-3e8c-4783-8a22-85bb1e77f8ab
+		summarizeBy: none
+		sourceColumn: Rad_Tracker
+
+		changedProperty = IsHidden
+
+		annotation SummarizationSetBy = Automatic
+
+	column Qgenda_Practice
+		dataType: string
+		lineageTag: 40b82e45-20bd-4d10-a866-cc4a410fada4
+		summarizeBy: none
+		sourceColumn: Qgenda_Practice
+
+		changedProperty = IsHidden
+
+		annotation SummarizationSetBy = Automatic
+
+	column Finance_cp_practice
+		dataType: string
+		lineageTag: 8ae3698e-7d75-4356-80e5-bdb2e05f94f3
+		summarizeBy: none
+		sourceColumn: Finance_cp_practice
+
+		changedProperty = IsHidden
+
+		annotation SummarizationSetBy = Automatic
+
+	column HR
+		dataType: string
+		lineageTag: e37942b7-4d97-44c9-aa5e-3c9601b9eefc
+		summarizeBy: none
+		sourceColumn: HR
+
+		changedProperty = IsHidden
+
+		annotation SummarizationSetBy = Automatic
+
+	column HR_LOCUM_IC
+		dataType: string
+		lineageTag: 55b486c2-4c52-4293-a910-e2d9a744ddf1
+		summarizeBy: none
+		sourceColumn: HR_LOCUM_IC
+
+		changedProperty = IsHidden
+
+		annotation SummarizationSetBy = Automatic
+
+	column BPR
+		dataType: string
+		lineageTag: 795b2b91-09b2-4af2-9171-a401b71128b0
+		summarizeBy: none
+		sourceColumn: BPR
+
+		changedProperty = IsHidden
+
+		annotation SummarizationSetBy = Automatic
+
+	column Exclusion_live_date
+		dataType: dateTime
+		formatString: Long Date
+		lineageTag: d99a1b8a-92a2-4f87-8d65-f96f40b60781
+		summarizeBy: none
+		sourceColumn: Exclusion_live_date
+
+		changedProperty = IsHidden
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation UnderlyingDateTimeDataType = Date
+
+	column Exclusion_Note
+		dataType: string
+		lineageTag: 049729dc-ce49-40d1-9e40-08caa10a85d9
+		summarizeBy: none
+		sourceColumn: Exclusion_Note
+
+		changedProperty = IsHidden
+
+		annotation SummarizationSetBy = Automatic
+
+	column Local_Practice_Short_Name
+		dataType: string
+		lineageTag: 18f91443-cb65-4623-bfbd-1c91abb8f61a
+		summarizeBy: none
+		sourceColumn: Local_Practice_Short_Name
+
+		changedProperty = IsHidden
+
+		annotation SummarizationSetBy = Automatic
+
+	column Division_Short_Name
+		dataType: string
+		lineageTag: 91cc5d1e-bf3e-4021-89a2-f809a670d649
+		summarizeBy: none
+		sourceColumn: Division_Short_Name
+
+		changedProperty = IsHidden
+
+		annotation SummarizationSetBy = Automatic
+
+	column Local_Division_Combined
+		dataType: string
+		lineageTag: f588ebec-1441-4ebb-ba83-79bad3c63244
+		summarizeBy: none
+		sourceColumn: Local_Division_Combined
+
+		changedProperty = IsHidden
+
+		annotation SummarizationSetBy = Automatic
+
+	column Local_Practic_Division_transition
+		dataType: string
+		lineageTag: ab472619-3e2c-4749-99c4-f6ef38821351
+		summarizeBy: none
+		sourceColumn: Local_Practic_Division_transition
+
+		changedProperty = IsHidden
+
+		annotation SummarizationSetBy = Automatic
+
+	column Timezone
+		dataType: string
+		lineageTag: 0eee7ae8-02d6-4e25-8a53-9974356891b3
+		summarizeBy: none
+		sourceColumn: Timezone
+
+		changedProperty = IsHidden
+
+		annotation SummarizationSetBy = Automatic
+
+	column Metric_use
+		dataType: string
+		lineageTag: 7355c8f7-bada-4d3e-a40d-61bee048296a
+		summarizeBy: none
+		sourceColumn: Metric_use
+
+		annotation SummarizationSetBy = Automatic
+
+	column metric_usuage_notes
+		dataType: string
+		lineageTag: fdd8203c-656d-4364-8cdd-18eae7c89168
+		summarizeBy: none
+		sourceColumn: metric_usuage_notes
+
+		annotation SummarizationSetBy = Automatic
+
+	column on_scorecard_flag
+		dataType: int64
+		formatString: 0
+		lineageTag: d4f77c7b-09ad-484c-a870-b334aa65595b
+		summarizeBy: sum
+		sourceColumn: on_scorecard_flag
+
+		annotation SummarizationSetBy = Automatic
+
+	column On_Shift_service_credit
+		dataType: double
+		lineageTag: 641e1f33-95c9-46a2-9719-b2856dc1456d
+		summarizeBy: sum
+		sourceColumn: On_Shift_service_credit
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column PD
+		dataType: string
+		lineageTag: c9659d6c-066f-40e6-8ec8-46cb09d90ded
+		summarizeBy: none
+		sourceColumn: PD
+
+		annotation SummarizationSetBy = Automatic
+
+	column PD_Email
+		dataType: string
+		lineageTag: 64a1861d-4285-40a5-a787-299c971abe0d
+		summarizeBy: none
+		sourceColumn: PD_Email
+
+		annotation SummarizationSetBy = Automatic
+
+	column RVP
+		dataType: string
+		lineageTag: 2c141134-de63-4590-882b-0869e75e21d7
+		summarizeBy: none
+		sourceColumn: RVP
+
+		annotation SummarizationSetBy = Automatic
+
+	column RVP_Email
+		dataType: string
+		lineageTag: ad5b4810-5814-4d48-9f3c-58bcb2f6e375
+		summarizeBy: none
+		sourceColumn: RVP_Email
+
+		annotation SummarizationSetBy = Automatic
+
+	column SVP_Email
+		dataType: string
+		lineageTag: 0f5c395a-af97-48e3-a085-e81500396b29
+		summarizeBy: none
+		sourceColumn: SVP_Email
+
+		annotation SummarizationSetBy = Automatic
+
+	partition Mini_practice_directory = m
+		mode: import
+		source = ```
+				let
+				    Source = Value.NativeQuery(Databricks.Catalogs("adb-7306149455716415.15.azuredatabricks.net", "/sql/1.0/warehouses/fe0ad987563c672a", [Catalog="edw_prod", Database=null, EnableAutomaticProxyDiscovery=null]){[Name="edw_prod",Kind="Database"]}[Data], 
+				"SELECT * FROM edw_prod.bipa_analytics.mini_practice_directory", 
+				null, [EnableFolding=true])
+				in
+				    Source
+				```
+
+	annotation PBI_ResultType = Table
+
+	annotation PBI_NavigationStepName = Navigation
+

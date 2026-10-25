@@ -1,0 +1,43 @@
+table radsubspecialty
+	lineageTag: 6ef3c660-042a-4ab7-afe9-37f6dff3e48f
+
+	column npi
+		dataType: string
+		lineageTag: f8f59b58-87c9-4e3c-912d-42052927b737
+		summarizeBy: none
+		sourceColumn: npi
+
+		annotation SummarizationSetBy = Automatic
+
+	column Radiologist
+		dataType: string
+		lineageTag: d6567479-ee1c-4f1a-aa26-22d98b726b43
+		summarizeBy: none
+		sourceColumn: Radiologist
+
+		annotation SummarizationSetBy = Automatic
+
+	column Subspecialty
+		dataType: string
+		lineageTag: e2264fed-c2a4-42e4-8754-05e0c2e551d3
+		summarizeBy: none
+		sourceColumn: Subspecialty
+
+		annotation SummarizationSetBy = Automatic
+
+	partition radsubspecialty = m
+		mode: import
+		source =
+				let
+				    Source = Databricks.Catalogs("adb-7306149455716415.15.azuredatabricks.net", "/sql/1.0/warehouses/fe0ad987563c672a", [Catalog=null, Database=null, EnableAutomaticProxyDiscovery=null, Implementation=null]),
+				    edw_dev_Database = Source{[Name="edw_dev",Kind="Database"]}[Data],
+				    bipa_analytics_Schema = edw_dev_Database{[Name="bipa_analytics",Kind="Schema"]}[Data],
+				    radsubspecialty_View = bipa_analytics_Schema{[Name="radsubspecialty",Kind="View"]}[Data],
+				    #"Renamed Columns" = Table.RenameColumns(radsubspecialty_View,{{"Subspecialty_Display", "Subspecialty"}, {"provider_full_name", "Radiologist"}})
+				in
+				    #"Renamed Columns"
+
+	annotation PBI_NavigationStepName = Navigation
+
+	annotation PBI_ResultType = Table
+

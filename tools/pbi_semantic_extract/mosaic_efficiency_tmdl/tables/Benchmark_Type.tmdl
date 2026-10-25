@@ -1,0 +1,35 @@
+table Benchmark_Type
+	lineageTag: 4eac71bb-74ab-421c-94af-69cfcb53af85
+
+	column Benchmark
+		lineageTag: 76a2a10b-0f2a-4757-9efa-f2a13905aad5
+		summarizeBy: none
+		isNameInferred
+		sourceColumn: [Benchmark]
+
+		annotation SummarizationSetBy = Automatic
+
+	column BenchmarkOrder
+		formatString: 0
+		lineageTag: b96a43b0-6d93-47f9-bfef-0ea0c779b370
+		summarizeBy: sum
+		isNameInferred
+		sourceColumn: [BenchmarkOrder]
+
+		annotation SummarizationSetBy = Automatic
+
+	partition Benchmark_Type = calculated
+		mode: import
+		source =
+				
+				DATATABLE(
+				    "Benchmark", STRING,
+				    "BenchmarkOrder", INTEGER,
+				    {
+				        {"Fixed", 1},
+				        {"Dynamic", 2}
+				    }
+				)
+
+	annotation PBI_Id = 3ad0bdbbf8d24ddda75a690c14ec389b
+

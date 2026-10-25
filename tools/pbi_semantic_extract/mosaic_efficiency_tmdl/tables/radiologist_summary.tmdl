@@ -1,0 +1,154 @@
+table radiologist_summary
+	lineageTag: 05862336-0452-453b-a835-16cea253b989
+
+	column Physician_NPI
+		dataType: double
+		lineageTag: 48c183b2-8938-4d75-b74a-038246720d52
+		summarizeBy: none
+		sourceColumn: Physician_NPI
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column Team
+		dataType: string
+		lineageTag: 6b7a2827-655f-4861-87c0-114b2f6e120a
+		summarizeBy: none
+		sourceColumn: Team
+
+		annotation SummarizationSetBy = Automatic
+
+	column Practice
+		dataType: string
+		lineageTag: b07833eb-2f6f-4178-803c-a853f4dc17dc
+		summarizeBy: none
+		sourceColumn: Practice
+
+		annotation SummarizationSetBy = Automatic
+
+	column Rad_Total_Drafting_ExclOutliers
+		dataType: int64
+		formatString: 0
+		lineageTag: 30e1cdf2-a69b-4eab-b72d-6c95b8733628
+		summarizeBy: none
+		sourceColumn: Rad_Total_Drafting_ExclOutliers
+
+		annotation SummarizationSetBy = Automatic
+
+	column Rad_Total_Drafting_InclOutliers
+		dataType: int64
+		formatString: 0
+		lineageTag: c91e508e-b036-4a19-aed6-7fe58f337c6c
+		summarizeBy: none
+		sourceColumn: Rad_Total_Drafting_InclOutliers
+
+		annotation SummarizationSetBy = Automatic
+
+	column Rad_Total_Reporting_ExclOutliers
+		dataType: int64
+		formatString: 0
+		lineageTag: 011aba2f-8131-44e4-9bf2-3588c4438a3e
+		summarizeBy: none
+		sourceColumn: Rad_Total_Reporting_ExclOutliers
+
+		annotation SummarizationSetBy = Automatic
+
+	column Rad_Total_Reporting_InclOutliers
+		dataType: int64
+		formatString: 0
+		lineageTag: d8d4d81a-7044-4b02-a521-3dfd1e426d22
+		summarizeBy: none
+		sourceColumn: Rad_Total_Reporting_InclOutliers
+
+		annotation SummarizationSetBy = Automatic
+
+	column Rad_Total_FullMosaic_ExclOutliers
+		dataType: int64
+		formatString: 0
+		lineageTag: 6a5545d5-e03f-40b1-a6f9-a417235232bb
+		summarizeBy: none
+		sourceColumn: Rad_Total_FullMosaic_ExclOutliers
+
+		annotation SummarizationSetBy = Automatic
+
+	column Rad_Total_FullMosaic_InclOutliers
+		dataType: int64
+		formatString: 0
+		lineageTag: 8199191c-7929-4fbf-a12f-fef8d273c3b0
+		summarizeBy: none
+		sourceColumn: Rad_Total_FullMosaic_InclOutliers
+
+		annotation SummarizationSetBy = Automatic
+
+	column team_rolled_up = ```
+			
+			var currentteam = radiologist_summary[Team]
+			var mappedteam = 
+			LOOKUPVALUE(team_rollups[Team Roll Up (KS)], 
+			team_rollups[Team] , currentteam
+			)
+			RETURN
+			SWITCH(
+			    TRUE(),
+			    NOT ISBLANK(MappedTeam), MappedTeam,
+			    CurrentTeam = "Access Slidell", "Access Alexandria",
+			    CurrentTeam
+			)
+			```
+		lineageTag: da07fa8d-1873-49e6-83f0-09a69da0333b
+		summarizeBy: none
+
+		annotation SummarizationSetBy = Automatic
+
+	column Rad_Total_Capture_ExclOutliers
+		dataType: int64
+		formatString: 0
+		lineageTag: 98bee751-a25c-432f-beaf-be066dd1ef8a
+		summarizeBy: none
+		sourceColumn: Rad_Total_Capture_ExclOutliers
+
+		annotation SummarizationSetBy = Automatic
+
+	column Rad_Total_Capture_InclOutliers
+		dataType: int64
+		formatString: 0
+		lineageTag: db4e6fcb-f4c6-46c1-9618-77bb12ac77de
+		summarizeBy: none
+		sourceColumn: Rad_Total_Capture_InclOutliers
+
+		annotation SummarizationSetBy = Automatic
+
+	column Radiologist
+		dataType: string
+		lineageTag: aeb7c65f-f539-433c-a703-404ec9bc39f6
+		summarizeBy: none
+		sourceColumn: Radiologist
+
+		annotation SummarizationSetBy = Automatic
+
+	partition radiologist_summary = m
+		mode: import
+		source = ```
+				let
+				    Source = Databricks.Catalogs(
+				    "adb-7306149455716415.15.azuredatabricks.net",
+				    "/sql/1.0/warehouses/fe0ad987563c672a", [Catalog=null, Database=null, EnableAutomaticProxyDiscovery=null, Implementation=null]),
+				    edw_dev_Database = Source{[Name="edw_dev",Kind="Database"]}[Data],
+				    bipa_analytics_Schema = edw_dev_Database{[Name="bipa_analytics",Kind="Schema"]}[Data],
+				    dim_radiologist_optimized_View = bipa_analytics_Schema{[Name="dim_radiologist_optimized",Kind="View"]}[Data],
+				    #"Removed Duplicates" = Table.Distinct(dim_radiologist_optimized_View, {"Physician_NPI"}),
+				    #"Added Custom" = Table.AddColumn(#"Removed Duplicates", "Custom", each if Text.Length([Radiologist]) > 10 
+				    and Text.Select(Text.End([Radiologist], 10), {"0".."9"}) = Text.End([Radiologist], 10)
+				then Text.Trim(Text.Start([Radiologist], Text.Length([Radiologist]) - 10))
+				else [Radiologist]),
+				    #"Removed Columns" = Table.RemoveColumns(#"Added Custom",{"Radiologist"}),
+				    #"Renamed Columns" = Table.RenameColumns(#"Removed Columns",{{"Custom", "Radiologist"}})
+				in
+				    #"Renamed Columns"
+				```
+
+	annotation PBI_NavigationStepName = Navigation
+
+	annotation PBI_ResultType = Table
+

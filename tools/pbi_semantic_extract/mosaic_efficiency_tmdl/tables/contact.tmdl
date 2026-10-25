@@ -1,0 +1,37 @@
+table contact
+	lineageTag: fa767ba6-6704-407d-b9d2-4b30f53954e9
+
+	column vrarp_npi
+		dataType: string
+		lineageTag: 04488f32-f5c8-45f9-b01b-85e6fc5fa3cc
+		summarizeBy: none
+		sourceColumn: vrarp_npi
+
+		annotation SummarizationSetBy = Automatic
+
+	column vrarp_fullyutilizingname
+		dataType: string
+		lineageTag: e7d10de9-f1c9-473c-83e6-8c73116bc355
+		summarizeBy: none
+		sourceColumn: vrarp_fullyutilizingname
+
+		annotation SummarizationSetBy = Automatic
+
+	partition contact = m
+		mode: import
+		source =
+				let
+				    Source = PowerPlatform.Dataflows(null),
+				    Workspaces = Source{[Id="Workspaces"]}[Data],
+				    #"3ae7b6af-85d7-4084-9e1c-18d3bdd6a6bc" = Workspaces{[workspaceId="3ae7b6af-85d7-4084-9e1c-18d3bdd6a6bc"]}[Data],
+				    #"bacde10b-de5f-4081-ac5f-0a35fc9c0378" = #"3ae7b6af-85d7-4084-9e1c-18d3bdd6a6bc"{[dataflowId="bacde10b-de5f-4081-ac5f-0a35fc9c0378"]}[Data],
+				    contact_ = #"bacde10b-de5f-4081-ac5f-0a35fc9c0378"{[entity="contact",version=""]}[Data],
+				    #"Filtered Rows" = Table.SelectRows(contact_, each [vrarp_fullyutilizingname] <> null and [vrarp_fullyutilizingname] <> ""),
+				    #"Filtered Rows1" = Table.SelectRows(#"Filtered Rows", each [vrarp_npi] <> null and [vrarp_npi] <> "")
+				in
+				    #"Filtered Rows1"
+
+	annotation PBI_NavigationStepName = Navigation
+
+	annotation PBI_ResultType = Table
+

@@ -1,0 +1,89 @@
+table 'Drafting Groups'
+	lineageTag: 62db76c1-8f72-4432-b650-2771e5b59e88
+
+	measure 'Test - Drafting Slicer Detection' =
+			
+			VAR IsDraftingFiltered = ISFILTERED('Drafting Groups'[Drafting Group])
+			VAR SelectedGroups = COUNTROWS(VALUES('Drafting Groups'[Drafting Group]))
+			
+			RETURN
+			    "IsFiltered: " & IsDraftingFiltered & " | Selected Count: " & SelectedGroups
+		lineageTag: 972d83ff-4161-4357-9a06-36ca9e21cf9b
+
+	measure 'Test - Drafting Eligible Count' = ```
+			
+			VAR SelectedGroups = VALUES('Drafting Groups'[Drafting Group])
+			VAR IsDraftingFiltered = ISFILTERED('Drafting Groups'[Drafting Group])
+			VAR AllGroupsSelected = COUNTROWS(SelectedGroups) = 4
+			
+			VAR ShowXR =         COUNTROWS(FILTER(SelectedGroups, [Drafting Group] = "Rads on XR Drafting")) > 0
+			VAR ShowCTHead =     COUNTROWS(FILTER(SelectedGroups, [Drafting Group] = "Rads on CT Head Drafting")) > 0
+			VAR ShowCTAbd =      COUNTROWS(FILTER(SelectedGroups, [Drafting Group] = "Rads on CT Abd/Pel Drafting")) > 0
+			VAR ShowNotOnDraft = COUNTROWS(FILTER(SelectedGroups, [Drafting Group] = "Rads Not on Drafting")) > 0
+			
+			VAR DraftingEligibleNPIs =
+			    FILTER(
+			        VALUES('Daily_Extract'[NPI]),
+			        VAR CurrentNPI = 'Daily_Extract'[NPI]
+			        VAR IsXR = 
+			            CALCULATE(
+			                MAX('Daily_Extract'[Is On XR Drafting]),
+			                'Daily_Extract'[NPI] = CurrentNPI
+			            ) = 1
+			        VAR IsCTHead = 
+			            CALCULATE(
+			                MAX('Daily_Extract'[Is On CT Head Drafting]),
+			                'Daily_Extract'[NPI] = CurrentNPI
+			            ) = 1
+			        VAR IsCTAbd = 
+			            CALCULATE(
+			                MAX('Daily_Extract'[Is On CT Abd/Pel Drafting]),
+			                'Daily_Extract'[NPI] = CurrentNPI
+			            ) = 1
+			        VAR IsNone = 
+			            CALCULATE(MAX('Daily_Extract'[Is On XR Drafting]), 'Daily_Extract'[NPI] = CurrentNPI) = 0 &&
+			            CALCULATE(MAX('Daily_Extract'[Is On CT Head Drafting]), 'Daily_Extract'[NPI] = CurrentNPI) = 0 &&
+			            CALCULATE(MAX('Daily_Extract'[Is On CT Abd/Pel Drafting]), 'Daily_Extract'[NPI] = CurrentNPI) = 0
+			        RETURN
+			            (ShowXR && IsXR) ||
+			            (ShowCTHead && IsCTHead) ||
+			            (ShowCTAbd && IsCTAbd) ||
+			            (ShowNotOnDraft && IsNone)
+			    )
+			
+			RETURN
+			    IF(
+			        NOT(IsDraftingFiltered) || AllGroupsSelected,
+			        DISTINCTCOUNT('Daily_Extract'[NPI]),
+			        COUNTROWS(DraftingEligibleNPIs)
+			    )
+			```
+		formatString: 0
+		lineageTag: 7628b999-5c39-45a8-9756-a483f65a2217
+
+	column 'Drafting Group'
+		lineageTag: 43916436-535e-427b-a4d3-9445769214f7
+		summarizeBy: none
+		isNameInferred
+		sourceColumn: [Drafting Group]
+
+		annotation SummarizationSetBy = Automatic
+
+	partition 'Drafting Groups' = calculated
+		mode: import
+		source =
+				
+				DATATABLE(
+				    "Drafting Group", STRING,
+				    {
+				        {"Rads on XR Drafting"},
+				        {"Rads on CT Head Drafting"},
+				        {"Rads on CT Abd/Pel Drafting"},
+				        {"Rads on CT Chest Drafting"},
+				        {"Rads Not on Drafting"},
+				        {"Previously on Drafting"}
+				    }
+				)
+
+	annotation PBI_Id = 1a0e90f46ece4f77a4104cb1eb5d370a
+

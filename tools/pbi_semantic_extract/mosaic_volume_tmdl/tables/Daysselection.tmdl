@@ -1,0 +1,21 @@
+table Daysselection
+	lineageTag: ccc8ae01-26e6-44f3-ab84-cca57de999c4
+
+	measure selecteddays = selectedvalue( 'Daysselection'[Days])
+		formatString: 0
+		lineageTag: f35cd9fe-c2a2-4228-b3a2-99f82b50019f
+
+	column Days
+		formatString: 0
+		lineageTag: 0ca0a3ae-3ae7-48f3-b32b-ad6acf38eb8d
+		summarizeBy: none
+		sourceColumn: [Days]
+
+		annotation SummarizationSetBy = User
+
+	partition Daysselection = calculated
+		mode: import
+		source = DATATABLE("Days",INTEGER ,{ {7} , {10}, {14} , {21} , {28} })
+
+	annotation PBI_Id = f032dcd71757444f8b5244677acf3f65
+

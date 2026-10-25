@@ -1,0 +1,65 @@
+table 'Mosaic Draft Count Table'
+	lineageTag: ad0b00ea-858b-410b-b6d2-03d0e88492ab
+
+	measure 'Selected Exams - Draft' = ```
+			
+			VAR ThresholdValue = SELECTEDVALUE('Mosaic Draft Count Table'[Value], 0)
+			VAR DraftedCount = 
+			    CALCULATE(
+			        COUNTROWS('Daily_Extract'), 
+			        'Daily_Extract'[drafteligibleproc] <> BLANK(), 
+			        'Daily_Extract'[Mosaic Exam Flag] = 1, 
+			        'Daily_Extract'[mosaic_draft_flag] = 1, 
+			        NOT(ISBLANK('vrarp_radpipeline'[Added to AD Group (CXR/ABD/MSK)])),
+			        ALLSELECTED('Daily_Extract')  // This is key!
+			    )
+			RETURN
+			    IF(DraftedCount >= ThresholdValue, 1, 0)
+			```
+		formatString: 0
+		lineageTag: dbcfc0a5-dab4-4270-a3ee-9577b58d85c0
+
+	measure 'mosaicdraftexamselg Filtered' =
+			
+			VAR ThresholdValue = SELECTEDVALUE('Mosaic Draft Count Table'[Value], 0)
+			VAR DraftedCount = [EligibleExams]
+			RETURN
+			    IF(
+			        DraftedCount >= ThresholdValue,
+			        DraftedCount,
+			        BLANK()
+			    )
+		formatString: 0
+		lineageTag: 9a934e8f-b173-42c4-8e87-2f563f1be324
+
+	measure '%Drafted of eligible exams (Filtered)' =
+			
+			VAR ThresholdValue = SELECTEDVALUE('Mosaic Draft Count Table'[Value] , 0)
+			VAR DraftedCount = [EligibleExams]
+			VAR Percentage = DIVIDE([mosaicdraftexamselg], [EligibleExams], 0)
+			RETURN
+			    IF(
+			        DraftedCount >= ThresholdValue,
+			        Percentage,
+			        BLANK()
+			    )
+		formatString: 0%;-0%;0%
+		lineageTag: 30b2c3ba-8cad-46b4-9d39-5866956a5ded
+
+	column Value
+		formatString: 0
+		lineageTag: 4a7a3664-a59b-4e57-8899-e2bec2a12b2d
+		summarizeBy: sum
+		isNameInferred
+		sourceColumn: [Value]
+
+		annotation SummarizationSetBy = Automatic
+
+	partition 'Mosaic Draft Count Table' = calculated
+		mode: import
+		source = ```
+				GENERATESERIES(0, 100, 5) 
+				```
+
+	annotation PBI_Id = c72cc54489e74c7abb14f8110a8871d7
+

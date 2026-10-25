@@ -2,6 +2,7 @@ import { useState } from "react";
 import { mosaicApi } from "../api/client";
 import { useFetch } from "../hooks/useFetch";
 import { StatTile } from "../components/StatTile";
+import { AIHoverCard } from "../components/AIHoverCard";
 import { Badge } from "../components/Badge";
 import { DataTable, fmtPct } from "../components/DataTable";
 import type { DataTableColumn } from "../components/DataTable";
@@ -147,13 +148,40 @@ export function DraftVsFinal() {
 
       <div style={{ display: "flex", gap: 16, flexWrap: "wrap" }}>
         <StatTile label="Exams Assessed" value={overview.data ? fmt(overview.data.n) : "…"} accent="var(--domain-efficiency)" />
-        <StatTile
-          label="Avg Draft Retention"
+        <AIHoverCard
+          feature="efficiency_metric"
+          entityLabel="Sampled exams"
+          metricLabel="Average draft retention"
           value={overview.data ? fmtRetention(overview.data.avg_retention_pct) : "…"}
-          accent="var(--domain-efficiency)"
-        />
-        <StatTile label="% Highly Useful" value={overview.data ? fmtPct((highlyUsefulPct ?? 0) / 100) : "…"} accent="var(--status-good)" />
-        <StatTile label="% Not Useful" value={overview.data ? fmtPct((notUsefulPct ?? 0) / 100) : "…"} accent="var(--status-critical)" />
+          underline={false}
+          style={{ flex: "1 1 200px", minWidth: 180 }}
+        >
+          <StatTile
+            label="Avg Draft Retention"
+            value={overview.data ? fmtRetention(overview.data.avg_retention_pct) : "…"}
+            accent="var(--domain-efficiency)"
+          />
+        </AIHoverCard>
+        <AIHoverCard
+          feature="efficiency_metric"
+          entityLabel="Sampled exams"
+          metricLabel="% of drafts rated Highly Useful"
+          value={overview.data ? fmtPct((highlyUsefulPct ?? 0) / 100) : "…"}
+          underline={false}
+          style={{ flex: "1 1 200px", minWidth: 180 }}
+        >
+          <StatTile label="% Highly Useful" value={overview.data ? fmtPct((highlyUsefulPct ?? 0) / 100) : "…"} accent="var(--status-good)" />
+        </AIHoverCard>
+        <AIHoverCard
+          feature="efficiency_metric"
+          entityLabel="Sampled exams"
+          metricLabel="% of drafts rated Not Useful"
+          value={overview.data ? fmtPct((notUsefulPct ?? 0) / 100) : "…"}
+          underline={false}
+          style={{ flex: "1 1 200px", minWidth: 180 }}
+        >
+          <StatTile label="% Not Useful" value={overview.data ? fmtPct((notUsefulPct ?? 0) / 100) : "…"} accent="var(--status-critical)" />
+        </AIHoverCard>
       </div>
 
       <CategoryBarCard title="Overall Assessment Distribution" categories={assessmentBars} colorFor={(c) => ASSESSMENT_COLORS[c]} />

@@ -1,0 +1,219 @@
+table '0. Historical'
+	lineageTag: 1d180cbd-bf71-44bb-aa97-2e2d966bc1a3
+
+	measure '% CT (Baseline)' = SUM('0. Historical'[CT_cases])/SUM('0. Historical'[total_cases])
+		formatString: 0%;-0%;0%
+		lineageTag: e890a87e-1fb8-4d91-b84e-4651a62262c6
+
+	measure '% MR (Baseline)' = SUM('0. Historical'[MR_cases])/SUM('0. Historical'[total_cases])
+		formatString: 0%;-0%;0%
+		lineageTag: 90361e04-b950-46ac-8baa-07cbc156fd24
+
+	measure '% NM (Baseline)' = SUM('0. Historical'[NM_cases])/SUM('0. Historical'[total_cases])
+		formatString: 0%;-0%;0%
+		lineageTag: 471dc07b-921a-4122-8210-7b8d5bee9136
+
+	measure '% Other (Baseline)' = SUM('0. Historical'[OTHER_Modality_cases])/SUM('0. Historical'[total_cases])
+		formatString: 0%;-0%;0%
+		lineageTag: 57828441-f66d-439b-ad1e-f5d4bdf40d1e
+
+	measure '% PT (Baseline)' = SUM('0. Historical'[PT_cases])/SUM('0. Historical'[total_cases])
+		formatString: 0%;-0%;0%
+		lineageTag: 448c1e1b-40a8-4aab-bcee-665f6feb7eaa
+
+	measure '% Routine (Baseline)' = SUM('0. Historical'[Routine_cases])/SUM('0. Historical'[total_cases])
+		formatString: 0%;-0%;0%
+		lineageTag: 36d46363-d44d-44a8-ba28-8fc62e3ec8ea
+
+	measure '% Stat (Baseline)' = SUM('0. Historical'[Stat_cases])/SUM('0. Historical'[total_cases])
+		formatString: 0%;-0%;0%
+		lineageTag: 1af93db2-d147-40b2-b1ae-64a47a234cef
+
+	measure '% Stroke (Baseline)' = SUM('0. Historical'[Stroke_cases])/SUM('0. Historical'[total_cases])
+		formatString: 0%;-0%;0%
+		lineageTag: f6e0ecf6-fc41-449a-8379-174310329f72
+
+	measure '% Trauma (Baseline)' = SUM('0. Historical'[Trauma_cases])/SUM('0. Historical'[total_cases])
+		formatString: 0%;-0%;0%
+		lineageTag: c2094ea6-ae7e-489c-b918-34c061593b14
+
+	measure '% US (Baseline)' = SUM('0. Historical'[US_cases])/SUM('0. Historical'[total_cases])
+		formatString: 0%;-0%;0%
+		lineageTag: 0c983536-6fe6-4bdc-bb1c-2ff0bab2c67e
+
+	measure '% XR (Baseline)' = SUM('0. Historical'[XR_cases])/SUM('0. Historical'[total_cases])
+		formatString: 0%;-0%;0%
+		lineageTag: 0a867ed2-b1c3-4709-908f-1d0d9172600f
+
+	measure '% IR (Baseline)' = SUM('0. Historical'[IR_Cases])/SUM('0. Historical'[total_cases])
+		lineageTag: a2eebb9f-ded5-4ccb-aa61-661043c70618
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	measure '% Other P (Baseline)' = SUM('0. Historical'[OTHER_Priority_cases])/SUM('0. Historical'[total_cases])
+		lineageTag: 10bfeada-18fa-4f32-a994-03c38a92f194
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	measure '% MG (Baseline)' = SUM('0. Historical'[MG_cases])/SUM('0. Historical'[total_cases])
+		lineageTag: 468bc69e-5abb-4c75-9ddb-126b09ccb071
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column physician_NPI
+		dataType: double
+		lineageTag: 42722725-76c2-40a8-8848-6453c092b22a
+		summarizeBy: none
+		sourceColumn: physician_NPI
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column total_cases
+		dataType: int64
+		formatString: 0
+		lineageTag: 9c5014a3-762b-4219-92c7-b3c5d75b8b42
+		summarizeBy: none
+		sourceColumn: total_cases
+
+		annotation SummarizationSetBy = Automatic
+
+	column XR_cases
+		dataType: int64
+		formatString: 0
+		lineageTag: e967b5ee-25f1-419d-85cf-10b3f82fe64a
+		summarizeBy: none
+		sourceColumn: XR_cases
+
+		annotation SummarizationSetBy = Automatic
+
+	column CT_cases
+		dataType: int64
+		formatString: 0
+		lineageTag: e0a0316d-82b7-408e-8802-bfff46729f48
+		summarizeBy: none
+		sourceColumn: CT_cases
+
+		annotation SummarizationSetBy = Automatic
+
+	column US_cases
+		dataType: int64
+		formatString: 0
+		lineageTag: 0f515bb0-2851-460a-a4da-0fd34f600c1f
+		summarizeBy: none
+		sourceColumn: US_cases
+
+		annotation SummarizationSetBy = Automatic
+
+	column MR_cases
+		dataType: int64
+		formatString: 0
+		lineageTag: 9bdbf3df-5b3a-4363-b77d-4d6ed506da91
+		summarizeBy: none
+		sourceColumn: MR_cases
+
+		annotation SummarizationSetBy = Automatic
+
+	column NM_cases
+		dataType: int64
+		formatString: 0
+		lineageTag: 2fef7a48-446b-4590-bf85-4d20a89429cf
+		summarizeBy: none
+		sourceColumn: NM_cases
+
+		annotation SummarizationSetBy = Automatic
+
+	column PT_cases
+		dataType: int64
+		formatString: 0
+		lineageTag: abe6bbe1-9070-4723-8d27-23e2662eedfd
+		summarizeBy: none
+		sourceColumn: PT_cases
+
+		annotation SummarizationSetBy = Automatic
+
+	column OTHER_Modality_cases
+		dataType: int64
+		formatString: 0
+		lineageTag: c1d97342-cffe-4774-998d-0899ba563230
+		summarizeBy: none
+		sourceColumn: OTHER_Modality_cases
+
+		annotation SummarizationSetBy = Automatic
+
+	column Routine_cases
+		dataType: int64
+		formatString: 0
+		lineageTag: 47024eb8-47a8-46ca-a0e8-3581400531ea
+		summarizeBy: none
+		sourceColumn: Routine_cases
+
+		annotation SummarizationSetBy = Automatic
+
+	column Stat_cases
+		dataType: int64
+		formatString: 0
+		lineageTag: 53ccf020-13f1-43e7-91b6-dbca2bddc7e8
+		summarizeBy: none
+		sourceColumn: Stat_cases
+
+		annotation SummarizationSetBy = Automatic
+
+	column Stroke_cases
+		dataType: int64
+		formatString: 0
+		lineageTag: a473be41-7843-4ff2-9a54-d10f9837640d
+		summarizeBy: none
+		sourceColumn: Stroke_cases
+
+		annotation SummarizationSetBy = Automatic
+
+	column Trauma_cases
+		dataType: int64
+		formatString: 0
+		lineageTag: 21f817f3-5fde-4f77-94fe-8180551ee94f
+		summarizeBy: none
+		sourceColumn: Trauma_cases
+
+		annotation SummarizationSetBy = Automatic
+
+	column IR_Cases
+		dataType: int64
+		formatString: 0
+		lineageTag: d25ac1e0-07f3-44fd-b6e0-87f705e70443
+		summarizeBy: none
+		sourceColumn: IR_Cases
+
+		annotation SummarizationSetBy = Automatic
+
+	column OTHER_Priority_cases
+		dataType: int64
+		formatString: 0
+		lineageTag: fcb5d108-a819-4fc8-9b8e-791ef1fd39d1
+		summarizeBy: none
+		sourceColumn: OTHER_Priority_cases
+
+		annotation SummarizationSetBy = Automatic
+
+	column MG_cases
+		dataType: int64
+		formatString: 0
+		lineageTag: 1c1d93ef-7214-42c9-ab47-14d1a24b2c50
+		summarizeBy: none
+		sourceColumn: MG_cases
+
+		annotation SummarizationSetBy = Automatic
+
+	partition '0. Historical' = m
+		mode: import
+		source =
+				let
+				    Source = Value.NativeQuery(Databricks.Catalogs("adb-7306149455716415.15.azuredatabricks.net", "/sql/1.0/warehouses/fe0ad987563c672a", [Catalog="edw_dev", Database=null, EnableAutomaticProxyDiscovery=null]){[Name="edw_dev",Kind="Database"]}[Data], "select * from edw_dev.bipa_analytics.stg_capacity_bl_modality_priority", null, [EnableFolding=true])
+				in
+				    Source
+
+	annotation PBI_ResultType = Table
+
+	annotation PBI_NavigationStepName = Navigation
+

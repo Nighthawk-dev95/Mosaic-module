@@ -24,9 +24,10 @@ pool can't be built or a write fails. Postgres logging is additive observability
 dependency the SQLite-backed read path relies on.
 """
 
+import json
 import os
 import threading
-from datetime import datetime
+from datetime import date, datetime
 from typing import Any
 
 _lock = threading.Lock()
@@ -121,6 +122,65 @@ def _build_pool():
                         note TEXT,
                         reviewed_at TIMESTAMPTZ NOT NULL,
                         UNIQUE (npi, target_shift)
+                    )
+                    """
+                )
+                # Freeform notes, attachable to either a radiologist (entity_key = NPI as
+                # string) or a practice (entity_key = practice name) - one polymorphic table
+                # rather than two, since the CRUD is identical either way and entity_type
+                # keeps them distinguishable. Mirrors PCC's own notes/journal pattern (its
+                # bundle documents a real, searchable notes system tied to entity records).
+                cur.execute(
+                    """
+                    CREATE TABLE IF NOT EXISTS mosaic.notes (
+                        id BIGSERIAL PRIMARY KEY,
+                        entity_type TEXT NOT NULL CHECK (entity_type IN ('radiologist', 'practice')),
+                        entity_key TEXT NOT NULL,
+                        note_text TEXT NOT NULL,
+                        created_at TIMESTAMPTZ NOT NULL
+                    )
+                    """
+                )
+                cur.execute(
+                    "CREATE INDEX IF NOT EXISTS notes_entity_idx ON mosaic.notes (entity_type, entity_key)"
+                )
+                # Audit log for the Radiologist Lookup page - every time someone opens an
+                # individual radiologist's drilldown, a row lands here. Mirrors PCC's own
+                # privacy discipline for this exact kind of view ("views are still logged",
+                # confirmed from its own changelog) - write-only from the app's perspective
+                # for now, nothing reads this back yet, but durable from day one rather than
+                # bolted on after the fact.
+                cur.execute(
+                    """
+                    CREATE TABLE IF NOT EXISTS mosaic.radiologist_lookup_views (
+                        id BIGSERIAL PRIMARY KEY,
+                        npi BIGINT NOT NULL,
+                        search_query TEXT,
+                        viewed_at TIMESTAMPTZ NOT NULL
+                    )
+                    """
+                )
+                # One row per (scope, week-ending-Friday) - the real "reproduce this weekly"
+                # artifact's persisted history. funnel/impact/escalations are JSON-encoded
+                # (app/data/mvp_dashboard_stats.py's compute_* outputs) rather than JSONB, to
+                # avoid pulling in psycopg's jsonb adapter for a value this app only ever
+                # round-trips through Python, never queries with SQL JSON operators.
+                # UNIQUE + ON CONFLICT means re-generating the same week overwrites it instead
+                # of duplicating - someone may click "Generate" more than once before a week
+                # is considered final.
+                cur.execute(
+                    """
+                    CREATE TABLE IF NOT EXISTS mosaic.mvp_weekly_snapshots (
+                        id BIGSERIAL PRIMARY KEY,
+                        scope TEXT NOT NULL CHECK (scope IN ('overview', 'mammo')),
+                        week_ending DATE NOT NULL,
+                        funnel TEXT NOT NULL,
+                        impact TEXT NOT NULL,
+                        escalations TEXT NOT NULL,
+                        key_insights TEXT,
+                        focus_next_week TEXT,
+                        generated_at TIMESTAMPTZ NOT NULL,
+                        UNIQUE (scope, week_ending)
                     )
                     """
                 )
@@ -252,4 +312,153 @@ def list_review_decisions() -> list[dict[str, Any]]:
                 return [dict(zip(columns, row)) for row in cur.fetchall()]
     except Exception as exc:  # noqa: BLE001
         print(f"[postgres] list_review_decisions failed: {exc}", flush=True)
+        return []
+
+
+def save_note(entity_type: str, entity_key: str, note_text: str, created_at: datetime) -> bool:
+    """A direct user action (like save_review_decision, not best-effort background
+    telemetry) - the route needs to know if the write actually succeeded."""
+    pool = _get_pool()
+    if pool is None:
+        print(f"[postgres] skipping save_note for {entity_type}={entity_key!r}: {_unavailable_reason}", flush=True)
+        return False
+    try:
+        with pool.connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    INSERT INTO mosaic.notes (entity_type, entity_key, note_text, created_at)
+                    VALUES (%s, %s, %s, %s)
+                    """,
+                    (entity_type, entity_key, note_text, created_at),
+                )
+        return True
+    except Exception as exc:  # noqa: BLE001
+        print(f"[postgres] save_note failed for {entity_type}={entity_key!r}: {exc}", flush=True)
+        return False
+
+
+def list_notes(entity_type: str, entity_key: str) -> list[dict[str, Any]]:
+    pool = _get_pool()
+    if pool is None:
+        return []
+    try:
+        with pool.connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    SELECT entity_type, entity_key, note_text, created_at
+                    FROM mosaic.notes
+                    WHERE entity_type = %s AND entity_key = %s
+                    ORDER BY created_at DESC
+                    """,
+                    (entity_type, entity_key),
+                )
+                columns = [c.name for c in cur.description]
+                return [dict(zip(columns, row)) for row in cur.fetchall()]
+    except Exception as exc:  # noqa: BLE001
+        print(f"[postgres] list_notes failed for {entity_type}={entity_key!r}: {exc}", flush=True)
+        return []
+
+
+def log_radiologist_lookup_view(npi: int, search_query: str | None, viewed_at: datetime) -> None:
+    """Best-effort audit entry - never blocks the lookup response on a Postgres hiccup,
+    same philosophy as log_refresh."""
+    pool = _get_pool()
+    if pool is None:
+        print(f"[postgres] skipping log_radiologist_lookup_view for npi={npi}: {_unavailable_reason}", flush=True)
+        return
+    try:
+        with pool.connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    INSERT INTO mosaic.radiologist_lookup_views (npi, search_query, viewed_at)
+                    VALUES (%s, %s, %s)
+                    """,
+                    (npi, search_query, viewed_at),
+                )
+    except Exception as exc:  # noqa: BLE001
+        print(f"[postgres] log_radiologist_lookup_view failed for npi={npi}: {exc}", flush=True)
+
+
+def save_weekly_snapshot(
+    scope: str,
+    week_ending: date,
+    funnel: dict,
+    impact: dict,
+    escalations: dict,
+    key_insights: str | None,
+    focus_next_week: str | None,
+    generated_at: datetime,
+) -> bool:
+    """Upsert this week's MVP dashboard snapshot (app/services/mvp_weekly_report_service.py) -
+    a direct user action (the "Generate This Week's Snapshot" button), so like
+    save_review_decision/save_note the caller needs to know if the write actually succeeded."""
+    pool = _get_pool()
+    if pool is None:
+        print(f"[postgres] skipping save_weekly_snapshot for scope={scope!r}: {_unavailable_reason}", flush=True)
+        return False
+    try:
+        with pool.connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    INSERT INTO mosaic.mvp_weekly_snapshots
+                        (scope, week_ending, funnel, impact, escalations, key_insights, focus_next_week, generated_at)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                    ON CONFLICT (scope, week_ending) DO UPDATE SET
+                        funnel = EXCLUDED.funnel,
+                        impact = EXCLUDED.impact,
+                        escalations = EXCLUDED.escalations,
+                        key_insights = EXCLUDED.key_insights,
+                        focus_next_week = EXCLUDED.focus_next_week,
+                        generated_at = EXCLUDED.generated_at
+                    """,
+                    (
+                        scope,
+                        week_ending,
+                        json.dumps(funnel),
+                        json.dumps(impact),
+                        json.dumps(escalations),
+                        key_insights,
+                        focus_next_week,
+                        generated_at,
+                    ),
+                )
+        return True
+    except Exception as exc:  # noqa: BLE001
+        print(f"[postgres] save_weekly_snapshot failed for scope={scope!r}: {exc}", flush=True)
+        return False
+
+
+def get_weekly_snapshots(scope: str, limit: int = 12) -> list[dict[str, Any]]:
+    """Most recent snapshots for one scope, newest week first - funnel/impact/escalations
+    decoded back into dicts so callers never deal with the TEXT-column JSON encoding."""
+    pool = _get_pool()
+    if pool is None:
+        return []
+    try:
+        with pool.connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    SELECT scope, week_ending, funnel, impact, escalations, key_insights, focus_next_week, generated_at
+                    FROM mosaic.mvp_weekly_snapshots
+                    WHERE scope = %s
+                    ORDER BY week_ending DESC
+                    LIMIT %s
+                    """,
+                    (scope, limit),
+                )
+                columns = [c.name for c in cur.description]
+                rows = [dict(zip(columns, row)) for row in cur.fetchall()]
+                for row in rows:
+                    row["week_ending"] = row["week_ending"].isoformat()
+                    row["funnel"] = json.loads(row["funnel"])
+                    row["impact"] = json.loads(row["impact"])
+                    row["escalations"] = json.loads(row["escalations"])
+                return rows
+    except Exception as exc:  # noqa: BLE001
+        print(f"[postgres] get_weekly_snapshots failed for scope={scope!r}: {exc}", flush=True)
         return []

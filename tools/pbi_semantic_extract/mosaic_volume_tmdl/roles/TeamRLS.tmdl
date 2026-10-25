@@ -1,0 +1,7 @@
+role TeamRLS
+	modelPermission: read
+
+	tablePermission RLSTeamTable = [EMAIL] = userprincipalname()
+
+	annotation PBI_Id = 3922b497ffee487598934aeb0c50736e
+

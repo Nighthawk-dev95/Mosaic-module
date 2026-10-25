@@ -1,0 +1,41 @@
+table 'Utilizing 90 Filter'
+	lineageTag: 08cd5066-2b5d-46b4-9843-1b323e00cd49
+
+	measure 'Utilizing 90 Filter Measure' =
+			
+			VAR SelectedStatus = SELECTEDVALUE('Utilizing 90 Filter'[Utilizing >90%])
+			VAR PctMosaic = [% Mosaic Exams]
+			
+			RETURN
+			SWITCH(
+			    TRUE(),
+			    ISBLANK(SelectedStatus), 1,  -- Nothing selected = show all
+			    SelectedStatus = "Yes - Above 90%" && PctMosaic >= 0.9, 1,
+			    SelectedStatus = "No - Below 90%" && PctMosaic < 0.9, 1,
+			    0
+			)
+		formatString: 0
+		lineageTag: dc6234f6-ae9b-4253-8a9e-0208eec03ef2
+
+	column 'Utilizing >90%'
+		lineageTag: ef0d5798-3fd8-415e-9997-24470ad65c9c
+		summarizeBy: none
+		isNameInferred
+		sourceColumn: [Utilizing >90%]
+
+		annotation SummarizationSetBy = Automatic
+
+	partition 'Utilizing 90 Filter' = calculated
+		mode: import
+		source =
+				
+				DATATABLE(
+				    "Utilizing >90%", STRING,
+				    {
+				        {"Yes - Above 90%"},
+				        {"No - Below 90%"}
+				    }
+				)
+
+	annotation PBI_Id = 43e10563f79a44ab9af83291a5ceb739
+

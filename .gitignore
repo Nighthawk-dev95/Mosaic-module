@@ -52,6 +52,29 @@ tools/source_watch/manifest.json
 # Accession-level EDW exports - real patient-exam-linked identifiers, never commit
 tools/edw_fixes/*.csv
 
+# Working analysis workbooks and write-ups at the repo root - scratch output from
+# internal analysis, regenerable from the SQL in tools/, and two of them (the mammo
+# pair) carried an "Accession Detail" sheet with real accession numbers and dictation
+# timestamps.
+/*.xlsx
+/*.docx
+# ...except the practice-to-Local mapping, which is business-maintained and is the
+# authoritative upstream for the mapping table - resources/mosaic_reporting_refresh.job.yml
+# names this file as its source.
+!/Practice_to_Local_Mapping.xlsx
+
+# Ad-hoc EDW query exports dropped at the repo root - same rule as the line above, plus
+# they are enormous: the timestamp pulls alone are 1.5 GB and 344 MB, well past GitHub's
+# 100 MB per-file hard limit, so committing one would make the repo unpushable.
+/*.csv
+/*.tsv
+/*.err
+/_npi_list*.txt
+/_linked_mammo_diag_ids.txt
+
+# Scratch workspace - deploy stdout dumps and dashboard JSON snapshots, regenerable
+.tmp_work/
+
 # EDW Mosaic Health - real daily EDW counts by date/practice/radiologist, never commit
 tools/edw_health/integrity_manifest.json
 tools/edw_health/reports/

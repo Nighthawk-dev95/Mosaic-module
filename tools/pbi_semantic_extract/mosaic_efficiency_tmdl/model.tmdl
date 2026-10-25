@@ -1,0 +1,96 @@
+model Model
+	culture: en-US
+	defaultPowerBIDataSourceVersion: powerBI_V3
+	sourceQueryCulture: en-US
+	dataAccessOptions
+		legacyRedirects
+		returnErrorValuesAsNull
+
+annotation PBI_QueryOrder = ["IsFullData","Mosaic metric","Readtimeview","contact","RadPipeline","radiologist_metrics","radiologist_summary","team_rollups","radiologist_metrics(1)","radiologist_summary(1)","provpractice_vw","radsubspecialty"]
+
+annotation __PBI_TimeIntelligenceEnabled = 1
+
+ref table DateTableTemplate_1a22d3a0-3533-4862-9dda-4a1facc9c7d8
+ref table Measure
+ref table 'Calendar View'
+ref table Drafting_Calendar
+ref table LocalDateTable_1e5d44c6-eed3-498e-95be-1b8d6d60f1a1
+ref table 'Mosaic metric'
+ref table Readtimeview
+ref table Reporting_Calendar
+ref table LocalDateTable_a07ef54e-24f2-4d34-9efc-529b591d9099
+ref table IsFullData
+ref table Mosaic_Calendar
+ref table 'Mosaic Mode Selector'
+ref table 'Mosaic VRA Slicer'
+ref table 'Mosaic Min Exams'
+ref table 'Metric Selector1'
+ref table 'VRA Slicer'
+ref table Parameter
+ref table Timeline
+ref table contact
+ref table RadPipeline
+ref table LocalDateTable_211298e2-3300-4b8d-8ed9-833151287dd6
+ref table LocalDateTable_b5f5c60e-ae39-4f41-8ff9-d051433bd34d
+ref table LocalDateTable_943dccd0-ea1b-4a16-84df-48f1b297f8f9
+ref table 'Outlier Selector'
+ref table radiologist_metrics
+ref table LocalDateTable_58c92a4e-6169-4ee5-b10c-359dadf04b1a
+ref table LocalDateTable_9b0907be-f3e3-4ffb-ab69-0586bad9e657
+ref table LocalDateTable_b1ed68e3-8355-402f-99f7-c98c78a61620
+ref table LocalDateTable_9840f64d-9e82-4b1f-9aa0-63a0eeac921d
+ref table LocalDateTable_7bb16109-c35e-4110-983f-e1e6a4096668
+ref table LocalDateTable_5ec75921-be4c-44a5-8f7c-1c8308e65d8e
+ref table radiologist_summary
+ref table team_rollups
+ref table 'Period Category'
+ref table 'Mosaic Mode'
+ref table LocalDateTable_9d149d3d-44c0-407b-94bb-320e47ad3da1
+ref table 'Min Captured Exams'
+ref table LocalDateTable_ca6be428-2cb0-4add-a0be-01c50e0f82ec
+ref table LocalDateTable_dddc24d9-ce1a-45b8-af3f-a77df37c782f
+ref table LocalDateTable_b69c4854-8241-4291-9ce2-4f804058518b
+ref table LocalDateTable_710c9663-c340-4b0a-b169-c822c1dcb3bd
+ref table LocalDateTable_3f2f15f8-09ef-4024-aa12-86adcda17543
+ref table LocalDateTable_91051ba1-7e0a-4134-ad72-f21d393829d8
+ref table LocalDateTable_e6eddf89-ad40-4a9b-b9e8-1432f8dbecf4
+ref table 'Report Refresh Info'
+ref table LocalDateTable_a8ad2615-cfa7-4b58-a50f-db7099855152
+ref table LocalDateTable_259f894e-d53e-4e47-a23b-22a215dc3b16
+ref table Baseline_Calendar
+ref table LocalDateTable_2c0e0ba7-9921-4344-82bc-df48e01f570f
+ref table Case_Buckets
+ref table Case_Buckets_Cumulative
+ref table Mode_Lines
+ref table LocalDateTable_cab2cec1-ab37-4450-900a-e641b557cfe0
+ref table LocalDateTable_6ea5e40a-bf8a-41f3-9452-d6e322eb64a8
+ref table LocalDateTable_1539fc92-5609-4fdf-ab15-377344048662
+ref table LocalDateTable_73587801-b5e9-45c9-b39b-af961a4e916a
+ref table LocalDateTable_f0ced46b-1352-4f3f-bd38-e0394c4037f7
+ref table LocalDateTable_e3ca7784-1a68-4d91-962a-319cebca4fc1
+ref table LocalDateTable_6e19a9cd-beb9-4b54-b3c6-58629ae82027
+ref table LocalDateTable_0cb56f34-1b73-4bda-b62b-13055f985262
+ref table LocalDateTable_9a785699-7f7f-46c7-9991-7834e468ea81
+ref table LocalDateTable_521b0390-409d-4b01-9f2e-42f2fa59e38c
+ref table radiologist_metrics(1)
+ref table LocalDateTable_eebb747c-28ef-4e13-a280-6afec83c41a3
+ref table radiologist_summary(1)
+ref table provpractice_vw
+ref table radsubspecialty
+ref table Benchmark_Type
+ref table Mode_Lines_NB
+ref table Mode_Lines_NB1
+ref table Metric_Labels
+ref table LocalDateTable_296b59da-399b-47e2-ac8f-eab659a610ac
+ref table LocalDateTable_a3c1cc84-56ee-426d-ba64-befa7f20af06
+ref table LocalDateTable_7e2d216d-a43c-4e67-83d2-4fba68761183
+ref table LocalDateTable_cf8db31b-5abc-4495-9152-2fe21c416a34
+ref table LocalDateTable_b4b5e9e1-9d42-4ef7-a724-6cecf58fb07f
+ref table LocalDateTable_b86da1ae-e9cb-4944-9e31-7d6b352d67e9
+ref table LocalDateTable_05fa8536-f824-4222-a5a5-9bc56fc75845
+ref table LocalDateTable_872b0b8c-6951-4617-b593-33ba9a7f21d5
+ref table LocalDateTable_aec06368-ca99-4b58-afa7-1f84f182adec
+ref table 'Date Granularity '
+
+ref cultureInfo en-US
+

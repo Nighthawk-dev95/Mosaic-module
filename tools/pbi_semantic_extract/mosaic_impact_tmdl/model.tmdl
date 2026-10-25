@@ -1,0 +1,45 @@
+model Model
+	culture: en-US
+	defaultPowerBIDataSourceVersion: powerBI_V3
+	sourceQueryCulture: en-US
+	dataAccessOptions
+		legacyRedirects
+		returnErrorValuesAsNull
+
+annotation PBI_QueryOrder = ["2.5Color_Tbl","0. Cur","0. Historical","1. Unit_Tbl","2. Baseline_Current MeasureTable","Display Shift Filter Table","Query","Program Status","team_rollups","stg_mosaic_baseline_master"]
+
+annotation __PBI_TimeIntelligenceEnabled = 1
+
+annotation PBI_ProTooling = ["DaxQueryView_Desktop","MCP-PBIModeling"]
+
+ref table DateTableTemplate_e89c7ff6-091a-40cb-bee3-3bce66826ede
+ref table '2.5Color_Tbl'
+ref table '0. Cur'
+ref table LocalDateTable_edadb232-7f17-46c8-b33c-94e5738fc8e1
+ref table LocalDateTable_fec0a0e5-7e29-44be-9ac1-2c676f350dff
+ref table LocalDateTable_c1070846-784e-459e-b77f-e88fad8e2c2c
+ref table '0. Historical'
+ref table LocalDateTable_fe746e59-df30-4584-b368-1aa4994296ae
+ref table '1. Unit_Tbl'
+ref table LocalDateTable_f43e7c91-0e59-46c9-9e55-879e5fa68d56
+ref table LocalDateTable_f20f3298-80d4-40db-a42f-2fa09de523ca
+ref table '2.Top N shift Table'
+ref table '2. Baseline_Current MeasureTable'
+ref table '0. Measure Table'
+ref table LocalDateTable_d159f131-d0b8-47f4-9ae5-dbecbfc5a532
+ref table '3.Summary Table'
+ref table LocalDateTable_2016e85f-d25a-46f9-a77e-0ba90e7ec8a0
+ref table 'Display Shift Filter Table'
+ref table '1.Measure Tbl - Adjustment Tally'
+ref table 'Shift Length Lookup'
+ref table Query
+ref table 'Program Status'
+ref table team_rollups
+ref table LocalDateTable_064f8f36-7c41-4eb8-a097-f2d49a1cce7e
+ref table 'Date Granularity'
+ref table 'Metric Selector'
+ref table 'Metric Parameter'
+ref table stg_mosaic_baseline_master
+
+ref cultureInfo en-US
+

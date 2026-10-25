@@ -3,6 +3,25 @@ from datetime import date
 from pydantic import BaseModel
 
 
+class Note(BaseModel):
+    """A freeform note attached to a radiologist (entity_key = NPI as string) or a practice
+    (entity_key = practice name) - see app/db/postgres_client.py's mosaic.notes table."""
+
+    entity_type: str
+    entity_key: str
+    note_text: str
+    created_at: str
+
+
+class RadiologistLookupMatch(BaseModel):
+    """Minimal search-result shape for the Radiologist Lookup page - deliberately not the
+    full roster/scorecard payload, matching PCC's own "no endpoint that lists a roster" rule."""
+
+    npi: int
+    radiologist_name: str | None
+    home_practice: str | None
+
+
 class RadiologistRosterItem(BaseModel):
     npi: int
     radiologist_name: str | None
@@ -11,6 +30,10 @@ class RadiologistRosterItem(BaseModel):
     deployment_status: str | None
     deployment_launch_group: str | None
     current_team: str | None
+    # Where the rad actually reads, as opposed to where they belong. Optional so cached
+    # roster payloads written before these two fields existed still deserialize.
+    primary_site: str | None = None
+    site_count: int | None = None
     reporting_cases_read: float | None = None
     total_drafting_cases: float | None = None
     total_mosaic_exams: int | None = None
@@ -30,43 +53,6 @@ class UtilizationPracticeRollup(BaseModel):
     pct_mammo_mosaic: float | None
     rads_live: int | None
     rads_drafting: int | None
-
-
-class DeploymentRadiologistItem(BaseModel):
-    npi: int
-    radiologist_name: str | None
-    home_practice: str | None
-    working_subspecialty: str | None
-    xr_ct_head_status: str | None
-    ct_abdpel_status: str | None
-    ct_chest_status: str | None = None
-    ct_head_drafts_last_14d: int
-    xr_drafts_last_14d: int
-    ct_abdpel_drafts_last_14d: int
-    ct_chest_drafts_last_14d: int | None = None
-
-
-class DeploymentPracticeRollup(BaseModel):
-    practice: str | None
-    total_rads: int
-    xr_ct_head_enabled_rads: int
-    ct_abdpel_enabled_rads: int
-    ct_chest_enabled_rads: int | None = None
-    ct_head_cases_last_14d: int
-    xr_cases_last_14d: int
-    ct_abdpel_cases_last_14d: int
-    ct_chest_cases_last_14d: int | None = None
-
-
-class DeploymentFunnelStage(BaseModel):
-    stage: str
-    rank: int
-    count: int
-
-
-class DeploymentFunnel(BaseModel):
-    domain: str
-    stages: list[DeploymentFunnelStage]
 
 
 class BlockerByPractice(BaseModel):
@@ -128,11 +114,13 @@ class EfficiencyTrendPoint(BaseModel):
     practice: str | None = None
     exam_category: str | None
     reporting_tbwu_per_min: float | None
-    drafting_tbwu_per_min: float | None
+    drafting_tbwu_per_min: float | None  # "Drafting + Capture" - Capture (US/BD) rows are a subset of Drafting
     full_mosaic_tbwu_per_min: float | None
+    drafting_only_tbwu_per_min: float | None = None  # Drafting excluding Capture-modality (US/BD) rows
     reporting_pct_change: float | None
     drafting_pct_change: float | None
     full_mosaic_pct_change: float | None
+    drafting_only_pct_change: float | None = None
     reporting_rad_count: int
     drafting_rad_count: int
     reporting_exam_count: int
@@ -145,25 +133,146 @@ class EfficiencyTrendRpAvgPoint(BaseModel):
     full_mosaic_tbwu_per_min: float | None
 
 
-class FocusRadiologistItem(BaseModel):
-    """A radiologist flagged by the real Mosaic Value Project (MVP) methodology: a fixed
-    baseline period (May-Jul 2026) vs. the most recent full month, gated by a minimum D&C
-    exam-volume floor and tiered by baseline capacity x efficiency-loss severity. Does not
-    model MVP's Dynamics-CRM-only exclusions ("Q3 go-live practice", "Do Not Revisit" flags) -
-    those live in a manually-maintained CRM export, not EDW."""
+class VolumeSummary(BaseModel):
+    """Company-wide (no grouping) volume snapshot - same measure set as the governed
+    mosaic_volume_metric_view's company-wide roll-up, reconciled by construction since it reuses
+    mosaic_service.py's own _RPCE_SOURCE_SYSTEMS_SQL/_RPCE_PCT_ADJUSTMENT constants."""
+
+    total_exams: int
+    mosaic_exams: int
+    pct_mosaic: float | None
+    drafting_exams: int
+    pct_drafting: float | None
+    pct_rpce_reporting: float | None
+    pct_rpce_drafting: float | None
+
+
+class VolumeGroupRollup(BaseModel):
+    """One row per group (Managing Practice, Team, or Local Region, depending on which /volume/by-*
+    route returned it) - same shape as VolumeSummary plus the group label."""
+
+    group: str | None
+    total_exams: int
+    mosaic_exams: int
+    pct_mosaic: float | None
+    drafting_exams: int
+    pct_drafting: float | None
+    pct_rpce_reporting: float | None
+    pct_rpce_drafting: float | None
+
+
+class VolumeTrendPoint(BaseModel):
+    period: str
+    total_exams: int
+    mosaic_exams: int
+    pct_mosaic: float | None
+    drafting_exams: int
+    pct_drafting: float | None
+
+
+class VolumeFilterOptions(BaseModel):
+    practices: list[str]
+    teams: list[str]
+    local_regions: list[str]
+
+
+class MentorMatchStatus(BaseModel):
+    """One radiologist's entry on the real Mosaic Mentors / peer-coach "Matching Status" sheet -
+    see app/data/mvp_mentor_matching.py for provenance. Distinct from (and much more specific
+    than) MvpRadiologistItem's own mosaic_mentor/mosaic_mentor_status fields, which are
+    populated for almost none of the MVP cohort."""
+
+    matching_status: str
+    mentors_identified: str | None = None
+    matching_notes: str | None = None
+    mentorship_meeting_date: str | None = None
+
+
+class MvpRadiologistItem(BaseModel):
+    """One radiologist from the real Mosaic Value Project program, read directly from
+    edw_prod.dataverse_m365-vra-dynamics-prod.rad_onboarding (the Dynamics-synced CRM table the
+    MVP Clinical Transformation team themselves maintain) rather than approximated from EDW -
+    supersedes the old from-scratch Focus Rads heuristic, which couldn't see the program's own
+    cohort/exclusion/outreach fields at all. current_dc_exam_count/current_exam_count omitted -
+    not meaningful at the universe level this endpoint returns (includes excluded rads)."""
 
     npi: int
     radiologist_name: str | None
     practice: str | None
-    subspecialty: str | None
-    priority_tier: str  # "Tier 1" | "Tier 2" | "Tier 3"
-    baseline_capacity_per_shift: float | None
-    dc_efficiency_change_pct: float | None
-    capacity_change_pct: float | None
-    ct_drafting_change_pct: float | None
-    xr_drafting_change_pct: float | None
-    us_capture_change_pct: float | None
-    current_dc_exam_count: int
+    mvp_cohort: str | None  # "Cohort 1".."Cohort 4", optionally "(Mammo)"/"(Ops or Self Referred)"
+    exclusion_reason: str | None  # None = actively tracked; populated = why this rad isn't engaged
+    mvp_target_outreach_week: str | None
+    reads_500_plus_dx_cases: str | None  # raw "Yes"/"No" from rad_onboarding's `500_dx_cases`
+    baseline_capacity_tbwu_9h: float | None  # mvp_tbwus_9h_shift_may_jul_26
+    full_mosaic_efficiency_change_pct: float | None  # vs the fixed May-Jul 2026 baseline
+    xr_drafting_efficiency_change_pct: float | None
+    ct_head_efficiency_change_pct: float | None
+    us_capture_efficiency_change_pct: float | None
+    drafting_captured_efficiency_change_pct: float | None
+    efficiency_change_last_30d_pct: float | None
+    full_mosaic_change_l7d_pct: float | None
+    full_mosaic_change_l14d_pct: float | None
+    full_mosaic_change_l30d_pct: float | None
+    xr_drafting_change_l7d_pct: float | None
+    xr_drafting_change_l14d_pct: float | None
+    xr_drafting_change_l30d_pct: float | None
+    ct_head_change_l7d_pct: float | None
+    ct_head_change_l14d_pct: float | None
+    ct_head_change_l30d_pct: float | None
+    us_capture_change_l7d_pct: float | None
+    us_capture_change_l14d_pct: float | None
+    us_capture_change_l30d_pct: float | None
+    mosaic_mentor: str | None
+    mosaic_mentor_status: str | None
+    optimization_support_status: str | None
+    optimization_support_notes: str | None
+    utilization_plan_notes: str | None
+    optimization_last_updated: str | None = None  # "last touched" proxy, not a stage-transition log - see 016_*.sql
+    mentor_match: MentorMatchStatus | None = None
+
+
+class EngagementCapacityPlan(BaseModel):
+    """A dated, one-time staffing/timeline planning snapshot (see
+    mvp_context.ENGAGEMENT_CAPACITY_PLAN for full provenance) - NOT a live forecast. Its own
+    finish_by_date has already passed as of when this was extracted; shown in the UI purely as
+    planning context, clearly labeled as such. projected_finish_date_if_unaided, unlike
+    finish_by_date, was still genuinely near-term as of this extraction - worth surfacing on its
+    own, not just as a stale historical figure."""
+
+    source_date: str
+    radiologists_on_list: int
+    already_engaged_at_plan_time: int
+    left_to_go_at_plan_time: int
+    realistic_target: int
+    hours_per_radiologist_all_in: float
+    total_hours_of_work: int
+    cols_today: int
+    people_needed_at_full_col_hours: int
+    people_to_add: int
+    trainers_to_borrow_at_16hrs_week: int
+    throughput_per_week_current_team: float
+    start_date: str
+    finish_by_date: str
+    engaged_by_finish_by_date: int
+    projected_finish_date_if_unaided: str
+    summary: str
+
+
+class MvpProgramContext(BaseModel):
+    """Static program narrative/glossary - see app/data/mvp_context.py for provenance. No EDW/
+    cache dependency, same pattern as RadSurveySummary - also used as AI hover-context grounding."""
+
+    program_narrative: str
+    program_history: str
+    priority_tier_definitions: dict[str, str]
+    exclusion_reason_glossary: dict[str, str]
+    engagement_process_steps: list[str]
+    mentorship_program_summary: str
+    current_status_notes: str
+    ai_generated_narrative: str
+    engagement_capacity_plan: EngagementCapacityPlan
+    overview_narrative: str = ""
+    mammo_narrative: str = ""
 
 
 class CapacityRadiologistItem(BaseModel):
@@ -197,6 +306,8 @@ class CapacityRadiologistItem(BaseModel):
     ir_cases: float | None
     adjustment_rvu: float | None
     adjustment_tbwu: float | None
+    pct_exams_with_valid_read_time: float | None = None
+    pct_shifts_rpce_source: float | None = None
 
 
 class MosaicIntelligenceSnapshot(BaseModel):
@@ -328,39 +439,6 @@ class RadSummaryStat(BaseModel):
     drafting_groups: list[str]
 
 
-class ScorecardMetrics(BaseModel):
-    top_n: str  # "5" | "10" | "15" | "20" | "25" | "30" | "all"
-    shifts_worked: int
-    case_count: int
-    addl_capacity_per_shift: float | None
-    efficiency: float | None
-    shift_utilization: float | None
-    avg_units_per_shift: float | None
-    ct_cases: int
-    xr_cases: int
-    us_cases: int
-    mr_cases: int
-    nm_cases: int
-    pt_cases: int
-    mg_cases: int
-    ir_cases: int
-    other_modality_cases: int
-    routine_cases: int
-    stat_cases: int
-    stroke_cases: int
-    trauma_cases: int
-    otherp_cases: int
-
-
-class RadiologistScorecard(BaseModel):
-    npi: int
-    radiologist_name: str | None
-    team: str | None
-    practice: str | None
-    mosaic_go_live_date: date | None
-    metrics: list[ScorecardMetrics]
-
-
 class UndraftedCategoryPoint(BaseModel):
     week_start: date
     local_practice: str | None
@@ -412,21 +490,6 @@ class RadSurveySummary(BaseModel):
     top_frustration_themes: list[ThemeStat]
     top_praised_themes: list[ThemeStat]
     by_practice: list[PracticeNpsStat]
-
-
-class ExternalFeedbackItem(BaseModel):
-    """One record pushed through the speculative /api/mosaic/ingest/external_feedback_demo
-    endpoint (routes/mosaic.py) - the real shape for that placeholder, now that it has one.
-    Deliberately a sibling of RadSurveySummary above (same positive/neutral/negative framing
-    the Rad Sentiment page already uses) rather than a new taxonomy - this is meant to read as
-    a *live* counterpart to that static survey snapshot, not an unrelated concept."""
-
-    practice: str | None = None
-    radiologist_name: str | None = None
-    sentiment: str  # "positive" | "neutral" | "negative"
-    category: str | None = None
-    comment: str | None = None
-    submitted_at: str
 
 
 class DraftInsightOverview(BaseModel):
@@ -497,6 +560,8 @@ class CapacityPracticeRollup(BaseModel):
     ir_cases: float | None
     adjustment_rvu: float | None
     adjustment_tbwu: float | None
+    pct_exams_with_valid_read_time: float | None = None
+    pct_shifts_rpce_source: float | None = None
 
 
 class CapacityBaselineScorecard(BaseModel):
@@ -577,17 +642,65 @@ class BaselineProxyCandidate(BaseModel):
     baseline_tbwu_per_hour: float | None
 
 
-class ReconciliationFinding(BaseModel):
-    """One row of the Reconciliation tab's unified divergence feed - "where the counts
-    disagree", mirroring the pattern (not the data source) of PCC's native Mosaic Intelligence
-    Reconciliation tab. Each of reconciliation_service.py's 3 checks emits a list of these;
-    get_all_findings() concatenates and sorts by magnitude descending across all of them, so
-    the feed reads biggest-divergence-first regardless of which check it came from."""
+class ShiftUtilizationItem(BaseModel):
+    """One row per (radiologist, shift date) - how much of the shift was reading time, and how
+    much of that reading was Mosaic-assisted or AI-drafted. Source:
+    edw_dev.bipa_analytics.presentation_deneb_vw (RP's own Deneb/shift-timeline source) joined to
+    tbl_exam_inventory's mosaic_read_flag/mosaic_draft_flag via accession number."""
 
-    check: str  # "mosaic_flag_mismatch" | "seal_team_mislabeling" | "seal_baseline_drift"
-    scope: str  # human label for what's being compared, e.g. "Practice", "Radiologist (NPI)"
-    entity: str  # the practice name / NPI+name / etc this finding is about
-    expected: str
-    actual: str
-    magnitude: float  # whatever that check's own natural count is - sorts findings descending
-    detail: str | None = None
+    npi: int
+    radiologist_name: str | None
+    practice: str | None
+    shift_date: date
+    utilization_pct: float | None  # fraction 0-1, reading_minutes/shift_total_minutes
+    pct_mosaic_read: float | None  # fraction 0-1 of that shift's exams read on Mosaic
+    pct_ai_drafted: float | None  # fraction 0-1 of that shift's exams AI-drafted
+    reading_minutes: float | None
+    shift_total_minutes: float | None
+
+
+class GenieAskRequest(BaseModel):
+    question: str
+    conversation_id: str | None = None
+
+
+class GenieAskResponse(BaseModel):
+    conversation_id: str
+    message_id: str
+
+
+class GenieResultTable(BaseModel):
+    columns: list[str]
+    rows: list[list]
+
+
+class GenieMessageResponse(BaseModel):
+    status: str
+    text: str | None
+    sql: str | None
+    error: str | None
+    suggested_questions: list[str]
+
+
+# ===========================================================================================
+# MVP Weekly Update dashboard rebuild (see declarative-dancing-willow.md plan, "MVP module
+# rebuild: reproduce the real Weekly Update report"). Status funnel / impact breakdown /
+# escalations-by-owner / weekly trend are all derived client-side from the existing
+# /mvp/radiologists payload (mirrors the computePriorities() pattern already in Mvp.tsx) - these
+# models exist only for the two pieces that genuinely need a new backend computation: the
+# Mammo-screening volume+efficiency combo chart, and the precomputed AI narrative per dashboard.
+
+class MammoScreeningTrendPoint(BaseModel):
+    period: str
+    screening_volume: int
+    screening_efficiency_change_pct: float | None
+
+
+class MvpDashboardNarrative(BaseModel):
+    """Precomputed (refresh-cycle) AI narrative for one MVP dashboard scope - mirrors
+    MvpProgramContext.ai_generated_narrative's exact pattern (never generated live on page
+    load, static fallback on failure)."""
+
+    scope: str  # "overview" | "mammo"
+    narrative: str
+    result: GenieResultTable | None

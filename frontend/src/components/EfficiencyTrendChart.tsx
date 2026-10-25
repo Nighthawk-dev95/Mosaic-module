@@ -16,11 +16,15 @@ interface Props {
   trend: EfficiencyTrendPoint[];
   rpAvg?: EfficiencyTrendRpAvgPoint[];
   mode: Mode;
+  /** MVP Area Detail's 4th line ("Drafting Only", excluding Capture-modality rows) - optional
+   * since most callers of this chart don't have/need the capture split. */
+  showDraftingOnly?: boolean;
 }
 
 const REPORTING_COLOR = "var(--series-6-green)";
 const DRAFTING_COLOR = "var(--series-4-yellow)";
 const FULL_MOSAIC_COLOR = "var(--series-5-magenta)";
+const DRAFTING_ONLY_COLOR = "var(--domain-capture)";
 
 function fmtMonth(period: string): string {
   const d = new Date(period);
@@ -70,7 +74,7 @@ function CombinedTooltip({ active, payload, label, mode }: any) {
   );
 }
 
-export function EfficiencyTrendChart({ trend, rpAvg, mode }: Props) {
+export function EfficiencyTrendChart({ trend, rpAvg, mode, showDraftingOnly = false }: Props) {
   const rpAvgByPeriod = new Map((rpAvg ?? []).map((r) => [r.period, r]));
   const data = trend.map((t) => {
     const rp = rpAvgByPeriod.get(t.period);
@@ -84,6 +88,7 @@ export function EfficiencyTrendChart({ trend, rpAvg, mode }: Props) {
   const reportingKey = mode === "absolute" ? "reporting_tbwu_per_min" : "reporting_pct_change";
   const draftingKey = mode === "absolute" ? "drafting_tbwu_per_min" : "drafting_pct_change";
   const fullMosaicKey = mode === "absolute" ? "full_mosaic_tbwu_per_min" : "full_mosaic_pct_change";
+  const draftingOnlyKey = mode === "absolute" ? "drafting_only_tbwu_per_min" : "drafting_only_pct_change";
 
   return (
     <ResponsiveContainer width="100%" height={280}>
@@ -106,8 +111,11 @@ export function EfficiencyTrendChart({ trend, rpAvg, mode }: Props) {
         <Tooltip content={<CombinedTooltip mode={mode} />} />
         <Legend wrapperStyle={{ fontSize: 12, color: "var(--text-secondary)" }} formatter={(v) => <span style={{ color: "var(--text-secondary)" }}>{v}</span>} />
         <Line type="monotone" dataKey={reportingKey} name="Reporting (Non-Drafted)" stroke={REPORTING_COLOR} strokeWidth={2} dot={false} isAnimationActive={false} connectNulls />
-        <Line type="monotone" dataKey={draftingKey} name="Drafting Only" stroke={DRAFTING_COLOR} strokeWidth={2} dot={false} isAnimationActive={false} connectNulls />
+        <Line type="monotone" dataKey={draftingKey} name={showDraftingOnly ? "Drafting + Capture" : "Drafting Only"} stroke={DRAFTING_COLOR} strokeWidth={2} dot={false} isAnimationActive={false} connectNulls />
         <Line type="monotone" dataKey={fullMosaicKey} name="Full Mosaic" stroke={FULL_MOSAIC_COLOR} strokeWidth={2} dot={false} isAnimationActive={false} connectNulls />
+        {showDraftingOnly && (
+          <Line type="monotone" dataKey={draftingOnlyKey} name="Drafting Only" stroke={DRAFTING_ONLY_COLOR} strokeWidth={2} dot={false} isAnimationActive={false} connectNulls />
+        )}
         {mode === "absolute" && rpAvg && (
           <>
             <Line

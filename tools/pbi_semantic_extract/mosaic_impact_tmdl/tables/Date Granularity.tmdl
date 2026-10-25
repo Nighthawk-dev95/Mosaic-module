@@ -1,0 +1,45 @@
+table 'Date Granularity'
+	lineageTag: 4ab41e79-3685-499b-8c9c-2ebb01a39284
+
+	column 'Date Granularity'
+		lineageTag: 349bef48-105f-405a-86bd-b0f9b5aac195
+		summarizeBy: none
+		sourceColumn: [Value1]
+		sortByColumn: 'Date Granularity Order'
+
+		relatedColumnDetails
+			groupByColumn: 'Date Granularity Fields'
+
+		annotation SummarizationSetBy = Automatic
+
+	column 'Date Granularity Fields'
+		isHidden
+		lineageTag: ff3728a9-adb0-4d8e-960f-b4e1385378d9
+		summarizeBy: none
+		sourceColumn: [Value2]
+		sortByColumn: 'Date Granularity Order'
+
+		extendedProperty ParameterMetadata = {"version":3,"kind":2}
+
+		annotation SummarizationSetBy = Automatic
+
+	column 'Date Granularity Order'
+		isHidden
+		formatString: 0
+		lineageTag: 4b848847-8a78-4b77-aaa6-b736b2862ac8
+		summarizeBy: sum
+		sourceColumn: [Value3]
+
+		annotation SummarizationSetBy = Automatic
+
+	partition 'Date Granularity' = calculated
+		mode: import
+		source =
+				{
+				    ("By Week", NAMEOF('0. Cur'[Shift Week Start]), 0),
+				    ("By Month", NAMEOF('0. Cur'[Shift Date (Year Month)]), 1),
+				    ("By Quarter", NAMEOF('0. Cur'[Shift Date (Year Quarter)]), 2)
+				}
+
+	annotation PBI_Id = 5549937e025445ca99d07c7015b5da2a
+

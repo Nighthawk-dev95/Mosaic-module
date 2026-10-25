@@ -1,0 +1,179 @@
+table RLSTeamTable
+	lineageTag: 33c185bd-30e4-4b68-83d2-a9a245977f09
+
+	column NAME
+		lineageTag: 45410013-b66d-418e-b006-237c0da3591f
+		summarizeBy: none
+		isNameInferred
+		sourceColumn: MODEL POWERBI_USER_FILTERS[NAME]
+		columnOrigin: 'MODEL POWERBI_USER_FILTERS'.NAME
+
+		annotation SummarizationSetBy = Automatic
+
+	column EMAIL
+		lineageTag: 490900d5-7867-4151-ad92-388731227506
+		summarizeBy: none
+		isNameInferred
+		sourceColumn: MODEL POWERBI_USER_FILTERS[EMAIL]
+		columnOrigin: 'MODEL POWERBI_USER_FILTERS'.EMAIL
+
+		annotation SummarizationSetBy = Automatic
+
+	column SUB_PRACTICE_SHORT_NAME
+		lineageTag: 7cf312ac-a417-4c43-87fc-29c3a73eed56
+		summarizeBy: none
+		isNameInferred
+		sourceColumn: MODEL POWERBI_USER_FILTERS[SUB_PRACTICE_SHORT_NAME]
+		columnOrigin: 'MODEL POWERBI_USER_FILTERS'.SUB_PRACTICE_SHORT_NAME
+
+		annotation SummarizationSetBy = Automatic
+
+	column AREA
+		lineageTag: 17fc091e-740d-4e5c-af84-3525af949374
+		summarizeBy: none
+		isNameInferred
+		sourceColumn: MODEL POWERBI_USER_FILTERS[AREA]
+		columnOrigin: 'MODEL POWERBI_USER_FILTERS'.AREA
+
+		annotation SummarizationSetBy = Automatic
+
+	column REGION
+		lineageTag: 5cfd4607-d3a4-4be6-9e2f-d05c242c2744
+		summarizeBy: none
+		isNameInferred
+		sourceColumn: MODEL POWERBI_USER_FILTERS[REGION]
+		columnOrigin: 'MODEL POWERBI_USER_FILTERS'.REGION
+
+		annotation SummarizationSetBy = Automatic
+
+	column Created_Date
+		lineageTag: ffdec948-bfbb-4c1e-a941-14ad251c33df
+		summarizeBy: none
+		isNameInferred
+		sourceColumn: MODEL POWERBI_USER_FILTERS[Created_Date]
+		columnOrigin: 'MODEL POWERBI_USER_FILTERS'.Created_Date
+
+		annotation SummarizationSetBy = Automatic
+
+	column Created_By
+		lineageTag: 3c6d008f-e1da-436e-bc6a-ccdf70125e23
+		summarizeBy: none
+		isNameInferred
+		sourceColumn: MODEL POWERBI_USER_FILTERS[Created_By]
+		columnOrigin: 'MODEL POWERBI_USER_FILTERS'.Created_By
+
+		annotation SummarizationSetBy = Automatic
+
+	column TITLE
+		lineageTag: edaae2ad-26a6-4bd8-ab8a-e3e73f5c83aa
+		summarizeBy: none
+		isNameInferred
+		sourceColumn: MODEL POWERBI_USER_FILTERS[TITLE]
+		columnOrigin: 'MODEL POWERBI_USER_FILTERS'.TITLE
+
+		annotation SummarizationSetBy = Automatic
+
+	column LocationFiltered
+		formatString: 0
+		lineageTag: c1f384a7-fdb5-4edc-bd76-c8385e58afa1
+		summarizeBy: sum
+		isNameInferred
+		sourceColumn: MODEL POWERBI_USER_FILTERS[LocationFiltered]
+		columnOrigin: 'MODEL POWERBI_USER_FILTERS'.LocationFiltered
+
+		annotation SummarizationSetBy = Automatic
+
+	column ID
+		formatString: 0
+		lineageTag: bc5407f7-d866-491e-98e1-c2ed34c46e68
+		summarizeBy: count
+		isNameInferred
+		sourceColumn: MODEL POWERBI_USER_FILTERS[ID]
+		columnOrigin: 'MODEL POWERBI_USER_FILTERS'.ID
+
+		annotation SummarizationSetBy = Automatic
+
+	column CCT_Access
+		formatString: 0
+		lineageTag: 22356997-7be4-4f3e-ab8a-25098e1df336
+		summarizeBy: sum
+		isNameInferred
+		sourceColumn: MODEL POWERBI_USER_FILTERS[CCT_Access]
+		columnOrigin: 'MODEL POWERBI_USER_FILTERS'.CCT_Access
+
+		annotation SummarizationSetBy = Automatic
+
+	column Local_Practic_Division_transition
+		lineageTag: e335ad43-5e19-484b-9d0c-39f49db3d88a
+		summarizeBy: none
+		isNameInferred
+		sourceColumn: MODEL POWERBI_USER_FILTERS[Local_Practic_Division_transition]
+		columnOrigin: 'MODEL POWERBI_USER_FILTERS'.Local_Practic_Division_transition
+
+		annotation SummarizationSetBy = Automatic
+
+	column Client_Dashboard_Access
+		formatString: 0
+		lineageTag: 896523b4-7950-4b69-b61e-e4812176f7e4
+		summarizeBy: sum
+		isNameInferred
+		sourceColumn: MODEL POWERBI_USER_FILTERS[Client_Dashboard_Access]
+		columnOrigin: 'MODEL POWERBI_USER_FILTERS'.Client_Dashboard_Access
+
+		annotation SummarizationSetBy = Automatic
+
+	column NPI
+		formatString: 0
+		lineageTag: 79493e8b-5d88-485f-b6be-255c3f302006
+		summarizeBy: sum
+		isNameInferred
+		sourceColumn: MODEL POWERBI_USER_FILTERS[NPI]
+		columnOrigin: 'MODEL POWERBI_USER_FILTERS'.NPI
+
+		annotation SummarizationSetBy = Automatic
+
+	column RVU_Weekly_pmm_subscription
+		formatString: 0
+		lineageTag: 6b3e2204-c582-4d78-84ae-f8288e9de4a8
+		summarizeBy: sum
+		isNameInferred
+		sourceColumn: MODEL POWERBI_USER_FILTERS[RVU_Weekly_pmm_subscription]
+		columnOrigin: 'MODEL POWERBI_USER_FILTERS'.RVU_Weekly_pmm_subscription
+
+		annotation SummarizationSetBy = Automatic
+
+	column TBWU_Weekly_pmm_subscription
+		formatString: 0
+		lineageTag: a790cb5b-2d2b-4679-9ef3-32eccd85a93e
+		summarizeBy: sum
+		isNameInferred
+		sourceColumn: MODEL POWERBI_USER_FILTERS[TBWU_Weekly_pmm_subscription]
+		columnOrigin: 'MODEL POWERBI_USER_FILTERS'.TBWU_Weekly_pmm_subscription
+
+		annotation SummarizationSetBy = Automatic
+
+	column RLS_Exception
+		formatString: """TRUE"";""TRUE"";""FALSE"""
+		lineageTag: c43dbbf6-2236-4a6f-a79c-d1622a62b2d3
+		summarizeBy: none
+		isNameInferred
+		sourceColumn: MODEL POWERBI_USER_FILTERS[RLS_Exception]
+		columnOrigin: 'MODEL POWERBI_USER_FILTERS'.RLS_Exception
+
+		annotation SummarizationSetBy = Automatic
+
+	column Exception_reason
+		lineageTag: f76b506f-27be-456d-a1f2-63f1d3569ff2
+		summarizeBy: none
+		isNameInferred
+		sourceColumn: MODEL POWERBI_USER_FILTERS[Exception_reason]
+		columnOrigin: 'MODEL POWERBI_USER_FILTERS'.Exception_reason
+
+		annotation SummarizationSetBy = Automatic
+
+	partition RLSTeamTable = calculated
+		mode: import
+		source = 'MODEL POWERBI_USER_FILTERS'
+
+	annotation PBI_Id = a179d16c0fd8426abcbdfa2256d26ccc
+

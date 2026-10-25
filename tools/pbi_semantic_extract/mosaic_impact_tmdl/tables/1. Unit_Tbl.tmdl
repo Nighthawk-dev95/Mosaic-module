@@ -1,0 +1,780 @@
+table '1. Unit_Tbl'
+	lineageTag: 9b8723fd-30e2-4496-a28e-eed13cbc24ee
+
+	measure 'On-Shift Capacity' = ```
+			
+			SWITCH(
+			    SELECTEDVALUE('1. Unit_Tbl'[Productivity Unit]),
+			    "RVU/Shift", SUM('0. Cur'[on_shift_capacity_RVU]),
+			    "TBWU/Shift", SUM('0. Cur'[on_shift_capacity_RPWU25]),
+			    "RVU/Hour", SUM('0. Cur'[on_shift_capacity_RVU_per_hour]),
+			    "TBWU/Hour", SUM('0. Cur'[on_shift_capacity_RPWU25_per_hour]),
+			    "RVU/9 Hour", SUM('0. Cur'[on_shift_capacity_RVU_per_9hours]),
+			    "TBWU 26/Shift", sum('0. Cur'[on_shift_capacity_RPWU]), 
+			    "TBWU 26/Hour" , sum('0. Cur'[on_shift_capacity_vs_baseline_RPWU_per_hour]), 
+			    "TBWU 26/9 Hour", sum('0. Cur'[on_shift_capacity_vs_baseline_RPWU_per_9hours]),
+			    SUM('0. Cur'[on_shift_capacity_RPWU25_per_9hours])
+			)
+			```
+		formatString: 0
+		lineageTag: 7a1b1eb4-f4fb-4611-b383-6957babaf95a
+
+		annotation PBI_FormatHint = {"isDecimal":true}
+
+	measure 'On-Shift Capacity v. BL' = ```
+			
+			SWITCH(
+			    SELECTEDVALUE('1. Unit_Tbl'[Productivity Unit]),
+			    "RVU/Shift", SUM('0. Cur'[on_shift_capacity_vs_baseline_RVU]),
+			    "TBWU/Shift", SUM('0. Cur'[on_shift_capacity_vs_baseline_RPWU25]),
+			    "RVU/Hour", SUM('0. Cur'[on_shift_capacity_vs_baseline_RVU_per_hour]),
+			    "TBWU/Hour", SUM('0. Cur'[on_shift_capacity_vs_baseline_RPWU25_per_hour]),
+			    "RVU/9 Hour", SUM('0. Cur'[on_shift_capacity_vs_baseline_RVU_per_9hours]),
+			    "TBWU 26/Shift" , sum('0. Cur'[on_shift_capacity_vs_baseline_RPWU]), 
+			    "TBWU 26/Hour", sum( '0. Cur'[on_shift_capacity_vs_baseline_RPWU_per_hour]),
+			    "TBWU 26/9 Hour", sum('0. Cur'[on_shift_capacity_vs_baseline_RPWU_per_9hours]), 
+			    SUM('0. Cur'[on_shift_capacity_vs_baseline_RPWU25_per_9hours])
+			)
+			```
+		formatString: 0
+		lineageTag: 3f583e78-c9e2-48a3-b40e-d96d3533c514
+
+		annotation PBI_FormatHint = {"isDecimal":true}
+
+	measure 'Off-Shift Assisted Capacity' =
+			
+			SWITCH(
+			    SELECTEDVALUE('1. Unit_Tbl'[Productivity Unit]),
+			    "RVU/Shift", SUM('0. Cur'[off_shift_assisted_capacity_RVU]),
+			    "TBWU/Shift", SUM('0. Cur'[off_shift_assisted_capacity_RPWU]),
+			    BLANK()
+			)
+		formatString: 0
+		lineageTag: 9465d43e-99d2-4a7c-9cff-1a7f1a426701
+
+		annotation PBI_FormatHint = {"isDecimal":true}
+
+	measure 'On-Shift Capacity Up to BL(Unit)' =
+			
+			SWITCH(
+			    SELECTEDVALUE('1. Unit_Tbl'[Productivity Unit]),
+			    "RVU/Shift", SUM('0. Cur'[OnShiftuptoBL_RVU]),
+			    "TBWU/Shift", SUM('0. Cur'[OnShiftuptoBL_RPWU]),
+			    "RVU/Hour", SUM('0. Cur'[OnShiftuptoBL_RVU_per_hour]),
+			    "TBWU/Hour", SUM('0. Cur'[OnShiftuptoBL_RPWU_per_hour]),
+			    "RVU/9 Hour", SUM('0. Cur'[OnShiftuptoBL_RVU_per_9hours]),
+			    SUM('0. Cur'[OnShiftuptoBL_RPWU_per_9hours])
+			)
+		lineageTag: 2c2ed6c0-385b-4d20-b55f-906b3dc47805
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	measure 'On-Shift Capacity Above BL(Unit)' =
+			
+			SWITCH(
+			    SELECTEDVALUE('1. Unit_Tbl'[Productivity Unit]),
+			    "RVU/Shift", SUM('0. Cur'[OnShiftaboveBL_RVU]),
+			    "TBWU/Shift", SUM('0. Cur'[OnShiftaboveBL_RPWU]),
+			    "RVU/Hour", SUM('0. Cur'[OnShiftaboveBL_RVU_per_hour]),
+			    "TBWU/Hour", SUM('0. Cur'[OnShiftaboveBL_RPWU_per_hour]),
+			    "RVU/9 Hour", SUM('0. Cur'[OnShiftaboveBL_RVU_per_9hours]),
+			    SUM('0. Cur'[OnShiftaboveBL_RPWU_per_9hours])
+			)
+		lineageTag: e5b9ed9a-f6d6-4b4e-91ef-9d84b6838cb2
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	measure 'Shift Baseline' = ```
+			
+			SWITCH(
+			    SELECTEDVALUE('1. Unit_Tbl'[Productivity Unit]),
+			    "RVU/Shift", SUM('0. Cur'[shift_baseline_RVU]),
+			    "TBWU/Shift", SUM('0. Cur'[shift_baseline_RPWU25]),
+			    "RVU/Hour", SUM('0. Cur'[shift_baseline_per_hour_RVU]),
+			    "TBWU/Hour", SUM('0. Cur'[shift_baseline_per_hour_RPWU25]),
+			    "RVU/9 Hour", SUM('0. Cur'[shift_baseline_per_9hours_RVU]),
+			    "TBWU 26/Shift" , sum('0. Cur'[shift_baseline_RPWU]), 
+			    "TBWU 26/Hour" , sum('0. Cur'[shift_baseline_per_hour_RPWU]), 
+			    "TBWU 26/9 Hour" ,sum('0. Cur'[shift_baseline_per_9hours_RPWU]),
+			    SUM('0. Cur'[shift_baseline_per_9hours_RPWU25])
+			)
+			```
+		formatString: 0
+		lineageTag: fafdd97b-b81f-4c6d-8271-cd977b6c531a
+
+		annotation PBI_FormatHint = {"isDecimal":true}
+
+	measure 'On-Shift Cases' =
+			
+			SWITCH(
+			    SELECTEDVALUE('1. Unit_Tbl'[Productivity Unit]),
+			    "RVU/Shift", SUM('0. Cur'[on_shift_cases]),
+			    "TBWU/Shift", SUM('0. Cur'[on_shift_cases]),
+			    "RVU/Hour", SUM('0. Cur'[on_shift_cases_per_hour]),
+			    "TBWU/Hour", SUM('0. Cur'[on_shift_cases_per_hour]),
+			    "RVU/9 Hour", SUM('0. Cur'[on_shift_cases_per_9hours]),
+			    SUM('0. Cur'[on_shift_cases_per_9hours])
+			)
+		formatString: 0
+		lineageTag: 107f26c9-1455-42ec-9859-c3ae3f63e27d
+
+		annotation PBI_FormatHint = {"isDecimal":true}
+
+	measure 'Off-Shift Assisted cases' =
+			
+			SWITCH(
+			    SELECTEDVALUE('1. Unit_Tbl'[Productivity Unit]),
+			    "RVU/Shift", SUM('0. Cur'[off_shift_assisted_cases]),
+			    "TBWU/Shift", SUM('0. Cur'[off_shift_assisted_cases]),
+			    BLANK()
+			)
+		formatString: 0
+		lineageTag: 7d544ae8-847d-441c-b87a-c480da7b78ec
+
+	measure 'On-Shift Assisted Cases' =
+			
+			SWITCH(
+			    SELECTEDVALUE('1. Unit_Tbl'[Productivity Unit]),
+			    "RVU/Shift", SUM('0. Cur'[on_shift_assisted_cases]),
+			    "TBWU/Shift", SUM('0. Cur'[on_shift_assisted_cases]),
+			    "RVU/Hour", SUM('0. Cur'[on_shift_assisted_cases_per_hour]),
+			    "TBWU/Hour", SUM('0. Cur'[on_shift_assisted_cases_per_hour]),
+			    "RVU/9 Hour", SUM('0. Cur'[on_shift_assisted_cases_per_9hours]),
+			    SUM('0. Cur'[on_shift_assisted_cases_per_9hours])
+			)
+		formatString: 0
+		lineageTag: 4418b9ad-a7a6-4e9f-9280-05b766789a71
+
+		annotation PBI_FormatHint = {"isDecimal":true}
+
+	measure '% Assisted' =
+			
+			SWITCH(
+			    SELECTEDVALUE('1. Unit_Tbl'[Productivity Unit]),
+			    "RVU/Shift", [% VRA Assisted per shift],
+			    "TBWU/Shift", [% VRA Assisted per shift],
+			    "RVU/Hour", [% VRA Assisted per hour],
+			    "TBWU/Hour", [% VRA Assisted per hour],
+			    "RVU/9 Hour", [% VRA Assisted per 9hour],
+			    [% VRA Assisted per 9hour]
+			)
+		formatString: 0%;-0%;0%
+		lineageTag: e041044a-8835-4ba1-b889-848d0ebca1b8
+
+	measure 'Avg Unit per case' = [On-Shift Capacity] / [On-Shift Cases]
+		lineageTag: 7933ab54-8d1f-4ad3-86f3-8b8902ae3e8d
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	measure '% Autonext' = ```
+			
+			SWITCH(
+			    SELECTEDVALUE('1. Unit_Tbl'[Productivity Unit]),
+			    "RVU/Shift", [% Autonext per shift],
+			    "TBWU/Shift", [% Autonext per shift],
+			    "RVU/Hour", [% Autonext per hour],
+			    "TBWU/Hour", [% Autonext per hour],
+			    "RVU/9 Hour", [% Autonext per 9hour],
+			    "TBWU 26/Shift", [% Autonext per shift], 
+			    "TBWU 26/Hour", [% Autonext per hour], 
+			    "TBWU 26/9 Hour", [% Autonext per 9hour], 
+			    [% Autonext per 9hour]
+			)
+			```
+		formatString: 0%;-0%;0%
+		lineageTag: a47cf72a-f2ce-4578-8593-e59ab60ebdfc
+
+	measure '% XR' = ```
+			
+			SWITCH(
+			    SELECTEDVALUE('1. Unit_Tbl'[Productivity Unit]),
+			    "RVU/Shift", [% XR per shift],
+			    "TBWU/Shift", [% XR per shift],
+			    "RVU/Hour", [% XR per hour],
+			    "TBWU/Hour", [% XR per hour],
+			    "RVU/9 Hour", [% XR per 9hour],
+			    "TBWU 26/Shift", [% XR per shift], 
+			    "TBWU 26/Hour", [% XR per hour], 
+			    "TBWU 26/9 Hour", [% XR per 9hour], 
+			    [% XR per 9hour]
+			)
+			```
+		formatString: 0%;-0%;0%
+		lineageTag: a57587ed-d489-469a-a3de-f56f8df0c0b4
+
+	measure '% CT' = ```
+			
+			SWITCH(
+			    SELECTEDVALUE('1. Unit_Tbl'[Productivity Unit]),
+			    "RVU/Shift", [% CT per shift],
+			    "TBWU/Shift", [% CT per shift],
+			    "RVU/Hour", [% CT per hour],
+			    "TBWU/Hour", [% CT per hour],
+			    "RVU/9 Hour", [% CT per 9hour],
+			    "TBWU 26/Shift", [% CT per shift], 
+			    "TBWU 26/Hour", [% CT per hour], 
+			    "TBWU 26/9 Hour", [% CT per 9hour], 
+			    [% CT per 9hour]
+			)
+			```
+		formatString: 0%;-0%;0%
+		lineageTag: 295a9709-7d79-4506-8a44-057e53fcf904
+
+	measure '% US' = ```
+			
+			SWITCH(
+			    SELECTEDVALUE('1. Unit_Tbl'[Productivity Unit]),
+			    "RVU/Shift", [% US per shift],
+			    "TBWU/Shift", [% US per shift],
+			    "RVU/Hour", [% US per hour],
+			    "TBWU/Hour", [% US per hour],
+			    "RVU/9 Hour", [% US per 9hour],
+			    "TBWU 26/Shift", [% US per shift], 
+			    "TBWU 26/Hour", [% US per hour], 
+			    "TBWU 26/9 Hour", [% US per 9hour], 
+			    [% US per 9hour]
+			)
+			```
+		formatString: 0%;-0%;0%
+		lineageTag: 739690ee-e3aa-45b7-9798-14ef0b29c8a7
+
+	measure '% MR' = ```
+			
+			SWITCH(
+			    SELECTEDVALUE('1. Unit_Tbl'[Productivity Unit]),
+			    "RVU/Shift", [% MR per shift],
+			    "TBWU/Shift", [% MR per shift],
+			    "RVU/Hour", [% MR per hour],
+			    "TBWU/Hour", [% MR per hour],
+			    "RVU/9 Hour", [% MR per 9hour],
+			    "TBWU 26/Shift", [% MR per shift], 
+			    "TBWU 26/Hour", [% MR per hour], 
+			    "TBWU 26/9 Hour", [% MR per 9hour],
+			    [% MR per 9hour]
+			)
+			```
+		formatString: 0%;-0%;0%
+		lineageTag: f26037db-104d-41b7-9d5d-4d5a37e22923
+
+	measure '% NM' = ```
+			
+			SWITCH(
+			    SELECTEDVALUE('1. Unit_Tbl'[Productivity Unit]),
+			    "RVU/Shift", [% NM per shift],
+			    "TBWU/Shift", [% NM per shift],
+			    "RVU/Hour", [% NM per hour],
+			    "TBWU/Hour", [% NM per hour],
+			    "RVU/9 Hour", [% NM per 9hour],
+			    "TBWU 26/Shift", [% NM per shift], 
+			    "TBWU 26/Hour", [% NM per hour], 
+			    "TBWU 26/9 Hour", [% NM per 9hour],
+			    [% NM per 9hour]
+			)
+			```
+		formatString: 0%;-0%;0%
+		lineageTag: 87da18de-0b06-4ec0-909f-96264738b941
+
+	measure '% PT' = ```
+			
+			SWITCH(
+			    SELECTEDVALUE('1. Unit_Tbl'[Productivity Unit]),
+			    "RVU/Shift", [% PT per shift],
+			    "TBWU/Shift", [% PT per shift],
+			    "RVU/Hour", [% PT per hour],
+			    "TBWU/Hour", [% PT per hour],
+			    "RVU/9 Hour", [% PT per 9hour],
+			    "TBWU 26/Shift", [% PT per shift], 
+			    "TBWU 26/Hour", [% PT per hour], 
+			    "TBWU 26/9 Hour", [% PT per 9hour],
+			    [% PT per 9hour]
+			)
+			```
+		formatString: 0%;-0%;0%
+		lineageTag: 489f1839-4eaa-409f-b4ed-151e69e68144
+
+	measure '% IR' = ```
+			
+			SWITCH(
+			    SELECTEDVALUE('1. Unit_Tbl'[Productivity Unit]),
+			    "RVU/Shift", [% IR per shift],
+			    "TBWU/Shift", [% IR per shift],
+			    "RVU/Hour", [% IR per hour],
+			    "TBWU/Hour", [% IR per hour],
+			    "RVU/9 Hour", [% IR per 9hour],
+			    "TBWU 26/Shift", [% IR per shift], 
+			    "TBWU 26/Hour", [% IR per hour], 
+			    "TBWU 26/9 Hour", [% IR per 9hour],
+			    [% IR per 9hour]
+			)
+			```
+		formatString: 0.00%;-0.00%;0.00%
+		lineageTag: dea27d14-c33d-453d-a796-22cca373db62
+
+	measure '% Other' = ```
+			
+			SWITCH(
+			    SELECTEDVALUE('1. Unit_Tbl'[Productivity Unit]),
+			    "RVU/Shift", [% Other per shift],
+			    "TBWU/Shift", [% Other per shift],
+			    "RVU/Hour", [% Other per hour],
+			    "TBWU/Hour", [% Other per hour],
+			    "RVU/9 Hour", [% Other per 9hour],
+			    "TBWU 26/Shift",[% Other per shift], 
+			    "TBWU 26/Hour", [% Other per hour], 
+			    "TBWU 26/9 Hour", [% Other per 9hour],
+			    [% Other per 9hour]
+			)
+			```
+		formatString: 0%;-0%;0%
+		lineageTag: 18a0629d-0cc6-408f-84e9-39b496f7a222
+
+	measure '% Routine' = ```
+			
+			SWITCH(
+			    SELECTEDVALUE('1. Unit_Tbl'[Productivity Unit]),
+			    "RVU/Shift", [% Routine per shift],
+			    "TBWU/Shift", [% Routine per shift],
+			    "RVU/Hour", [% Routine per hour],
+			    "TBWU/Hour", [% Routine per hour],
+			    "RVU/9 Hour", [% Routine per 9hour],
+			    "TBWU 26/Shift", [% Routine per shift], 
+			    "TBWU 26/Hour", [% Routine per hour], 
+			    "TBWU 26/9 Hour", [% Routine per 9hour], 
+			    [% Routine per 9hour]
+			)
+			```
+		formatString: 0%;-0%;0%
+		lineageTag: fcd54d6f-d65d-411b-8a6b-bda88757a060
+
+	measure '% Stat' = ```
+			
+			SWITCH(
+			    SELECTEDVALUE('1. Unit_Tbl'[Productivity Unit]),
+			    "RVU/Shift", [% Stat per shift],
+			    "TBWU/Shift", [% Stat per shift],
+			    "RVU/Hour", [% Stat per hour],
+			    "TBWU/Hour", [% Stat per hour],
+			    "RVU/9 Hour", [% Stat per 9hour],
+			    "TBWU 26/Shift", [% Stat per shift], 
+			    "TBWU 26/Hour", [% Stat per hour], 
+			    "TBWU 26/9 Hour", [% Stat per 9hour],
+			    [% Stat per 9hour]
+			)
+			```
+		formatString: 0%;-0%;0%
+		lineageTag: a46dd4ba-88b9-4990-9e0e-0d7c9f3d13f9
+
+	measure '% Stroke' = ```
+			
+			SWITCH(
+			    SELECTEDVALUE('1. Unit_Tbl'[Productivity Unit]),
+			    "RVU/Shift", [% Stroke per shift],
+			    "TBWU/Shift", [% Stroke per shift],
+			    "RVU/Hour", [% Stroke per hour],
+			    "TBWU/Hour", [% Stroke per hour],
+			    "RVU/9 Hour", [% Stroke per 9hour],
+			    "TBWU 26/Shift", [% Stroke per shift], 
+			    "TBWU 26/Hour", [% Stroke per hour], 
+			    "TBWU 26/9 Hour", [% Stroke per 9hour], 
+			    [% Stroke per 9hour]
+			)
+			```
+		formatString: 0%;-0%;0%
+		lineageTag: faa1788a-53a7-4787-8b7c-18fea1ed87f5
+
+	measure '% Trauma' = ```
+			
+			SWITCH(
+			    SELECTEDVALUE('1. Unit_Tbl'[Productivity Unit]),
+			    "RVU/Shift", [% Trauma per shift],
+			    "TBWU/Shift", [% Trauma per shift],
+			    "RVU/Hour", [% Trauma per hour],
+			    "TBWU/Hour", [% Trauma per hour],
+			    "RVU/9 Hour", [% Trauma per 9hour],
+			    "TBWU 26/Shift", [% Trauma per shift], 
+			    "TBWU 26/Hour", [% Trauma per hour], 
+			    "TBWU 26/9 Hour", [% Trauma per 9hour], 
+			    [% Trauma per 9hour]
+			)
+			```
+		formatString: 0%;-0%;0%
+		lineageTag: e1a0fe76-46e8-40d6-b2d6-a1e878d1f0e5
+
+	measure Adjustment =
+			
+			SWITCH(
+			    SELECTEDVALUE('1. Unit_Tbl'[Productivity Unit]),
+			    "RVU/Shift", SUM('0. Cur'[adjustment_RVU]),
+			    "TBWU/Shift", SUM('0. Cur'[adjustment_TBWU]),
+			    "RVU/Hour", SUM('0. Cur'[adjustment_RVU]),
+			    "TBWU/Hour", SUM('0. Cur'[adjustment_TBWU]),
+			    "RVU/9 Hour", SUM('0. Cur'[adjustment_RVU]),
+			    SUM('0. Cur'[adjustment_TBWU])
+			)
+		lineageTag: 2617c578-a530-4570-852c-0968eb036f43
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	measure '% OtherP' =
+			
+			SWITCH(
+			    SELECTEDVALUE('1. Unit_Tbl'[Productivity Unit]),
+			    "RVU/Shift", [% OtherP per shift],
+			    "TBWU/Shift", [% OtherP per shift],
+			    "RVU/Hour", [% OtherP per hour],
+			    "TBWU/Hour", [% OtherP per hour],
+			    "RVU/9 Hour", [% OtherP per 9hour],
+			    [% OtherP per 9hour]
+			)
+		lineageTag: d03ff598-8508-4b65-89ff-bf8c152a6bf7
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	measure '% Mosaic' = ```
+			
+			SWITCH(
+			    SELECTEDVALUE('1. Unit_Tbl'[Productivity Unit]),
+			    "RVU/Shift", [% mosaic per shift],
+			    "TBWU/Shift", [% mosaic per shift],
+			    "RVU/Hour", [% Mosaic per hour],
+			    "TBWU/Hour", [% Mosaic per hour],
+			    "RVU/9 Hour", [% Mosaic per 9hour],
+			    "TBWU 26/Shift", [% mosaic per shift], 
+			    "TBWU 26/Hour", [% Mosaic per hour], 
+			    "TBWU 26/9 Hour", [% Mosaic per 9hour], 
+			    [% Mosaic per 9hour]
+			)
+			```
+		formatString: 0%;-0%;0%
+		lineageTag: a951c1ab-dfd2-4720-8add-e8267613f8a4
+
+	measure 'Shift Case Baseline' =
+			
+			SWITCH(
+			    SELECTEDVALUE('1. Unit_Tbl'[Productivity Unit]),
+			    "RVU/Shift", SUM('0. Cur'[shift_baseline_case]),
+			    "TBWU/Shift", SUM('0. Cur'[shift_baseline_case]),
+			    "RVU/Hour", SUM('0. Cur'[shift_baseline_per_hour_case]),
+			    "TBWU/Hour", SUM('0. Cur'[shift_baseline_per_hour_case]),
+			    "RVU/9 Hour", SUM('0. Cur'[shift_baseline_per_9hours_case]),
+			    SUM('0. Cur'[shift_baseline_per_9hours_case])
+			)
+		lineageTag: 0b8f5adf-be21-4b8a-836f-30e2a8ffa863
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	measure 'Shifts to include' = IF(ISBLANK([Shift Baseline]),"Shifts w/o baseline","Shifts with Baseline")
+		lineageTag: 8f940c07-5228-483a-b654-eb4d6076a9d1
+
+	measure '% MG' = ```
+			
+			SWITCH(
+			    SELECTEDVALUE('1. Unit_Tbl'[Productivity Unit]),
+			    "RVU/Shift", [% MG per shift],
+			    "TBWU/Shift", [% MG per shift],
+			    "RVU/Hour", [% MG per hour],
+			    "TBWU/Hour", [% MG per hour],
+			    "RVU/9 Hour", [% MG per 9hour],
+			    "TBWU 26/Shift", [% MG per shift], 
+			    "TBWU 26/Hour", [% MG per hour], 
+			    "TBWU 26/9 Hour", [% MG per 9hour],
+			    [% MG per 9hour]
+			)
+			```
+		formatString: 0%;-0%;0%
+		lineageTag: 2066577e-5fac-4f1a-a3f9-d8dd0230fde5
+
+	measure '% Mosaic Drafting' = ```
+			
+			SWITCH(
+			    SELECTEDVALUE('1. Unit_Tbl'[Productivity Unit]),
+			    "RVU/Shift", [% Mosaic drafting per shift],
+			    "TBWU/Shift", [% Mosaic drafting per shift],
+			    "RVU/Hour", [% Mosaic drafting per hour],
+			    "TBWU/Hour", [% Mosaic drafting per hour],
+			    "RVU/9 Hour", [% Mosaic drafting per 9hour],
+			    "TBWU 26/Shift", [% Mosaic drafting per shift], 
+			    "TBWU 26/Hour", [% Mosaic drafting per hour], 
+			    "TBWU 26/9 Hour", [% Mosaic drafting per 9hour], 
+			    [% Mosaic drafting per 9hour]
+			)
+			```
+		formatString: 0%;-0%;0%
+		lineageTag: 5aa071e9-c3a2-413e-91ae-146647096dd4
+
+	measure '% Assigned' =
+			
+			SWITCH(
+			    SELECTEDVALUE('1. Unit_Tbl'[Productivity Unit]),
+			    "RVU/Shift", [% assigned per shift],
+			    "TBWU/Shift", [% assigned per shift],
+			    "RVU/Hour", [% assigned per hour],
+			    "TBWU/Hour", [% assigned per hour],
+			    "RVU/9 Hour", [% Assigned per 9hour],
+			    [% Assigned per 9hour]
+			)
+		formatString: 0%;-0%;0%
+		lineageTag: 2f078c8f-a1da-4a8a-a525-cde8f77b9c4f
+
+	measure '% Pool' =
+			
+			SWITCH(
+			    SELECTEDVALUE('1. Unit_Tbl'[Productivity Unit]),
+			    "RVU/Shift", [% pool per shift],
+			    "TBWU/Shift", [% pool per shift],
+			    "RVU/Hour", [% pool per hour],
+			    "TBWU/Hour", [% pool per hour],
+			    "RVU/9 Hour", [% Pool per 9hour],
+			    [% Pool per 9hour]
+			)
+		formatString: 0%;-0%;0%
+		lineageTag: 50eab431-9fae-4776-bb5d-84c3fbd6a149
+
+	measure 'shift baseline premosaic' = ```
+			
+			
+			
+			VAR SelectedUnit = SELECTEDVALUE('1. Unit_Tbl'[Productivity Unit])
+			VAR PreMosaicShifts = 
+			    FILTER(
+			        '0. Cur',
+			        '0. Cur'[ShiftDate] < '0. Cur'[Mosaic_go_live_date] || ISBLANK('0. Cur'[Mosaic_go_live_date] 
+			        )// Adjust column names as needed
+			    )
+			RETURN
+			SWITCH(
+			    SelectedUnit,
+			    "RVU/Shift", CALCULATE(SUM('0. Cur'[shift_baseline_RVU]), PreMosaicShifts),
+			    "TBWU/Shift", CALCULATE(SUM('0. Cur'[shift_baseline_RPWU]), PreMosaicShifts),
+			    "RVU/Hour", CALCULATE(SUM('0. Cur'[shift_baseline_per_hour_RVU]), PreMosaicShifts),
+			    "TBWU/Hour", CALCULATE(SUM('0. Cur'[shift_baseline_per_hour_RPWU]), PreMosaicShifts),
+			    "RVU/9 Hour", CALCULATE(SUM('0. Cur'[shift_baseline_per_9hours_RVU]), PreMosaicShifts),
+			    CALCULATE(SUM('0. Cur'[shift_baseline_per_9hours_RPWU]), PreMosaicShifts)
+			)
+			```
+		lineageTag: 88a43604-4230-40ff-846c-24da390c7326
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	measure 'on-shift capacity mosaic' = ```
+			
+			
+			var selectedunit = SELECTEDVALUE('1. Unit_Tbl'[Productivity Unit])
+			
+			var postmosaicshifts = 
+			FILTER(
+			    '0. Cur', 
+			    '0. Cur'[ShiftDate] >= '0. Cur'[Mosaic_go_live_date] && NOT ( ISBLANK('0. Cur'[Mosaic_go_live_date]))
+			)
+			RETURN
+			SWITCH(
+			    SelectedUnit,
+			    "RVU/Shift", CALCULATE(SUM('0. Cur'[on_shift_capacity_RVU]), PostMosaicShifts),
+			    "TBWU/Shift", CALCULATE(SUM('0. Cur'[on_shift_capacity_RPWU]), PostMosaicShifts),
+			    "RVU/Hour", CALCULATE(SUM('0. Cur'[on_shift_capacity_RVU_per_hour]), PostMosaicShifts),
+			    "TBWU/Hour", CALCULATE(SUM('0. Cur'[on_shift_capacity_RPWU_per_hour]), PostMosaicShifts),
+			    "RVU/9 Hour", CALCULATE(SUM('0. Cur'[on_shift_capacity_RVU_per_9hours]), PostMosaicShifts),
+			    CALCULATE(SUM('0. Cur'[on_shift_capacity_RPWU_per_9hours]), PostMosaicShifts)
+			)
+			```
+		lineageTag: 0fefb39c-a192-4639-905e-34cce5c48940
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	measure '% Mosaic Capture' =
+			
+			SWITCH(
+			    SELECTEDVALUE('1. Unit_Tbl'[Productivity Unit]),
+			    "RVU/Shift", [% capture per shift],
+			    "TBWU/Shift", [% capture per shift],
+			    "RVU/Hour", [% capture per hour],
+			    "TBWU/Hour", [% capture per hour],
+			    "RVU/9 Hour", [% Capture per 9hour],
+			    [% Capture per 9hour]
+			)
+		lineageTag: eb77762a-38ce-4cca-be8b-0753f40d275b
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	measure 'On-Shift Utilization' = ```
+			
+			DIVIDE(
+			    SWITCH(
+			        SELECTEDVALUE('1. Unit_Tbl'[Productivity Unit]),
+			        "RVU/Shift", SUM('0. Cur'[on_shift_utilization_RVU_pct]),
+			        "TBWU/Shift", SUM('0. Cur'[on_shift_utilization_RPWU25_pct]),
+			        "RVU/Hour", SUM('0. Cur'[on_shift_utilization_RVU_per_hour_pct]),
+			        "TBWU/Hour", SUM('0. Cur'[on_shift_utilization_RPWU25_per_hour_pct]),
+			        "RVU/9 Hour", SUM('0. Cur'[on_shift_utilization_RVU_per_9hours_pct]),
+			        "TBWU 26/Shift", sum('0. Cur'[on_shift_utilization_RPWU_pct]), 
+			        "TBWU 26/Hour", sum('0. Cur'[on_shift_utilization_RPWU_per_hour_pct]), 
+			        "TBWU 26/9 Hour", SUM('0. Cur'[on_shift_utilization_RPWU_per_9hours_pct]), 
+			        SUM('0. Cur'[on_shift_utilization_RPWU25_per_9hours_pct])
+			    ),
+			    100
+			)
+			```
+		formatString: 0.00%;-0.00%;0.00%
+		lineageTag: c9a55750-5731-4942-9cff-6affb8504635
+
+	measure 'On-Shift Efficiency' = ```
+			
+			VAR SelectedUnit = SELECTEDVALUE('1. Unit_Tbl'[Productivity Unit])
+			RETURN
+			SWITCH(
+			    SelectedUnit,
+			    "RVU/Shift", SUMX(FILTER('0. Cur', '0. Cur'[on_shift_efficiency_RVU] <= 1.00), '0. Cur'[on_shift_efficiency_RVU]),
+			    "TBWU/Shift", SUMX(FILTER('0. Cur', '0. Cur'[on_shift_efficiency_RPWU25] <= 1.00), '0. Cur'[on_shift_efficiency_RPWU25]),
+			    "RVU/Hour", SUMX(FILTER('0. Cur', '0. Cur'[on_shift_efficiency_RVU] <= 1.00), '0. Cur'[on_shift_efficiency_RVU]),
+			    "TBWU/Hour", SUMX(FILTER('0. Cur', '0. Cur'[on_shift_efficiency_RPWU25] <= 1.00), '0. Cur'[on_shift_efficiency_RPWU25]),
+			    "RVU/9 Hour", SUMX(FILTER('0. Cur', '0. Cur'[on_shift_efficiency_RVU] <= 1.00), '0. Cur'[on_shift_efficiency_RVU]),
+			    "TBWU 26/Shift", SUMX(FILTER('0. Cur', '0. Cur'[on_shift_efficiency_RPWU] <=1.00), '0. Cur'[on_shift_efficiency_RPWU]),
+			    "TBWU 26/Hour", SUMX(FILTER('0. Cur', '0. Cur'[on_shift_efficiency_RPWU] <=1.00), '0. Cur'[on_shift_efficiency_RPWU]), 
+			    "TBWU 26/9 Hour", SUMX(FILTER('0. Cur', '0. Cur'[on_shift_efficiency_RPWU] <=1.00), '0. Cur'[on_shift_efficiency_RPWU]), 
+			    SUMX(FILTER('0. Cur', '0. Cur'[on_shift_efficiency_RPWU25] <= 1.00), '0. Cur'[on_shift_efficiency_RPWU25])
+			)
+			```
+		lineageTag: 37780ea5-d2e0-4835-bed9-c76eda912a51
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	measure '% Inpatient' = ```
+			
+			SWITCH(
+			    SELECTEDVALUE('1. Unit_Tbl'[Productivity Unit]),
+			    "RVU/Shift", [% inpatient per shift],
+			    "TBWU/Shift", [% inpatient per shift],
+			    "RVU/Hour", [% inpatient per hour],
+			    "TBWU/Hour", [% inpatient per hour],
+			    "RVU/9 Hour", [% inpatient per 9hour],
+			    "TBWU 26/Shift", [% inpatient per shift], 
+			    "TBWU 26/Hour", [% inpatient per hour], 
+			    "TBWU 26/9 Hour", [% inpatient per 9hour], 
+			    [% inpatient per 9hour]
+			)
+			```
+		formatString: 0%;-0%;0%
+		lineageTag: 8277fbef-27ce-4444-b181-ce34e3dc01d0
+
+	measure '% outpatient' = ```
+			
+			SWITCH(
+			    SELECTEDVALUE('1. Unit_Tbl'[Productivity Unit]),
+			    "RVU/Shift", [% outpatient per shift],
+			    "TBWU/Shift", [% outpatient per shift],
+			    "RVU/Hour", [% outpatient per hour],
+			    "TBWU/Hour", [% outpatient per hour],
+			    "RVU/9 Hour", [% outpatient per 9hour],
+			    "TBWU 26/Shift", [% outpatient per shift], 
+			    "TBWU 26/Hour", [% outpatient per hour], 
+			    "TBWU 26/9 Hour", [% outpatient per 9hour], 
+			    [% outpatient per 9hour]
+			)
+			```
+		formatString: 0%;-0%;0%
+		lineageTag: e3137374-c82e-44c6-b1c2-9dbdbbf618a8
+
+	measure '% ER' = ```
+			
+			SWITCH(
+			    SELECTEDVALUE('1. Unit_Tbl'[Productivity Unit]),
+			    "RVU/Shift", [% ER per shift],
+			    "TBWU/Shift", [% ER per shift],
+			    "RVU/Hour", [% ER per hour],
+			    "TBWU/Hour", [% ER per hour],
+			    "RVU/9 Hour", [% ER per 9hour],
+			    "TBWU 26/Shift", [% ER per shift], 
+			    "TBWU 26/Hour", [% ER per hour], 
+			    "TBWU 26/9 Hour", [% ER per 9hour], 
+			    [% ER per 9hour]
+			)
+			```
+		formatString: 0%;-0%;0%
+		lineageTag: 6834e6ab-8441-4fc0-8564-bc922d469948
+
+	measure Has_Baseline_For_Selected_Unit =
+			
+			VAR SelectedUnit = SELECTEDVALUE('1. Unit_Tbl'[Productivity Unit])
+			RETURN
+			SWITCH(
+			    TRUE(),
+			    SelectedUnit IN {"RVU/Shift", "RVU/Hour", "RVU/9 Hour"},
+			        MAXX('0. Cur', IF('0. Cur'[Has_RVU_Baseline], 1, 0)),
+			    SelectedUnit IN {"TBWU/Shift", "TBWU/Hour", "TBWU/9 Hour"},
+			        MAXX('0. Cur', IF('0. Cur'[Has_TBWU25_Baseline], 1, 0)),
+			    SelectedUnit IN {"TBWU 26/Shift", "TBWU 26/Hour", "TBWU 26/9 Hour"},
+			        MAXX('0. Cur', IF('0. Cur'[Has_TBWU26_Baseline], 1, 0)),
+			    MAXX('0. Cur', IF('0. Cur'[Has_TBWU25_Baseline], 1, 0))
+			)
+		formatString: 0
+		lineageTag: 529f4772-e944-4000-80f2-87f10d9434b3
+
+	column 'Productivity Unit'
+		dataType: string
+		lineageTag: 55829da7-d77e-4134-bec8-76773e48ed63
+		summarizeBy: none
+		sourceColumn: Productivity Unit
+		sortByColumn: Order
+
+		changedProperty = SortByColumn
+
+		annotation SummarizationSetBy = Automatic
+
+	column Order
+		dataType: int64
+		formatString: 0
+		lineageTag: 0f61e70e-63f7-4165-b369-86e83e728b1e
+		summarizeBy: sum
+		sourceColumn: Order
+
+		annotation SummarizationSetBy = Automatic
+
+	column GreenMin
+		dataType: double
+		lineageTag: 8089e892-ac30-4974-81e1-fe71a850042e
+		summarizeBy: sum
+		sourceColumn: GreenMin
+
+		changedProperty = DataType
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column YellowMin
+		dataType: double
+		lineageTag: 3dd66575-11d8-43b8-8a62-1f92c1ccfe28
+		summarizeBy: sum
+		sourceColumn: YellowMin
+
+		changedProperty = DataType
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column RedMax
+		dataType: double
+		lineageTag: 4f90af57-ccc7-41f7-af41-cf3676296ab2
+		summarizeBy: sum
+		sourceColumn: RedMax
+
+		changedProperty = DataType
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	partition '1. Unit_Tbl' = m
+		mode: import
+		source =
+				let
+				    Source = Table.FromRows(Json.Document(Binary.Decompress(Binary.FromText("i45WCgoL1Q/OyEwrUdJRMgRiEyA2AONYnWilEKdwhLQRhjRIs0d+aRFMQs8Ei3aoAlNsCkAGWCpAVZhjtx4ub4FVXsHIDO5CY5wqoEaY4VQAt8USVUksAA==", BinaryEncoding.Base64), Compression.Deflate)), let _t = ((type nullable text) meta [Serialized.Text = true]) in type table [#"Productivity Unit" = _t, Order = _t, GreenMin = _t, YellowMin = _t, RedMax = _t]),
+				    #"Changed Type" = Table.TransformColumnTypes(Source,{{"Order", Int64.Type}})
+				in
+				    #"Changed Type"
+
+	annotation PBI_ResultType = Table
+
+	annotation PBI_NavigationStepName = Navigation
+

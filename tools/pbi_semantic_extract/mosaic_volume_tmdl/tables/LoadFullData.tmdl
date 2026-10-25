@@ -1,0 +1,20 @@
+table LoadFullData
+	lineageTag: d8c7cbd7-331a-43a3-aaa5-f3b4810da316
+
+	column LoadFullData
+		dataType: boolean
+		formatString: """TRUE"";""TRUE"";""FALSE"""
+		lineageTag: eb74e090-f3d3-457c-a9bd-f01c116bcb15
+		summarizeBy: none
+		sourceColumn: LoadFullData
+
+		annotation SummarizationSetBy = Automatic
+
+	partition LoadFullData = m
+		mode: import
+		source = false meta [IsParameterQuery=true, Type="Logical", IsParameterQueryRequired=true]
+
+	annotation PBI_NavigationStepName = Navigation
+
+	annotation PBI_ResultType = Logical
+

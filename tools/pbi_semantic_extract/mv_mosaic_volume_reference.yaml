@@ -1,0 +1,290 @@
+# REFERENCE ONLY - do not deploy this as-is.
+# This is the full YAML body of the existing edw_dev.mosaictechops.mv_mosaic_volume metric view,
+# captured via `SHOW CREATE TABLE edw_dev.mosaictechops.mv_mosaic_volume` on 2026-10-20.
+# It is NOT reachable from this app/profile (different catalog, no grant) - it is reference
+# material only, showing a proven translation pattern (days_back parameter, rad_pipeline join,
+# measure naming) to reuse when building the new mosaic_volume_metric_view in
+# edw_prod.enterprise_analytics against tbl_exam_inventory instead.
+
+version: 1.1
+
+source: edw_dev.bipa_analytics.presentation_mosaicdailyvolume_vw
+
+joins:
+  - name: rad_pipeline
+    source: '`edw_prod`.`dataverse_m365-vra-dynamics-prod`.rad_onboarding'
+    "on": "source.NPI = CAST(REPLACE(rad_pipeline.npi, ',', '') AS DECIMAL(10,0))"
+
+comment: "Mosaic Volume Report - exam volume, Mosaic reporting/drafting adoption, RVU/TBWU rollups"
+
+parameters:
+  - name: days_back
+    data_type: int
+    default: 14
+
+dimensions:
+  - name: NPI
+    expr: source.NPI
+
+  - name: Modality
+    expr: source.modality_code
+
+  - name: Calendar Date
+    expr: source.Calendar_Date
+
+  - name: Local Practice
+    expr: source.local_practice_short_name
+
+  - name: Place Of Service
+    expr: source.Place_Of_Service_Name
+
+  - name: Source System Code
+    expr: source.Source_System_Code
+
+  - name: Is RPCE
+    expr: "CASE WHEN source.Source_System_Code IN ('rpceMidwest', 'rpceSouthwest') THEN 1 ELSE 0 END"
+
+measures:
+  - name: Total Exam Ct
+    expr: SUM(source.Case_Count)
+
+  - name: Mosaic Exam Ct
+    expr: SUM(source.Mosaic_flag)
+
+  - name: Pct Mosaic Exams
+    expr: "SUM(source.Mosaic_flag) / NULLIF(SUM(source.Case_Count), 0)"
+
+  - name: Mosaic Draft Ct
+    expr: SUM(source.mosaic_draft_flag)
+
+  - name: Pct Mosaic Drafting
+    expr: "SUM(source.mosaic_draft_flag) / NULLIF(SUM(source.Case_Count), 0)"
+
+  - name: RPCE Exam Ct
+    expr: "SUM(CASE WHEN source.Source_System_Code IN ('rpceMidwest', 'rpceSouthwest') THEN 1 ELSE 0 END)"
+
+  - name: RPCE RVU
+    expr: "SUM(CASE WHEN source.Source_System_Code IN ('rpceMidwest', 'rpceSouthwest') THEN source.RVU ELSE 0 END)"
+
+  - name: Pct Of RPCE
+    expr: "SUM(source.Mosaic_flag) / NULLIF(SUM(CASE WHEN source.Source_System_Code IN ('rpceMidwest', 'rpceSouthwest') THEN 1 ELSE 0 END), 0)"
+
+  - name: RPCE As Pct Of Clinical
+    expr: "SUM(CASE WHEN source.Source_System_Code IN ('rpceMidwest', 'rpceSouthwest') THEN 1 ELSE 0 END) / NULLIF(SUM(source.Case_Count), 0)"
+
+  - name: Number Of Mosaic Rads
+    expr: COUNT(DISTINCT CASE WHEN source.Mosaic_flag = 1 THEN source.NPI END)
+
+  - name: Number Of Rads Live On Drafting
+    expr: COUNT(DISTINCT CASE WHEN source.mosaic_draft_flag = 1 THEN source.NPI END)
+
+  - name: Number Of RPCE Rads
+    expr: "COUNT(DISTINCT CASE WHEN source.Source_System_Code IN ('rpceMidwest', 'rpceSouthwest') THEN source.NPI END)"
+
+  - name: Pct Of Rads
+    expr: "COUNT(DISTINCT CASE WHEN source.Mosaic_flag = 1 THEN source.NPI END) / NULLIF(COUNT(DISTINCT CASE WHEN source.Source_System_Code IN ('rpceMidwest', 'rpceSouthwest') THEN source.NPI END), 0)"
+
+  - name: US Capturable
+    expr: COUNT(CASE WHEN source.modality_code = 'US' AND source.Mexproc IS NOT NULL THEN 1 END)
+
+  - name: Captured US
+    expr: SUM(CASE WHEN source.modality_code = 'US' THEN source.mosaic_draft_flag ELSE 0 END)
+
+  - name: Pct Captured
+    expr: "SUM(CASE WHEN source.modality_code = 'US' THEN source.mosaic_draft_flag ELSE 0 END) / NULLIF(COUNT(CASE WHEN source.modality_code = 'US' AND source.Mexproc IS NOT NULL THEN 1 END), 0)"
+
+  - name: Eligible Rads For Capture
+    expr: COUNT(DISTINCT CASE WHEN source.modality_code = 'US' AND source.Mosaic_flag = 1 AND source.Mexproc IS NOT NULL THEN source.NPI END)
+
+  - name: Eligible Rads For Capture BD
+    expr: COUNT(DISTINCT CASE WHEN source.modality_code = 'BD' AND source.Mosaic_flag = 1 AND source.Mexproc IS NOT NULL THEN source.NPI END)
+
+  - name: US Capture Eligible In Window
+    expr: |-
+      COUNT(CASE WHEN source.modality_code = 'US' AND source.Mosaic_flag = 1 AND source.Mexproc IS NOT NULL
+        AND source.Calendar_Date >= CURRENT_DATE - days_back AND source.Calendar_Date <= CURRENT_DATE THEN 1 END)
+
+  - name: US Capture Read In Window
+    expr: |-
+      COUNT(CASE WHEN source.modality_code = 'US' AND source.mosaic_draft_flag = 1 AND source.Mosaic_flag = 1 AND source.Mexproc IS NOT NULL
+        AND source.Calendar_Date >= CURRENT_DATE - days_back AND source.Calendar_Date <= CURRENT_DATE THEN 1 END)
+
+  - name: Pct US Capture Read In Window
+    expr: |-
+      COUNT(CASE WHEN source.modality_code = 'US' AND source.mosaic_draft_flag = 1 AND source.Mosaic_flag = 1 AND source.Mexproc IS NOT NULL
+        AND source.Calendar_Date >= CURRENT_DATE - days_back AND source.Calendar_Date <= CURRENT_DATE THEN 1 END)
+      / NULLIF(COUNT(CASE WHEN source.modality_code = 'US' AND source.Mosaic_flag = 1 AND source.Mexproc IS NOT NULL
+        AND source.Calendar_Date >= CURRENT_DATE - days_back AND source.Calendar_Date <= CURRENT_DATE THEN 1 END), 0)
+
+  - name: BD Capture Eligible In Window
+    expr: |-
+      COUNT(CASE WHEN source.modality_code = 'BD' AND source.Mosaic_flag = 1 AND source.Mexproc IS NOT NULL
+        AND source.Calendar_Date >= CURRENT_DATE - days_back AND source.Calendar_Date <= CURRENT_DATE THEN 1 END)
+
+  - name: BD Capture Read In Window
+    expr: |-
+      COUNT(CASE WHEN source.modality_code = 'BD' AND source.mosaic_draft_flag = 1 AND source.Mosaic_flag = 1 AND source.Mexproc IS NOT NULL
+        AND source.Calendar_Date >= CURRENT_DATE - days_back AND source.Calendar_Date <= CURRENT_DATE THEN 1 END)
+
+  - name: Total CT
+    expr: COUNT(CASE WHEN source.modality_code = 'CT' THEN 1 END)
+
+  - name: CT Reporting
+    expr: COUNT(CASE WHEN source.modality_code = 'CT' AND source.Mosaic_flag = 1 THEN 1 END)
+
+  - name: CT Drafting
+    expr: COUNT(CASE WHEN source.modality_code = 'CT' AND source.mosaic_draft_flag = 1 THEN 1 END)
+
+  - name: Total Head CT
+    expr: COUNT(CASE WHEN source.Clinical_Procedure_Code = 'RPID22' THEN 1 END)
+
+  - name: Head CT Reporting
+    expr: COUNT(CASE WHEN source.Clinical_Procedure_Code = 'RPID22' AND source.Mosaic_flag = 1 THEN 1 END)
+
+  - name: Head CT Drafting
+    expr: COUNT(CASE WHEN source.Clinical_Procedure_Code = 'RPID22' AND source.mosaic_draft_flag = 1 THEN 1 END)
+
+  - name: Total Drafted CT
+    expr: SUM(CASE WHEN source.modality_code = 'CT' AND source.Drafteligiblecode = 'RPID22' THEN source.mosaic_draft_flag ELSE 0 END)
+
+  - name: Total Drafted XR
+    expr: SUM(CASE WHEN source.modality_code = 'CR' THEN source.mosaic_draft_flag ELSE 0 END)
+
+  - name: Draftable CT Ct
+    expr: COUNT(CASE WHEN source.modality_code = 'CT' AND source.Drafteligiblecode = 'RPID22' THEN 1 END)
+
+  - name: Draftable XR Ct
+    expr: COUNT(CASE WHEN source.modality_code = 'CR' AND source.drafteligibleproc IS NOT NULL THEN 1 END)
+
+  - name: Drafting Eligible Exams
+    expr: "COUNT(CASE WHEN source.drafteligibleproc IS NOT NULL AND NULLIF(rad_pipeline.added_to_ad_group_cxr_abd_msk, 'None') IS NOT NULL THEN 1 END)"
+
+  - name: Mosaic Eligible Exams
+    expr: |-
+      COUNT(CASE WHEN source.drafteligibleproc IS NOT NULL AND source.Mosaic_flag = 1
+        AND NULLIF(rad_pipeline.added_to_ad_group_cxr_abd_msk, 'None') IS NOT NULL THEN 1 END)
+
+  - name: Mosaic Draft Eligible Exams
+    expr: |-
+      COUNT(CASE WHEN source.drafteligibleproc IS NOT NULL AND source.Mosaic_flag = 1 AND source.mosaic_draft_flag = 1
+        AND NULLIF(rad_pipeline.added_to_ad_group_cxr_abd_msk, 'None') IS NOT NULL THEN 1 END)
+
+  - name: Pct Drafted Of Mosaic Exams
+    expr: |-
+      COUNT(CASE WHEN source.drafteligibleproc IS NOT NULL AND source.Mosaic_flag = 1 AND source.mosaic_draft_flag = 1
+        AND NULLIF(rad_pipeline.added_to_ad_group_cxr_abd_msk, 'None') IS NOT NULL THEN 1 END)
+      / NULLIF(COUNT(CASE WHEN source.drafteligibleproc IS NOT NULL AND source.Mosaic_flag = 1
+        AND NULLIF(rad_pipeline.added_to_ad_group_cxr_abd_msk, 'None') IS NOT NULL THEN 1 END), 0)
+
+  - name: Pct Drafted Of Eligible Exams
+    expr: |-
+      COUNT(CASE WHEN source.drafteligibleproc IS NOT NULL AND source.Mosaic_flag = 1 AND source.mosaic_draft_flag = 1
+        AND NULLIF(rad_pipeline.added_to_ad_group_cxr_abd_msk, 'None') IS NOT NULL THEN 1 END)
+      / NULLIF(COUNT(CASE WHEN source.drafteligibleproc IS NOT NULL
+        AND NULLIF(rad_pipeline.added_to_ad_group_cxr_abd_msk, 'None') IS NOT NULL THEN 1 END), 0)
+
+  - name: RVU Mosaic
+    expr: SUM(CASE WHEN source.Mosaic_flag = 1 THEN source.RVU ELSE 0 END)
+
+  - name: RVU Mosaic Drafting
+    expr: SUM(CASE WHEN source.mosaic_draft_flag = 1 THEN source.RVU ELSE 0 END)
+
+  - name: RVU Mosaic Capture
+    expr: "SUM(CASE WHEN source.mosaic_draft_flag = 1 AND source.modality_code IN ('US', 'BD') AND source.Mexproc IS NOT NULL THEN source.RVU ELSE 0 END)"
+
+  - name: Best RVU Total
+    expr: SUM(source.best_rvu)
+
+  - name: Best RVU Drafting
+    expr: SUM(CASE WHEN source.mosaic_draft_flag = 1 THEN source.best_rvu ELSE 0 END)
+
+  - name: Best RVU Reporting
+    expr: SUM(CASE WHEN source.Mosaic_flag = 1 THEN source.best_rvu ELSE 0 END)
+
+  - name: Adjusted Best RVU Total
+    expr: SUM(source.Adjusted_Best_RVU)
+
+  - name: Adjusted Best RVU Drafting
+    expr: SUM(CASE WHEN source.mosaic_draft_flag = 1 THEN source.Adjusted_Best_RVU ELSE 0 END)
+
+  - name: Adjusted Best RVU Reporting
+    expr: SUM(CASE WHEN source.Mosaic_flag = 1 THEN source.Adjusted_Best_RVU ELSE 0 END)
+
+  - name: Allocated RVU Total
+    expr: SUM(source.Allocated_RVU)
+
+  - name: Allocated RVU Drafting
+    expr: SUM(CASE WHEN source.mosaic_draft_flag = 1 THEN source.Allocated_RVU ELSE 0 END)
+
+  - name: Allocated RVU Reporting
+    expr: SUM(CASE WHEN source.Mosaic_flag = 1 THEN source.Allocated_RVU ELSE 0 END)
+
+  - name: Allocated WU Total
+    expr: SUM(source.Allocated_WU)
+
+  - name: Allocated WU Drafting
+    expr: SUM(CASE WHEN source.mosaic_draft_flag = 1 THEN source.Allocated_WU ELSE 0 END)
+
+  - name: Allocated WU Reporting
+    expr: SUM(CASE WHEN source.Mosaic_flag = 1 THEN source.Allocated_WU ELSE 0 END)
+
+  - name: TBWU Total
+    expr: SUM(source.TBWU)
+
+  - name: TBWU Drafting
+    expr: SUM(CASE WHEN source.mosaic_draft_flag = 1 THEN source.TBWU ELSE 0 END)
+
+  - name: TBWU Reporting
+    expr: SUM(CASE WHEN source.Mosaic_flag = 1 THEN source.TBWU ELSE 0 END)
+
+  - name: Total RVUs In Window
+    expr: SUM(CASE WHEN source.Calendar_Date > CURRENT_DATE - days_back AND source.Calendar_Date <= CURRENT_DATE THEN source.RVU ELSE 0 END)
+
+  - name: Total TBWU In Window
+    expr: SUM(CASE WHEN source.Calendar_Date > CURRENT_DATE - days_back AND source.Calendar_Date <= CURRENT_DATE THEN source.TBWU ELSE 0 END)
+
+  - name: VRA Prepped Exams
+    expr: COUNT(DISTINCT CASE WHEN source.assisted_flag = 1 AND (source.VRAname IS NOT NULL OR source.Commnotetimestamp IS NOT NULL) THEN source.Exam_ID END)
+
+  - name: VRA Prepped Mosaic Exams
+    expr: COUNT(DISTINCT CASE WHEN source.assisted_flag = 1 AND source.Mosaic_flag = 1 AND (source.VRAname IS NOT NULL OR source.Commnotetimestamp IS NOT NULL) THEN source.Exam_ID END)
+
+  - name: Exams In Window
+    expr: SUM(CASE WHEN source.Calendar_Date >= CURRENT_DATE - days_back AND source.Calendar_Date <= CURRENT_DATE THEN source.Case_Count ELSE 0 END)
+
+  - name: Mosaic Exams In Window
+    expr: SUM(CASE WHEN source.Calendar_Date >= CURRENT_DATE - days_back AND source.Calendar_Date <= CURRENT_DATE AND source.Mosaic_flag = 1 THEN source.Case_Count ELSE 0 END)
+
+  - name: Pct Mosaic Exams In Window
+    expr: "SUM(CASE WHEN source.Calendar_Date >= CURRENT_DATE - days_back AND source.Calendar_Date <= CURRENT_DATE AND source.Mosaic_flag = 1 THEN source.Case_Count ELSE 0 END) / NULLIF(SUM(CASE WHEN source.Calendar_Date >= CURRENT_DATE - days_back AND source.Calendar_Date <= CURRENT_DATE THEN source.Case_Count ELSE 0 END), 0)"
+
+  - name: Drafting Exams In Window
+    expr: SUM(CASE WHEN source.Calendar_Date >= CURRENT_DATE - days_back AND source.Calendar_Date <= CURRENT_DATE AND source.mosaic_draft_flag = 1 THEN source.Case_Count ELSE 0 END)
+
+  - name: Pct Drafting In Window
+    expr: "SUM(CASE WHEN source.Calendar_Date >= CURRENT_DATE - days_back AND source.Calendar_Date <= CURRENT_DATE AND source.mosaic_draft_flag = 1 THEN source.Case_Count ELSE 0 END) / NULLIF(SUM(CASE WHEN source.Calendar_Date >= CURRENT_DATE - days_back AND source.Calendar_Date <= CURRENT_DATE THEN source.Case_Count ELSE 0 END), 0)"
+
+  - name: CA Lung Screener Reads By Rad In Window
+    expr: |-
+      COUNT(CASE WHEN source.modality_code = 'CT' AND source.Clinical_Procedure_Code IN ('RPID6891', 'RPID6891-FU', 'RAD2282', 'RPID6891-WC')
+        AND source.Calendar_Date >= CURRENT_DATE - days_back AND source.Calendar_Date <= CURRENT_DATE THEN 1 END)
+
+  - name: CA Lung Screener Reads In Mosaic In Window
+    expr: |-
+      COUNT(CASE WHEN source.modality_code = 'CT' AND source.Clinical_Procedure_Code IN ('RPID6891', 'RPID6891-FU', 'RAD2282', 'RPID6891-WC')
+        AND source.Mosaic_flag = 1 AND source.Calendar_Date >= CURRENT_DATE - days_back AND source.Calendar_Date <= CURRENT_DATE THEN 1 END)
+
+  - name: Mammo Reads By Rad In Window
+    expr: COUNT(CASE WHEN source.modality_code = 'MG' AND source.Calendar_Date >= CURRENT_DATE - days_back AND source.Calendar_Date <= CURRENT_DATE THEN 1 END)
+
+  - name: Mammo Reads In Mosaic In Window
+    expr: COUNT(CASE WHEN source.modality_code = 'MG' AND source.Mosaic_flag = 1 AND source.Calendar_Date >= CURRENT_DATE - days_back AND source.Calendar_Date <= CURRENT_DATE THEN 1 END)
+
+  - name: IR Cases In Window
+    expr: COUNT(CASE WHEN source.modality_code = 'IR' AND source.Calendar_Date >= CURRENT_DATE - days_back AND source.Calendar_Date <= CURRENT_DATE THEN 1 END)
+
+  - name: IR In Mosaic In Window
+    expr: COUNT(CASE WHEN source.modality_code = 'IR' AND source.Mosaic_flag = 1 AND source.Calendar_Date >= CURRENT_DATE - days_back AND source.Calendar_Date <= CURRENT_DATE THEN 1 END)
+
+  - name: DEXA Capture Read Total
+    expr: COUNT(CASE WHEN source.modality_code = 'BD' AND source.mosaic_draft_flag = 1 AND source.Mosaic_flag = 1 AND source.Mexproc IS NOT NULL THEN 1 END)

@@ -1,0 +1,58 @@
+model Model
+	culture: en-US
+	defaultPowerBIDataSourceVersion: powerBI_V3
+	sourceQueryCulture: en-US
+	dataAccessOptions
+		legacyRedirects
+		returnErrorValuesAsNull
+
+annotation PBI_QueryOrder = ["Daily_Extract","Hour_order","MODEL POWERBI_USER_FILTERS","DataRefresh","Mini_practice_directory","LoadFullData","Query","LineChartMetricSelector","vrarp_radpipeline","vrarp_launchmodel","Query (3)","team_rollups","RangeStart","RangeEnd","Resident Utilization","provpractice_vw"]
+
+annotation __PBI_TimeIntelligenceEnabled = 0
+
+annotation PBI_ProTooling = ["DaxQueryView_Desktop"]
+
+ref table Daily_Extract
+ref table Hour_order
+ref table 'MODEL POWERBI_USER_FILTERS'
+ref table DataRefresh
+ref table Metrictypeselector
+ref table RLSTeamTable
+ref table Mini_practice_directory
+ref table 'Mosaic Metric'
+ref table 'Date Selector'
+ref table 'Mosaic Exam Count Table'
+ref table Daysselection
+ref table Measureselector
+ref table Legendtable
+ref table Query
+ref table FullyAdoptedSlicer
+ref table Weektable
+ref table Placeofserviceslicer
+ref table ThresholdSlicer
+ref table LoadFullData
+ref table SP
+ref table LineChartMetricSelector
+ref table vrarp_radpipeline
+ref table Metricselector
+ref table 'Mosaic Draft Count Table'
+ref table vrarp_launchmodel
+ref table 'Query (3)'
+ref table 'Metric Groups'
+ref table team_rollups
+ref table RangeStart
+ref table RangeEnd
+ref table 'Resident Utilization'
+ref table 'Drafting Groups'
+ref table 'Resident FU Status'
+ref table 'Resident Mosaic Metric'
+ref table 'Resident Date Selector'
+ref table provpractice_vw
+ref table 'Utilizing 90 Filter'
+
+ref role Users
+ref role UserTest
+ref role TeamRLS
+
+ref cultureInfo en-US
+

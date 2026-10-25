@@ -14,32 +14,43 @@ import type {
   CaptureRadiologistItem,
   CaptureUtilizationTrendPracticePoint,
   CaptureUtilizationTrendRadiologistPoint,
-  DeploymentFunnel,
-  DeploymentPracticeRollup,
-  DeploymentRadiologistItem,
   DraftInsightCategoryGroup,
   DraftInsightModalityStat,
   DraftInsightOverview,
   DraftInsightPracticeStat,
   DraftInsightSampleItem,
   EfficiencyDetail,
-  ExternalFeedbackItem,
-  ReconciliationFinding,
+  Note,
+  RadiologistLookupDetail,
+  RadiologistLookupMatch,
   EfficiencyFilterOptions,
   EfficiencyMode,
   EfficiencyTrendPoint,
+  MammoScreeningTrendPoint,
   EfficiencyTrendRpAvgPoint,
-  FocusRadiologistItem,
+  MvpRadiologistItem,
+  MvpProgramContext,
+  AiContextRequest,
+  AiContextResponse,
   MosaicIntelligenceSnapshot,
   PopulationEfficiency,
   RadiologistRosterItem,
-  RadiologistScorecard,
   RadSummaryStat,
   RadSurveySummary,
   RpceTrendPoint,
+  ShiftUtilizationItem,
   UndraftedCategoryPoint,
   UndraftedFilterOptions,
   UtilizationPracticeRollup,
+  VolumeFilterOptions,
+  VolumeGroupRollup,
+  VolumeSummary,
+  VolumeTrendPoint,
+  GenieAskRequest,
+  GenieAskResponse,
+  GenieMessageResponse,
+  WeeklyReportSnapshot,
+  MvpMethodologyCheck,
 } from "./types";
 
 const BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "http://127.0.0.1:8000/api/mosaic";
@@ -103,13 +114,16 @@ export const mosaicApi = {
   },
   getUtilizationByPractice: (daysBack = 30) =>
     get<UtilizationPracticeRollup[]>(`/utilization/by-practice?days_back=${daysBack}`),
-  getDeploymentByRadiologist: () => get<DeploymentRadiologistItem[]>("/deployment/by-radiologist"),
-  getDeploymentByPractice: () => get<DeploymentPracticeRollup[]>("/deployment/by-practice"),
-  getDeploymentFunnelReporting: () => get<DeploymentFunnel>("/deployment/funnel/reporting"),
-  getDeploymentFunnelDrafting: () => get<DeploymentFunnel>("/deployment/funnel/drafting"),
-  getDeploymentBlockersDrafting: () => get<BlockerByPractice[]>("/deployment/blockers/drafting"),
-  getDeploymentFunnelCtAbdpel: () => get<DeploymentFunnel>("/deployment/funnel/ct-abdpel"),
-  getDeploymentBlockersCtAbdpel: () => get<BlockerByPractice[]>("/deployment/blockers/ct-abdpel"),
+  getVolumeSummary: () => get<VolumeSummary>("/volume/summary"),
+  getVolumeByPractice: () => get<VolumeGroupRollup[]>("/volume/by-practice"),
+  getVolumeByTeam: () => get<VolumeGroupRollup[]>("/volume/by-team"),
+  getVolumeByLocalRegion: () => get<VolumeGroupRollup[]>("/volume/by-local-region"),
+  getVolumeTrend: () => get<VolumeTrendPoint[]>("/volume/trend"),
+  getVolumeFilters: () => get<VolumeFilterOptions>("/volume/filters"),
+  getShiftUtilizationByRadiologist: (practice?: string) =>
+    get<ShiftUtilizationItem[]>(`/shift-utilization${practice ? `?practice=${encodeURIComponent(practice)}` : ""}`),
+  getDeploymentBlockersDrafting: () => get<BlockerByPractice[]>("/blockers/drafting"),
+  getDeploymentBlockersCtAbdpel: () => get<BlockerByPractice[]>("/blockers/ct-abdpel"),
   getEfficiencyDetail: (mode: EfficiencyMode = "full_mosaic") => get<EfficiencyDetail>(`/efficiency?mode=${mode}`),
   getEfficiencyPopulation: (params: {
     mode?: EfficiencyMode;
@@ -137,10 +151,28 @@ export const mosaicApi = {
     return get<EfficiencyTrendPoint[]>(`/efficiency/trend${qs ? `?${qs}` : ""}`);
   },
   getEfficiencyTrendRpAvg: () => get<EfficiencyTrendRpAvgPoint[]>("/efficiency/trend/rp-avg"),
-  getFocusRadiologists: () => get<FocusRadiologistItem[]>("/efficiency/focus-radiologists"),
+  getMvpRadiologists: () => get<MvpRadiologistItem[]>("/mvp/radiologists"),
+  getMvpContext: () => get<MvpProgramContext>("/mvp/context"),
+  getMvpAreaDetail: () => get<Record<string, EfficiencyTrendPoint[]>>("/mvp/area-detail"),
+  getMammoScreeningTrend: () => get<MammoScreeningTrendPoint[]>("/mvp/mammo-screening-trend"),
+  getMvpMammoScreeningTrend: () => get<MammoScreeningTrendPoint[]>("/mvp/mammo-screening-trend/mvp-only"),
+  generateMvpWeeklyReport: (scope: "overview" | "mammo") =>
+    post<WeeklyReportSnapshot>(`/mvp/weekly-report/generate?scope=${scope}`),
+  getMvpWeeklyReport: (scope: "overview" | "mammo") =>
+    get<WeeklyReportSnapshot>(`/mvp/weekly-report?scope=${scope}`),
+  getMvpWeeklyReportHistory: (scope: "overview" | "mammo", limit = 12) =>
+    get<WeeklyReportSnapshot[]>(`/mvp/weekly-report/history?scope=${scope}&limit=${limit}`),
+  getMvpMethodologyCheck: (scope: "overview" | "mammo") =>
+    get<MvpMethodologyCheck>(`/mvp/methodology-check?scope=${scope}`),
+  getAiContext: (req: AiContextRequest) => postJson<AiContextResponse>("/ai-context", req),
   getRadSentiment: () => get<RadSurveySummary>("/survey/rad-sentiment"),
-  getExternalFeedback: () => get<ExternalFeedbackItem[]>("/external-feedback"),
-  getReconciliationFindings: () => get<ReconciliationFinding[]>("/reconciliation"),
+  searchRadiologistLookup: (q: string) => get<RadiologistLookupMatch[]>(`/radiologist-lookup/search?q=${encodeURIComponent(q)}`),
+  getRadiologistLookup: (npi: number, q?: string) =>
+    get<RadiologistLookupDetail>(`/radiologist-lookup/${npi}${q ? `?q=${encodeURIComponent(q)}` : ""}`),
+  getNotes: (entityType: "radiologist" | "practice", entityKey: string) =>
+    get<Note[]>(`/notes?entity_type=${entityType}&entity_key=${encodeURIComponent(entityKey)}`),
+  postNote: (entityType: "radiologist" | "practice", entityKey: string, noteText: string) =>
+    postJson<{ status: string }>("/notes", { entity_type: entityType, entity_key: entityKey, note_text: noteText }),
   getCaptureOverview: () => get<CaptureOverview>("/capture/overview"),
   getCaptureByPractice: (practice?: string) =>
     get<CapturePracticeRollup[]>(`/capture/by-practice${practice ? `?practice=${encodeURIComponent(practice)}` : ""}`),
@@ -168,8 +200,6 @@ export const mosaicApi = {
   },
   getCapacityByRadiologist: () => get<CapacityRadiologistItem[]>("/capacity/by-radiologist"),
   getCapacityByPractice: () => get<CapacityPracticeRollup[]>("/capacity/by-practice"),
-  getRadiologistScorecard: (practice?: string) =>
-    get<RadiologistScorecard[]>(`/radiologist-scorecard${practice ? `?practice=${encodeURIComponent(practice)}` : ""}`),
   getUndraftedAnalysis: (params: { practice?: string; exam_category?: string; site?: string } = {}) => {
     const search = new URLSearchParams();
     if (params.practice) search.set("practice", params.practice);
@@ -207,6 +237,9 @@ export const mosaicApi = {
     note?: string | null;
   }) => postJson<{ saved: boolean }>("/capacity/baseline-review-decisions", decision),
   getReviewActivity: (limit = 20) => get<ReviewActivityItem[]>(`/capacity/review-activity?limit=${limit}`),
+  askGenie: (req: GenieAskRequest) => postJson<GenieAskResponse>("/genie/ask", req),
+  getGenieMessage: (conversationId: string, messageId: string) =>
+    get<GenieMessageResponse>(`/genie/message?conversation_id=${conversationId}&message_id=${messageId}`),
   getRefreshStatus: () => get<RefreshStatus>("/refresh/status"),
   triggerRefresh: () => post<{ status: string }>("/refresh"),
 };

@@ -1,0 +1,141 @@
+table stg_mosaic_baseline_master
+	lineageTag: 8c45c30d-f568-48c0-8237-abecfbd0c3ad
+
+	measure 'Baseline Row Count' = COUNTROWS(stg_mosaic_baseline_master)
+		formatString: 0
+		lineageTag: 3358da78-8918-4720-8823-80cd6535cb53
+
+	column NPI
+		dataType: double
+		formatString: 0
+		lineageTag: 44b532e4-ebff-44b7-a46a-d18118cede03
+		summarizeBy: none
+		sourceColumn: NPI
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isDecimal":true}
+
+	column Shift_Name
+		dataType: string
+		lineageTag: 2040951b-adcd-4028-bdb1-3606b6bdce15
+		summarizeBy: none
+		sourceColumn: Shift_Name
+
+		annotation SummarizationSetBy = Automatic
+
+	column Baseline_Type
+		dataType: string
+		lineageTag: 0c837797-6985-4cac-b75d-8b53e7f4a40e
+		summarizeBy: none
+		sourceColumn: Baseline_Type
+
+		annotation SummarizationSetBy = Automatic
+
+	column Matched_Shift_Name
+		dataType: string
+		lineageTag: 4de53bb5-56fe-44f5-a338-664e883cc912
+		summarizeBy: none
+		sourceColumn: Matched_Shift_Name
+
+		annotation SummarizationSetBy = Automatic
+
+	column Provider_Practice
+		dataType: string
+		lineageTag: 9037808f-5dba-451a-a40c-5d71c775bb11
+		summarizeBy: none
+		sourceColumn: Provider_Practice
+
+		annotation SummarizationSetBy = Automatic
+
+	column Rad_Name
+		dataType: string
+		lineageTag: 5a0e2636-d0df-4f74-a9f0-393e3475b3fb
+		summarizeBy: none
+		sourceColumn: Rad_Name
+
+		annotation SummarizationSetBy = Automatic
+
+	column Baseline_Period
+		dataType: string
+		lineageTag: 92cd1bef-70fe-4b55-a327-01f212a62af1
+		summarizeBy: none
+		sourceColumn: Baseline_Period
+
+		annotation SummarizationSetBy = Automatic
+
+	column TBWU26_Baseline
+		dataType: double
+		lineageTag: 5d62b7da-5031-4440-b3d0-a84f295dd8b7
+		summarizeBy: sum
+		sourceColumn: TBWU26_Baseline
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column TBWU25_Baseline
+		dataType: double
+		lineageTag: d1e265a1-a11b-4518-b863-7af0c2f9ecbb
+		summarizeBy: sum
+		sourceColumn: TBWU25_Baseline
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column RVU_Baseline
+		dataType: double
+		lineageTag: b1d39f93-51ef-4994-a080-e23292546a94
+		summarizeBy: sum
+		sourceColumn: RVU_Baseline
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column Case_Count_Baseline
+		dataType: double
+		lineageTag: 27015d98-4085-460d-a54f-72fb1196c5ef
+		summarizeBy: sum
+		sourceColumn: Case_Count_Baseline
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column Source
+		dataType: string
+		lineageTag: aed6059a-bb75-45b9-945a-8d5e93e82458
+		summarizeBy: none
+		sourceColumn: Source
+
+		annotation SummarizationSetBy = Automatic
+
+	column Matched_Shift_Name_Display =
+			
+			IF(
+			    stg_mosaic_baseline_master[Baseline_Type] = "Exact",
+			    stg_mosaic_baseline_master[Shift_Name],
+			    stg_mosaic_baseline_master[Matched_Shift_Name]
+			)
+		lineageTag: ee307029-a182-4185-99e1-e4f4f5240e89
+		summarizeBy: none
+
+		annotation SummarizationSetBy = Automatic
+
+	partition stg_mosaic_baseline_master = m
+		mode: import
+		source =
+				let
+				    Source = Databricks.Catalogs("adb-7306149455716415.15.azuredatabricks.net", "/sql/1.0/warehouses/fe0ad987563c672a", [Catalog=null, Database=null, EnableAutomaticProxyDiscovery=null, Implementation=null]),
+				    edw_dev_Database = Source{[Name="edw_dev",Kind="Database"]}[Data],
+				    bipa_analytics_Schema = edw_dev_Database{[Name="bipa_analytics",Kind="Schema"]}[Data],
+				    stg_mosaic_baseline_master_Table = bipa_analytics_Schema{[Name="stg_combined_baseline_master",Kind="Table"]}[Data]
+				in
+				    stg_mosaic_baseline_master_Table
+
+	annotation PBI_NavigationStepName = Navigation
+
+	annotation PBI_ResultType = Table
+

@@ -1,0 +1,1075 @@
+table vrarp_radpipeline
+	lineageTag: 62e56c3a-7bd0-450d-8d4e-24eb9d364831
+
+	measure distinctradsdraftingdynamics = ```
+			
+			
+			CALCULATE(DISTINCTCOUNT('vrarp_radpipeline'[NPI]), 
+			FILTER(
+			    VALUES('vrarp_radpipeline'[NPI]), 
+			    CALCULATE(SUM('Daily_Extract'[mosaic_draft_flag])) >=1 &&
+			
+			    (
+			    CALCULATE(COUNTROWS(FILTER('vrarp_radpipeline', NOT(ISBLANK('vrarp_radpipeline'[Added to AD Group (CXR/ABD/MSK)]))))) >0 
+			    ||
+			    CALCULATE(COUNTROWS(FILTER('vrarp_radpipeline', NOT(ISBLANK('vrarp_radpipeline'[Added to AD Group (CT Head)]))))) >0
+			    )
+			)
+			)
+			```
+		formatString: 0
+		lineageTag: ad7e90a9-2ff7-4fd4-ae0f-cc3900135aae
+
+	column Radiologist
+		dataType: string
+		lineageTag: af9b1669-f031-4f49-802e-4d9051d00fc3
+		summarizeBy: none
+		sourceColumn: vrarp_radiologistname
+
+		annotation SummarizationSetBy = Automatic
+
+	column 'Added to AD Group (CT Head)'
+		dataType: dateTime
+		formatString: Short Date
+		lineageTag: 666c230e-71e2-4bfc-b202-afd64c556977
+		summarizeBy: none
+		sourceColumn: vrarp_addedtoadgroupcthead
+
+		changedProperty = DataType
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation UnderlyingDateTimeDataType = Date
+
+	column 'Added to AD Group (CXR/ABD/MSK)'
+		dataType: dateTime
+		formatString: Short Date
+		lineageTag: 20952ef5-0792-446d-80f5-d907b0d2af91
+		summarizeBy: none
+		sourceColumn: vrarp_addedtoadgroupcxrabdmsk
+
+		changedProperty = DataType
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation UnderlyingDateTimeDataType = Date
+
+	column 'Drafting Training Sent (CT Head)'
+		dataType: dateTime
+		formatString: Short Date
+		lineageTag: 9aca31b8-0619-4ce4-a4cf-aec5045fb172
+		summarizeBy: none
+		sourceColumn: vrarp_addedtoadgroupcxronly
+
+		changedProperty = DataType
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation UnderlyingDateTimeDataType = Date
+
+	column NPI
+		dataType: int64
+		formatString: 0
+		lineageTag: 1400330e-7c2d-4793-8f28-43630294ca35
+		summarizeBy: none
+		sourceColumn: vrarp_npinum
+
+		annotation SummarizationSetBy = Automatic
+
+	column 'Initial Scheduling Completion Time'
+		dataType: int64
+		formatString: 0
+		lineageTag: c7b94e08-087b-4a9b-b38b-c1dd8d693a09
+		summarizeBy: none
+		sourceColumn: vrarp_initialschedulingcompletionminutes
+
+		annotation SummarizationSetBy = Automatic
+
+	column 'Initial Scheduling End Time'
+		dataType: dateTime
+		formatString: General Date
+		lineageTag: d852e89f-6d68-4a09-b0bb-8bdc09d00b9c
+		summarizeBy: none
+		sourceColumn: vrarp_initialschedulingendtime
+
+		annotation SummarizationSetBy = Automatic
+
+	column vrarp_initialschedulingowner
+		dataType: string
+		lineageTag: f775cba7-1928-4dbc-81c5-e082b15fa7a7
+		summarizeBy: none
+		sourceColumn: vrarp_initialschedulingowner
+
+		annotation SummarizationSetBy = Automatic
+
+	column 'Initial Scheduling Start Time'
+		dataType: dateTime
+		formatString: General Date
+		lineageTag: 2ea9d031-717b-4702-9166-6d7e9b994c6b
+		summarizeBy: none
+		sourceColumn: vrarp_initialschedulingstarttime
+
+		annotation SummarizationSetBy = Automatic
+
+	column vrarp_initialtrainingprogress
+		dataType: int64
+		formatString: 0
+		lineageTag: f89deb94-8031-441e-a7ac-9ea062533c27
+		summarizeBy: none
+		sourceColumn: vrarp_initialtrainingprogress
+
+		annotation SummarizationSetBy = Automatic
+
+	column 'Initial Training Progress'
+		dataType: string
+		lineageTag: c6cdad53-fcbc-4df0-939c-19b851938a4b
+		summarizeBy: none
+		sourceColumn: vrarp_initialtrainingprogressname
+
+		annotation SummarizationSetBy = Automatic
+
+	column 'Reschedule Root Cause Reason (Final)'
+		dataType: string
+		lineageTag: 28974960-ad4d-4811-99b5-e9d65668f91e
+		summarizeBy: none
+		sourceColumn: vrarp_reschedulerootcausereasonfinal
+
+		annotation SummarizationSetBy = Automatic
+
+	column 'Reschedule Root Cause Reason (Initial)'
+		dataType: string
+		lineageTag: e3ebfcc8-b33d-49c0-b008-1351ae47fa56
+		summarizeBy: none
+		sourceColumn: vrarp_reschedulerootcausereasoninitial
+
+		annotation SummarizationSetBy = Automatic
+
+	column 'Revisit Scheduling Completion Time'
+		dataType: int64
+		formatString: 0
+		lineageTag: 78d81449-2d27-4d9c-96c4-2d45961f42cf
+		summarizeBy: none
+		sourceColumn: vrarp_revisitschedulingcompletionminutes
+
+		annotation SummarizationSetBy = Automatic
+
+	column 'Revisit Scheduling End Time'
+		dataType: dateTime
+		formatString: General Date
+		lineageTag: 5170223d-de0f-44de-a1de-2311b63cd4a8
+		summarizeBy: none
+		sourceColumn: vrarp_revisitschedulingendtime
+
+		annotation SummarizationSetBy = Automatic
+
+	column vrarp_revisitschedulingowner
+		dataType: string
+		lineageTag: 718992c9-1b25-4384-b753-592f694c6c13
+		summarizeBy: none
+		sourceColumn: vrarp_revisitschedulingowner
+
+		annotation SummarizationSetBy = Automatic
+
+	column 'Revisit Scheduling Start Time'
+		dataType: dateTime
+		formatString: General Date
+		lineageTag: 661b160b-a41c-4deb-a3b6-313638ed0692
+		summarizeBy: none
+		sourceColumn: vrarp_revisitschedulingstarttime
+
+		annotation SummarizationSetBy = Automatic
+
+	column vrarp_revisittrainingprogress
+		dataType: int64
+		formatString: 0
+		lineageTag: 14299aff-c34f-40fd-bfc4-2c58ead8f307
+		summarizeBy: none
+		sourceColumn: vrarp_revisittrainingprogress
+
+		annotation SummarizationSetBy = Automatic
+
+	column 'Revisit Training Progress'
+		dataType: string
+		lineageTag: b1722629-0e6b-45e6-b9e2-656ff2dd9c4a
+		summarizeBy: none
+		sourceColumn: vrarp_revisittrainingprogressname
+
+		annotation SummarizationSetBy = Automatic
+
+	column 'Initial Scheduling Owner'
+		dataType: string
+		lineageTag: 520f092a-606d-41a1-a633-6d0073fba19f
+		summarizeBy: none
+		sourceColumn: vrarp_initialschedulingownername
+
+		annotation SummarizationSetBy = Automatic
+
+	column vrarp_initialschedulingowneryominame
+		dataType: string
+		lineageTag: d2e6cef7-44b0-49f5-ab93-72ad57518b13
+		summarizeBy: none
+		sourceColumn: vrarp_initialschedulingowneryominame
+
+		annotation SummarizationSetBy = Automatic
+
+	column 'Revisit Scheduling Owner'
+		dataType: string
+		lineageTag: 7e062b06-d574-4c4a-8f58-40c7c6078254
+		summarizeBy: none
+		sourceColumn: vrarp_revisitschedulingownername
+
+		annotation SummarizationSetBy = Automatic
+
+	column vrarp_revisitschedulingowneryominame
+		dataType: string
+		lineageTag: 137b37b3-8ca2-4701-9a1b-6f007cb279ce
+		summarizeBy: none
+		sourceColumn: vrarp_revisitschedulingowneryominame
+
+		annotation SummarizationSetBy = Automatic
+
+	column vrarp_completedbyinitial
+		dataType: string
+		lineageTag: a6a2cef2-8c84-4f24-91e6-a91e4606be9f
+		summarizeBy: none
+		sourceColumn: vrarp_completedbyinitial
+
+		annotation SummarizationSetBy = Automatic
+
+	column vrarp_completedbyrevisit
+		dataType: string
+		lineageTag: 26b411e0-5098-40c5-934a-1deb7935c530
+		summarizeBy: none
+		sourceColumn: vrarp_completedbyrevisit
+
+		annotation SummarizationSetBy = Automatic
+
+	column 'Completed By (Initial)'
+		dataType: string
+		lineageTag: 8a226c05-1758-49b9-81c7-3e26874652b9
+		summarizeBy: none
+		sourceColumn: vrarp_completedbyinitialname
+
+		annotation SummarizationSetBy = Automatic
+
+	column vrarp_completedbyinitialyominame
+		dataType: string
+		lineageTag: 206c8ed4-e5b9-4027-8a86-c5d3e800d2ad
+		summarizeBy: none
+		sourceColumn: vrarp_completedbyinitialyominame
+
+		annotation SummarizationSetBy = Automatic
+
+	column 'Completed By (Revisit)'
+		dataType: string
+		lineageTag: 8a3235ac-646e-4517-b683-84ab122a0c09
+		summarizeBy: none
+		sourceColumn: vrarp_completedbyrevisitname
+
+		annotation SummarizationSetBy = Automatic
+
+	column vrarp_completedbyrevisityominame
+		dataType: string
+		lineageTag: 5562e29c-5d03-4ee6-b55c-f0387dafc467
+		summarizeBy: none
+		sourceColumn: vrarp_completedbyrevisityominame
+
+		annotation SummarizationSetBy = Automatic
+
+	column 'Okta Date Sent'
+		dataType: dateTime
+		formatString: General Date
+		lineageTag: 011a95a7-b8d6-4957-b1a0-7ae2f9a5fed7
+		summarizeBy: none
+		sourceColumn: vrarp_oktadatesent
+
+		annotation SummarizationSetBy = Automatic
+
+	column vrarp_oktarequestsent
+		dataType: boolean
+		formatString: """TRUE"";""TRUE"";""FALSE"""
+		lineageTag: 5c1eb7bd-fb2b-4543-9ee7-77c1c0340bb7
+		summarizeBy: none
+		sourceColumn: vrarp_oktarequestsent
+
+		annotation SummarizationSetBy = Automatic
+
+	column 'Okta Request Sent'
+		dataType: string
+		lineageTag: 3ab7e5d8-611f-47d7-a98c-90f6958d69f4
+		summarizeBy: none
+		sourceColumn: vrarp_oktarequestsentname
+
+		annotation SummarizationSetBy = Automatic
+
+	column 'Training Date (Initial) Duplicate'
+		dataType: dateTime
+		formatString: General Date
+		lineageTag: 7e17df7f-2c8b-43a6-9f58-5814e2ef8f93
+		summarizeBy: none
+		sourceColumn: vrarp_trainingdateinitialduplicate
+
+		annotation SummarizationSetBy = Automatic
+
+	column vrarp_captureenabled
+		dataType: boolean
+		formatString: """TRUE"";""TRUE"";""FALSE"""
+		lineageTag: 970f72e1-9240-4b37-9c6c-c73a99e20a49
+		summarizeBy: none
+		sourceColumn: vrarp_captureenabled
+
+		annotation SummarizationSetBy = Automatic
+
+	column 'Capture Enabled'
+		dataType: string
+		lineageTag: 9422d7d0-ab97-4f7a-94b9-9f5f1428e584
+		summarizeBy: none
+		sourceColumn: vrarp_captureenabledname
+
+		annotation SummarizationSetBy = Automatic
+
+	column 'Training Completion'
+		dataType: dateTime
+		formatString: General Date
+		lineageTag: 8143f539-8d75-44e7-bb95-3f8104da135f
+		summarizeBy: none
+		sourceColumn: vrarp_trainingcompletion
+
+		annotation SummarizationSetBy = Automatic
+
+	column 'Added to AD Group (CT Abd/Pelvis)'
+		dataType: dateTime
+		formatString: General Date
+		lineageTag: aff1eb25-4e8e-4cf8-bc68-0fe85efec625
+		summarizeBy: none
+		sourceColumn: vrarp_addedtoadgroupctabdpelvis
+
+		annotation SummarizationSetBy = Automatic
+
+	column 'Drafting Training Complete (CT Abd/Pelvis)'
+		dataType: dateTime
+		formatString: General Date
+		lineageTag: 10f8ff61-015e-4ac9-980a-6582da7ee53d
+		summarizeBy: none
+		sourceColumn: vrarp_draftingtrainingcompletectabdpelvis
+
+		annotation SummarizationSetBy = Automatic
+
+	column 'Drafting Training Sent (CT Abd/Pelvis)'
+		dataType: dateTime
+		formatString: General Date
+		lineageTag: e9596b38-b81a-4535-a95b-7b021cfc6d6a
+		summarizeBy: none
+		sourceColumn: vrarp_draftingtrainingsentctabdpelvis
+
+		annotation SummarizationSetBy = Automatic
+
+	column 'Addendum Workflow Description'
+		dataType: string
+		lineageTag: a0c2735d-7d9e-4502-81e1-900a196e4b1b
+		summarizeBy: none
+		sourceColumn: vrarp_addendumworkflowdescription
+
+		annotation SummarizationSetBy = Automatic
+
+	column vrarp_addendumworkflowrequired
+		dataType: int64
+		formatString: 0
+		lineageTag: ff9b80ac-3c18-45dd-a8c3-18e45085fcb8
+		summarizeBy: none
+		sourceColumn: vrarp_addendumworkflowrequired
+
+		annotation SummarizationSetBy = Automatic
+
+	column 'Addendum Workflow Required'
+		dataType: string
+		lineageTag: f1f6ff1e-f515-46ba-89cf-891c4ff70543
+		summarizeBy: none
+		sourceColumn: vrarp_addendumworkflowrequiredname
+
+		annotation SummarizationSetBy = Automatic
+
+	column vrarp_appworkflowrequirement1
+		dataType: string
+		lineageTag: de95e100-7d9c-4bea-b63f-e18ef55f4d6c
+		summarizeBy: none
+		sourceColumn: vrarp_appworkflowrequirement1
+
+		annotation SummarizationSetBy = Automatic
+
+	column 'IR APP Template Comments'
+		dataType: string
+		lineageTag: 09b5a56e-af13-48da-b706-31e96d26a828
+		summarizeBy: none
+		sourceColumn: vrarp_irapptemplatecomments
+
+		annotation SummarizationSetBy = Automatic
+
+	column 'IR APP Templates Uploaded Date'
+		dataType: dateTime
+		formatString: General Date
+		lineageTag: 3d02f630-4707-496b-8639-d7eb0b5de952
+		summarizeBy: none
+		sourceColumn: vrarp_irapptemplatesuploadeddate
+
+		annotation SummarizationSetBy = Automatic
+
+	column 'Mosaic Version'
+		dataType: string
+		lineageTag: c6e800b1-975e-4e73-822f-65f9028fc72e
+		summarizeBy: none
+		sourceColumn: vrarp_mosaicversion
+
+		annotation SummarizationSetBy = Automatic
+
+	column 'OKTA Group Enabled Date'
+		dataType: dateTime
+		formatString: General Date
+		lineageTag: 0ff5b4d2-7521-4c23-b6ff-b511d7e970b3
+		summarizeBy: none
+		sourceColumn: vrarp_oktagroupenableddate
+
+		annotation SummarizationSetBy = Automatic
+
+	column vrarp_oktagroupnamerequested
+		dataType: string
+		lineageTag: fbcb528b-7c22-4517-bc76-6b14bf94b41a
+		summarizeBy: none
+		sourceColumn: vrarp_oktagroupnamerequested
+
+		annotation SummarizationSetBy = Automatic
+
+	column 'OKTA Group Requested Date'
+		dataType: dateTime
+		formatString: General Date
+		lineageTag: 549cea55-d22b-470b-807d-a686d979253f
+		summarizeBy: none
+		sourceColumn: vrarp_oktagrouprequesteddate
+
+		annotation SummarizationSetBy = Automatic
+
+	column 'OKTA Request Ticket'
+		dataType: string
+		lineageTag: aeb7f0e8-679f-406f-acd4-a64dd8709b92
+		summarizeBy: none
+		sourceColumn: vrarp_oktarequestticket
+
+		annotation SummarizationSetBy = Automatic
+
+	column 'Prelaunch Completion Date'
+		dataType: dateTime
+		formatString: General Date
+		lineageTag: b0f24844-8aaf-48da-871e-078f9c720c73
+		summarizeBy: none
+		sourceColumn: vrarp_prelaunchcompletiondate
+
+		annotation SummarizationSetBy = Automatic
+
+	column 'Prelaunch Notes'
+		dataType: string
+		lineageTag: 4eaa6ab2-8cce-432a-8ccd-ae73c347eb6a
+		summarizeBy: none
+		sourceColumn: vrarp_prelaunchnotes
+
+		annotation SummarizationSetBy = Automatic
+
+	column 'Prelaunch Workstation'
+		dataType: string
+		lineageTag: 8f3c8afe-acc1-48ab-bb16-e388742827f6
+		summarizeBy: none
+		sourceColumn: vrarp_prelaunchworkstation
+
+		annotation SummarizationSetBy = Automatic
+
+	column vrarp_residentworkflowrequirement
+		dataType: string
+		lineageTag: e61ce8c9-cdfb-4c64-8368-1e23cc4c9895
+		summarizeBy: none
+		sourceColumn: vrarp_residentworkflowrequirement
+
+		annotation SummarizationSetBy = Automatic
+
+	column vrarp_residentworkflowrequirement1
+		dataType: string
+		lineageTag: 2139a496-30aa-45f2-88cc-06eb2405ecb5
+		summarizeBy: none
+		sourceColumn: vrarp_residentworkflowrequirement1
+
+		annotation SummarizationSetBy = Automatic
+
+	column 'APP Workflow Requirement'
+		dataType: string
+		lineageTag: 107244da-6823-40c5-bdce-f5bbe89b7e7c
+		summarizeBy: none
+		sourceColumn: vrarp_appworkflowrequirement1name
+
+		annotation SummarizationSetBy = Automatic
+
+	column 'OKTA Group Name Requested'
+		dataType: string
+		lineageTag: 10ac4b07-5045-480d-aba0-27fbe8bccbf8
+		summarizeBy: none
+		sourceColumn: vrarp_oktagroupnamerequestedname
+
+		annotation SummarizationSetBy = Automatic
+
+	column 'Resident Workflow Requirement'
+		dataType: string
+		lineageTag: bdacc065-15fe-427a-801f-7c4329df45c9
+		summarizeBy: none
+		sourceColumn: vrarp_residentworkflowrequirementname
+
+		annotation SummarizationSetBy = Automatic
+
+	column 'Resident Workflow Requirement 2'
+		dataType: string
+		lineageTag: 4ba7dd54-28dc-449c-91c9-29076433d20b
+		summarizeBy: none
+		sourceColumn: vrarp_residentworkflowrequirement1name
+
+		annotation SummarizationSetBy = Automatic
+
+	column vrarp_contact
+		dataType: string
+		lineageTag: 74f541bd-f558-4828-85fe-18dbb7276f0b
+		summarizeBy: none
+		sourceColumn: vrarp_contact
+
+		annotation SummarizationSetBy = Automatic
+
+	column Contact
+		dataType: string
+		lineageTag: 8d403e4d-52c9-4e40-8702-2320591839d7
+		summarizeBy: none
+		sourceColumn: vrarp_contactname
+
+		annotation SummarizationSetBy = Automatic
+
+	column vrarp_contactyominame
+		dataType: string
+		lineageTag: 8e33f162-c993-41b4-bb5e-ea22d4f9ee62
+		summarizeBy: none
+		sourceColumn: vrarp_contactyominame
+
+		annotation SummarizationSetBy = Automatic
+
+	column 'Default Clario Launcher Update to Mosaic Date'
+		dataType: dateTime
+		formatString: General Date
+		lineageTag: 2ed4ff0b-0ec7-44d1-b7b3-c39cef37b632
+		summarizeBy: none
+		sourceColumn: vrarp_defaultclariolauncherupdatetomosaicdate
+
+		annotation SummarizationSetBy = Automatic
+
+	column 'Legacy VR Account Disabled Date'
+		dataType: dateTime
+		formatString: General Date
+		lineageTag: 87f92596-d01a-40f0-b836-4adbdfd41a6a
+		summarizeBy: none
+		sourceColumn: vrarp_legacyvraccountdisableddate
+
+		annotation SummarizationSetBy = Automatic
+
+	column 'Legacy VR Sunset Notes'
+		dataType: string
+		lineageTag: 5268c25c-b7fc-422f-9933-9b79c5960a9b
+		summarizeBy: none
+		sourceColumn: vrarp_legacyvrsunsetnotes
+
+		annotation SummarizationSetBy = Automatic
+
+	column vrarp_legacyvrsunsetready
+		dataType: int64
+		formatString: 0
+		lineageTag: 27138f68-88d1-4ded-aa24-fe2e6ef4e514
+		summarizeBy: none
+		sourceColumn: vrarp_legacyvrsunsetready
+
+		annotation SummarizationSetBy = Automatic
+
+	column 'Legacy VR Sunset Ready'
+		dataType: string
+		lineageTag: d885eb22-d383-4faf-bca9-56fb3809d707
+		summarizeBy: none
+		sourceColumn: vrarp_legacyvrsunsetreadyname
+
+		annotation SummarizationSetBy = Automatic
+
+	column 'Added to AD Group (CT Chest)'
+		dataType: dateTime
+		formatString: General Date
+		lineageTag: eccaf4b7-ebb5-434c-b8aa-104d588d14b1
+		summarizeBy: none
+		sourceColumn: vrarp_addedtoadgroupctchest
+
+		annotation SummarizationSetBy = Automatic
+
+	column 'Drafting Training Completed (CT Chest)'
+		dataType: dateTime
+		formatString: General Date
+		lineageTag: d11f18ee-45f5-4ba3-ab87-9e8a54acea5c
+		summarizeBy: none
+		sourceColumn: vrarp_draftingtrainingcompletedctchest
+
+		annotation SummarizationSetBy = Automatic
+
+	column 'Drafting Training Sent (CT Chest)'
+		dataType: dateTime
+		formatString: General Date
+		lineageTag: 7764edaa-b33f-462b-b9f3-5c423669787a
+		summarizeBy: none
+		sourceColumn: vrarp_draftingtrainingsentctchest
+
+		annotation SummarizationSetBy = Automatic
+
+	column 'Added to AD Group (Triage)'
+		dataType: dateTime
+		formatString: General Date
+		lineageTag: fd57dd65-48de-4d5b-bd13-94ef3388eadd
+		summarizeBy: none
+		sourceColumn: vrarp_addedtoadgrouptriage
+
+		annotation SummarizationSetBy = Automatic
+
+	column 'Added to AD Group (CTA Chest)'
+		dataType: dateTime
+		formatString: General Date
+		lineageTag: 5d1242c9-c74d-4169-9b88-62dd7bda6a1a
+		summarizeBy: none
+		sourceColumn: vrarp_addedtoadgroupctachest
+
+		annotation SummarizationSetBy = Automatic
+
+	column 'Drafting Training Completed (CTA Chest)'
+		dataType: dateTime
+		formatString: General Date
+		lineageTag: e5f9606c-6866-4fef-b02f-95e60802dde9
+		summarizeBy: none
+		sourceColumn: vrarp_draftingtrainingcompletedctachest
+
+		annotation SummarizationSetBy = Automatic
+
+	column 'Drafting Training Sent (CTA Chest)'
+		dataType: dateTime
+		formatString: General Date
+		lineageTag: 3b4c974f-2a3f-41bb-9d76-c8473a53eaee
+		summarizeBy: none
+		sourceColumn: vrarp_draftingtrainingsentctachest
+
+		annotation SummarizationSetBy = Automatic
+
+	column 'RP Email'
+		dataType: string
+		lineageTag: c91318a1-9e65-4e73-bc1e-eccfd3bad3c2
+		summarizeBy: none
+		sourceColumn: vrarp_rpemail
+
+		annotation SummarizationSetBy = Automatic
+
+	column '% Mosaic Efficiency Change (last 30 days)'
+		dataType: double
+		lineageTag: c3433911-2932-4989-9fb3-e0b9b9b0cc3c
+		summarizeBy: none
+		sourceColumn: vrarp_efficiencychangelast30days
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column 'Mosaic Optimization Support Notes'
+		dataType: string
+		lineageTag: 1a8079a8-9488-4604-9514-f42aefb680da
+		summarizeBy: none
+		sourceColumn: vrarp_mosaicoptimizationsupportnotes
+
+		annotation SummarizationSetBy = Automatic
+
+	column vrarp_mosaicoptimizationsupportstatus
+		dataType: string
+		lineageTag: a005948d-fbad-4e7f-bdb2-c1e437c86eb2
+		summarizeBy: none
+		sourceColumn: vrarp_mosaicoptimizationsupportstatus
+
+		annotation SummarizationSetBy = Automatic
+
+	column 'Mosaic Optimization Support Status'
+		dataType: string
+		lineageTag: 5f55b862-6fa9-4cf7-a1f8-62c789139c7b
+		summarizeBy: none
+		sourceColumn: vrarp_mosaicoptimizationsupportstatusname
+
+		annotation SummarizationSetBy = Automatic
+
+	column 'Training Date (Initial)'
+		dataType: dateTime
+		formatString: General Date
+		lineageTag: 833f2f77-f2d4-4005-a4d4-5ceb4c743e0c
+		summarizeBy: none
+		sourceColumn: vrarp_trainingdateinitial
+
+		annotation SummarizationSetBy = Automatic
+
+	column 'CT Head Efficiency Change (May-Jul 26)'
+		dataType: double
+		lineageTag: 4d6048db-e7fa-44c0-8cac-62b9568196bf
+		summarizeBy: none
+		sourceColumn: vrarp_ctheadefficiencychangejunjul26
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column 'CT Head Efficiency Change (L7D)'
+		dataType: double
+		lineageTag: 0991e4f8-5ed1-44c2-a98e-896148ddcfe4
+		summarizeBy: none
+		sourceColumn: vrarp_ctheadefficiencychangelast7d
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column 'Full Mosaic Efficiency Change (May-Jul 26)'
+		dataType: double
+		lineageTag: 6ce7f205-1699-467d-aac1-5767459f0b86
+		summarizeBy: none
+		sourceColumn: vrarp_fullmosaicefficiencychangejunjul26
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column 'Full Mosaic Efficiency Change (L7D)'
+		dataType: double
+		lineageTag: 74f06f6c-45aa-40ef-a4b9-c54f41476e71
+		summarizeBy: none
+		sourceColumn: vrarp_fullmosaicefficiencychangelast7d
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column 'US Capture Efficiency Change (May-Jul 26)'
+		dataType: double
+		lineageTag: 8af403c7-d9ed-4a01-a29a-28509dbd0a20
+		summarizeBy: none
+		sourceColumn: vrarp_uscaptureefficiencychangejunjul26
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column 'US Capture Efficiency Change (L7D)'
+		dataType: double
+		lineageTag: 80ab706b-0390-43d0-b966-7b94c62b3498
+		summarizeBy: none
+		sourceColumn: vrarp_uscaptureefficiencychangelast7d
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column 'XR Drafting Efficiency Change (May-Jul 26)'
+		dataType: double
+		lineageTag: 97d3241d-3833-43aa-8e1e-b628dba929b7
+		summarizeBy: none
+		sourceColumn: vrarp_xrdraftingefficiencychangejunjul26
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column 'XR Drafting Efficiency Change (L7D)'
+		dataType: double
+		lineageTag: f720d941-12c7-40b2-9b5f-d8f53fa7826f
+		summarizeBy: none
+		sourceColumn: vrarp_xrdraftingefficiencychangelast7d
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column 'Added to AD Group (CT Cervical Spine)'
+		dataType: dateTime
+		formatString: General Date
+		lineageTag: 0e0e959d-ce07-48cd-8b58-e83eba5545f2
+		summarizeBy: none
+		sourceColumn: vrarp_addedtoadgroupctcervicalspine
+
+		annotation SummarizationSetBy = Automatic
+
+	column 'Drafting Training Completed (CT Cervical Spine)'
+		dataType: dateTime
+		formatString: General Date
+		lineageTag: 91773102-77d0-470f-b725-485780a298a6
+		summarizeBy: none
+		sourceColumn: vrarp_draftingtrainingcompletedctcervicalspine
+
+		annotation SummarizationSetBy = Automatic
+
+	column 'Drafting Training Sent (CT Cervical Spine)'
+		dataType: dateTime
+		formatString: General Date
+		lineageTag: ea1e0da5-5e38-46c1-b4a3-0bfc37845ce4
+		summarizeBy: none
+		sourceColumn: vrarp_draftingtrainingsentctcervicalspine
+
+		annotation SummarizationSetBy = Automatic
+
+	column 'CT Head Efficiency Change (L14D)'
+		dataType: double
+		lineageTag: 4e3c3c34-e059-47c1-ad7c-ae32dc17e070
+		summarizeBy: none
+		sourceColumn: vrarp_ctheadefficiencychangel14d
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column 'CT Head Efficiency Change (L30D)'
+		dataType: double
+		lineageTag: 8a77734c-b559-40e8-9965-4dcdab480b92
+		summarizeBy: none
+		sourceColumn: vrarp_ctheadefficiencychangel30d
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column 'Drafting & Captured Efficiency Change (L14D)'
+		dataType: double
+		lineageTag: f24479f4-486b-4d50-9300-4e198ae19954
+		summarizeBy: none
+		sourceColumn: vrarp_draftingcapturedefficiencychangel14d
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column 'Drafting & Captured Efficiency Change (L30D)'
+		dataType: double
+		lineageTag: 27cb6958-d28b-469f-a3c1-a96eae644750
+		summarizeBy: none
+		sourceColumn: vrarp_draftingcapturedefficiencychangel30d
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column 'Drafting & Captured Efficiency Change (L7D)'
+		dataType: double
+		lineageTag: 3803a594-28ec-469a-9de2-215f0edb8b67
+		summarizeBy: none
+		sourceColumn: vrarp_draftingcapturedefficiencychangel7d
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column 'Drafting & Captured Efficiency Change (May-Jul 26)'
+		dataType: double
+		lineageTag: 73723e77-65c6-4f70-82c6-1801669e1d41
+		summarizeBy: none
+		sourceColumn: vrarp_draftingcapturedefficiencychangemayjul26
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column 'Full Mosaic Efficiency Change (L14D)'
+		dataType: double
+		lineageTag: 54be9a91-3774-4dc9-b4a4-a6fccf974f19
+		summarizeBy: none
+		sourceColumn: vrarp_fullmosaicefficiencychangel14d
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column 'Full Mosaic Efficiency Change (L30D)'
+		dataType: double
+		lineageTag: 7a6518eb-9b30-4241-a886-24e4da27d0e4
+		summarizeBy: none
+		sourceColumn: vrarp_fullmosaicefficiencychangel30d
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column 'MVP Target Outreach Week'
+		dataType: dateTime
+		formatString: General Date
+		lineageTag: 1bd829ab-39f4-486a-95ef-59b784635ac5
+		summarizeBy: none
+		sourceColumn: vrarp_mvptargetoutreachweek
+
+		annotation SummarizationSetBy = Automatic
+
+	column 'MVP TBWUs/9h shift (May-Jul 26)'
+		dataType: double
+		lineageTag: 16475390-c840-4947-8873-36e8b1fdc875
+		summarizeBy: none
+		sourceColumn: vrarp_mvptbwus9hshiftmayjul26
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column 'Optimization Last Updated'
+		dataType: dateTime
+		formatString: General Date
+		lineageTag: ca48dc91-433f-48fd-91f5-f3136b1131bc
+		summarizeBy: none
+		sourceColumn: vrarp_optimizationlastupdated
+
+		annotation SummarizationSetBy = Automatic
+
+	column 'US Capture Efficiency Change (L14D)'
+		dataType: double
+		lineageTag: 7f8a0086-9a09-4936-8b4d-9e10106faa6e
+		summarizeBy: none
+		sourceColumn: vrarp_uscaptureefficiencychangel14d
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column 'US Capture Efficiency Change (L30D)'
+		dataType: double
+		lineageTag: 702c75f8-0351-4a83-8aaa-d76994a4444c
+		summarizeBy: none
+		sourceColumn: vrarp_uscaptureefficiencychangel30d
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column 'XR Drafting Efficiency Change (L14D)'
+		dataType: double
+		lineageTag: 34c8dffb-975a-4274-8325-a71f0586d0d0
+		summarizeBy: none
+		sourceColumn: vrarp_xrdraftingefficiencychangel14d
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column 'XR Drafting Efficiency Change (L30D)'
+		dataType: double
+		lineageTag: 0d402598-b79a-4817-bdde-6e9118adad07
+		summarizeBy: none
+		sourceColumn: vrarp_xrdraftingefficiencychangel30d
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column 'Date Mosaic Mentorship Completed'
+		dataType: dateTime
+		formatString: General Date
+		lineageTag: 49ace319-e237-4c56-9905-fcced6d142b5
+		summarizeBy: none
+		sourceColumn: vrarp_datemosaicmentorshipcompleted
+
+		annotation SummarizationSetBy = Automatic
+
+	column vrarp_mosaicmentorshipprogramstatus
+		dataType: string
+		lineageTag: 1baee117-dc33-4130-905f-9c6dcadca73a
+		summarizeBy: none
+		sourceColumn: vrarp_mosaicmentorshipprogramstatus
+
+		annotation SummarizationSetBy = Automatic
+
+	column vrarp_mosaicmentorstatus
+		dataType: string
+		lineageTag: 64fda468-0198-4ff5-a097-4d43d600cf61
+		summarizeBy: none
+		sourceColumn: vrarp_mosaicmentorstatus
+
+		annotation SummarizationSetBy = Automatic
+
+	column vrarp_mvpcohort
+		dataType: string
+		lineageTag: ac7a38da-4d9e-45c1-bc08-703d3837b480
+		summarizeBy: none
+		sourceColumn: vrarp_mvpcohort
+
+		annotation SummarizationSetBy = Automatic
+
+	column vrarp_mymosaicmentor
+		dataType: string
+		lineageTag: 40eeb706-bdf7-4667-9f7d-6f10d593c205
+		summarizeBy: none
+		sourceColumn: vrarp_mymosaicmentor
+
+		annotation SummarizationSetBy = Automatic
+
+	column 'Mosaic Mentorship Program Status'
+		dataType: string
+		lineageTag: 9dbdb070-b52c-406b-b5eb-d445dd00a5cf
+		summarizeBy: none
+		sourceColumn: vrarp_mosaicmentorshipprogramstatusname
+
+		annotation SummarizationSetBy = Automatic
+
+	column 'Mosaic Mentor Status'
+		dataType: string
+		lineageTag: 02c6faf7-f176-4594-804c-d2003715abce
+		summarizeBy: none
+		sourceColumn: vrarp_mosaicmentorstatusname
+
+		annotation SummarizationSetBy = Automatic
+
+	column 'MVP Cohort'
+		dataType: string
+		lineageTag: c190f992-9d56-457f-9f29-37b47cafa466
+		summarizeBy: none
+		sourceColumn: vrarp_mvpcohortname
+
+		annotation SummarizationSetBy = Automatic
+
+	column 'My Mosaic Mentor'
+		dataType: string
+		lineageTag: c1bd940d-5245-41bf-8d3b-55aa270198cc
+		summarizeBy: none
+		sourceColumn: vrarp_mymosaicmentorname
+
+		annotation SummarizationSetBy = Automatic
+
+	column vrarp_mymosaicmentoryominame
+		dataType: string
+		lineageTag: 87315439-2e0f-4262-b491-c915490ccbc6
+		summarizeBy: none
+		sourceColumn: vrarp_mymosaicmentoryominame
+
+		annotation SummarizationSetBy = Automatic
+
+	column 'IRB Signed Date'
+		dataType: dateTime
+		formatString: General Date
+		lineageTag: a4625eeb-5f28-42eb-a9bb-af28c10d3c9a
+		summarizeBy: none
+		sourceColumn: vrarp_irbsigneddate
+
+		annotation SummarizationSetBy = Automatic
+
+	partition vrarp_radpipeline = m
+		mode: import
+		source =
+				let
+				    Source = CommonDataService.Database("orgdf658607.crm.dynamics.com"),
+				    dbo_vrarp_radpipeline = Source{[Schema="dbo",Item="vrarp_radpipeline"]}[Data],
+				    #"Removed Columns" = Table.RemoveColumns(dbo_vrarp_radpipeline,{"vrarp_radpipelineid", "createdon", "createdby", "modifiedon", "modifiedby", "createdonbehalfby", "modifiedonbehalfby", "createdbyname", "createdbyyominame", "createdonbehalfbyname", "createdonbehalfbyyominame", "modifiedbyname", "modifiedbyyominame", "modifiedonbehalfbyname", "modifiedonbehalfbyyominame", "ownerid", "owneridname", "owneridyominame", "owningbusinessunit", "owninguser", "owningteam", "owningbusinessunitname", "statecode", "statecodename", "statuscode", "statuscodename", "importsequencenumber", "overriddencreatedon", "timezoneruleversionnumber", "utcconversiontimezonecode", "processid", "stageid", "traversedpath", "cra5d_lt_overalllaunchstatus", "cra5d_lt_overalllaunchstatusname", "cra5d_practicesuccesslead", "vrarp_actualgolivedate", "vrarp_endtime", "vrarp_endtimename", "vrarp_launchtemplate", "vrarp_lk_activetime", "vrarp_lk_golivedate", "vrarp_lk_launchattendance", "vrarp_lk_launchattendancename", "vrarp_lk_launchcoach", "vrarp_lk_launchowner", "vrarp_lk_newsheadline", "vrarp_lk_newsheadlinecritical", "vrarp_lk_newsheadlinecriticalname", "vrarp_lk_plpattendance", "vrarp_lk_plpattendancename", "vrarp_lk_prelaunchprepavailability", "vrarp_lk_prelaunchprepmeeting", "vrarp_lk_radengagementmeeting", "vrarp_lk_setupprogress", "vrarp_lk_tobelauncheddate", "vrarp_localpracticenotes", "vrarp_mosaicinstallation", "vrarp_mosaicp1training", "vrarp_mosaicp2training", "vrarp_nativetimezone", "vrarp_nativetimezonename", "vrarp_oneononeradengagement", "vrarp_projectedgolive", "vrarp_radengagementmeetingtext", "vrarp_radiologist", "vrarp_radlaunchmodel", "vrarp_radlaunchmodelname", "vrarp_radstatus", "vrarp_radstatusname", "vrarp_rp_500dxcases", "vrarp_rp_500dxcasesname", "vrarp_rp_exclusionreason", "vrarp_rp_plpcoach", "vrarp_schedule", "vrarp_scheduledtimenative", "vrarp_scheduledtimes", "vrarp_starttime", "vrarp_starttimename", "vrarp_teamnotes", "vrarp_timeslot", "vrarp_timeslotname", "vrarp_vraeligible", "vrarp_vraeligiblename", "vrarp_vravendor", "cra5d_practicesuccessleadname", "cra5d_practicesuccessleadyominame", "vrarp_launchtemplatename", "vrarp_lk_launchcoachname", "vrarp_lk_launchcoachyominame", "vrarp_lk_launchownername", "vrarp_lk_launchowneryominame", "vrarp_id", "vrarp_techstacks"}),
+				    #"Removed Duplicates" = Table.Distinct(#"Removed Columns", {"vrarp_radiologistyominame", "vrarp_rp_plpcoachname", "vrarp_rp_plpcoachyominame", "vrarp_techstacksname", "vrarp_vravendorname", "vrarp_vravendoryominame"}),
+				    #"Removed Columns1" = Table.RemoveColumns(#"Removed Duplicates",{"vrarp_radiologistyominame", "vrarp_rp_plpcoachname", "vrarp_rp_plpcoachyominame", "vrarp_techstacksname", "vrarp_vravendorname", "vrarp_vravendoryominame", "vrarp_deploymentnotes", "vrarp_firstoutreachinitial", "vrarp_firstoutreachrevisit", "vrarp_lastoutreachinitial", "vrarp_contactpreference", "vrarp_lastoutreachrevisit", "vrarp_launchgroup", "vrarp_plannedforutilizationdrive", "vrarp_plannedforutilizationdrivename", "vrarp_plannedtrainingweekinitial", "vrarp_plannedtrainingweekrevisit", "vrarp_prelaunchdate", "vrarp_prelaunchlead", "vrarp_scheduledbyinitial", "vrarp_scheduledbyrevisit", "vrarp_schedulernotesinitial", "vrarp_schedulernotesrevisit", "vrarp_schedulingstatusinitial", "vrarp_schedulingstatusrevisit", "vrarp_trainernameinitial", "vrarp_trainernamerevisit", "vrarp_trainernotesinitial", "vrarp_trainernotesrevisit", "vrarp_trainingdaterevisit", "vrarp_contactpreferencename", "vrarp_launchgroupname", "vrarp_prelaunchleadname", "vrarp_prelaunchleadyominame", "vrarp_scheduledbyinitialname", "vrarp_scheduledbyinitialyominame", "vrarp_scheduledbyrevisitname", "vrarp_scheduledbyrevisityominame", "vrarp_schedulingstatusinitialname", "vrarp_schedulingstatusrevisitname", "vrarp_trainernameinitialname", "vrarp_trainernameinitialyominame", "vrarp_trainernamerevisitname", "vrarp_trainernamerevisityominame", "vrarp_draftingconsent", "vrarp_draftingtrainingcthead", "vrarp_draftingtrainingcxrabdmsk", "vrarp_draftingtrainingcxronly", "vrarp_employmenttype", "vrarp_mosaicreportingdraftingmodel", "vrarp_utilizationplannotes", "vrarp_draftingconsentname", "vrarp_mosaicreportingdraftingmodelname", "vrarp_draftingnotes", "account", "asyncoperation", "businessunit", "contact(cra5d_practicesuccesslead)", "contact(vrarp_lk_launchcoach)", "contact(vrarp_prelaunchlead)", "contact(vrarp_radiologist)", "contact(vrarp_rp_plpcoach)", "contact(vrarp_scheduledbyinitial)", "contact(vrarp_scheduledbyrevisit)", "contact(vrarp_trainernameinitial)", "contact(vrarp_trainernamerevisit)", "processsession", "processstage", "systemuser(createdby)", "systemuser(createdonbehalfby)", "systemuser(modifiedby)", "systemuser(modifiedonbehalfby)", "systemuser(owninguser)", "systemuser(vrarp_lk_launchowner)", "team", "vrarp_contactpreference(vrarp_contactpreference)", "vrarp_draftingconsent(vrarp_draftingconsent)", "vrarp_initialscheduling", "vrarp_launchgroup(vrarp_launchgroup)", "vrarp_launchmodel", "vrarp_mosaicreportingdraftingmodel(vrarp_mosaicreportingdraftingmodel)", "vrarp_radchecklist", "vrarp_radchecklisttemplate", "vrarp_revisitscheduling", "vrarp_techlist", "vrarp_vradeactivationrequests", "vrarp_vraroster", "vrarp_reviewformsubmission", "vrarp_priority"}),
+				    #"Removed Duplicates1" = Table.Distinct(#"Removed Columns1", {"vrarp_npinum"}),
+				    #"Filtered Rows" = Table.SelectRows(#"Removed Duplicates1", each ([vrarp_npinum] <> null))
+				in
+				    #"Filtered Rows"
+
+	annotation PBI_NavigationStepName = Navigation
+
+	annotation PBI_ResultType = Table
+

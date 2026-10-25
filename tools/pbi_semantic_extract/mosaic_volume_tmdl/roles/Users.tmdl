@@ -1,0 +1,7 @@
+role Users
+	modelPermission: read
+
+	tablePermission 'MODEL POWERBI_USER_FILTERS' = [EMAIL] = userprincipalname()
+
+	annotation PBI_Id = 27f11db85a9f491db414dfa84717023f
+

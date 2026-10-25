@@ -1,0 +1,196 @@
+table 'MODEL POWERBI_USER_FILTERS'
+	lineageTag: b45b707b-1cbe-4f87-b867-140396cb64cf
+
+	column NAME
+		dataType: string
+		lineageTag: 5b04cf40-56db-43fa-8743-a3e0e0ac7840
+		summarizeBy: none
+		sourceColumn: NAME
+
+		changedProperty = IsHidden
+
+		annotation SummarizationSetBy = Automatic
+
+	column EMAIL
+		dataType: string
+		lineageTag: 9cb3c641-7e4e-4c3a-ac1d-0c6148bd4e75
+		summarizeBy: none
+		sourceColumn: EMAIL
+
+		changedProperty = IsHidden
+
+		annotation SummarizationSetBy = Automatic
+
+	column SUB_PRACTICE_SHORT_NAME
+		dataType: string
+		lineageTag: c8cf2f87-3484-43bf-9440-77409e63b307
+		summarizeBy: none
+		sourceColumn: SUB_PRACTICE_SHORT_NAME
+
+		changedProperty = IsHidden
+
+		annotation SummarizationSetBy = Automatic
+
+	column AREA
+		dataType: string
+		lineageTag: 15b2cc96-c9ff-444f-9001-f6b0f6c1ceb3
+		summarizeBy: none
+		sourceColumn: AREA
+
+		changedProperty = IsHidden
+
+		annotation SummarizationSetBy = Automatic
+
+	column REGION
+		dataType: string
+		lineageTag: ca80ad2b-9a5b-4545-b87c-d2674118bdfb
+		summarizeBy: none
+		sourceColumn: REGION
+
+		changedProperty = IsHidden
+
+		annotation SummarizationSetBy = Automatic
+
+	column Created_Date
+		dataType: string
+		lineageTag: ecf344d5-d438-4157-afb2-5a771489faae
+		summarizeBy: none
+		sourceColumn: Created_Date
+
+		changedProperty = IsHidden
+
+		annotation SummarizationSetBy = Automatic
+
+	column Created_By
+		dataType: string
+		lineageTag: 6e97e9c4-1775-4a81-9610-d3e715e6254c
+		summarizeBy: none
+		sourceColumn: Created_By
+
+		changedProperty = IsHidden
+
+		annotation SummarizationSetBy = Automatic
+
+	column TITLE
+		dataType: string
+		lineageTag: 5df4f9ef-65aa-442e-ab25-97991e8ee2ae
+		summarizeBy: none
+		sourceColumn: TITLE
+
+		changedProperty = IsHidden
+
+		annotation SummarizationSetBy = Automatic
+
+	column LocationFiltered
+		dataType: int64
+		formatString: 0
+		lineageTag: 89d0c96f-6e6c-4c31-ac31-8f16fb4150cf
+		summarizeBy: sum
+		sourceColumn: LocationFiltered
+
+		changedProperty = IsHidden
+
+		annotation SummarizationSetBy = Automatic
+
+	column ID
+		dataType: int64
+		formatString: 0
+		lineageTag: e8aa45b4-398a-4959-9788-b46c1cf22a0c
+		summarizeBy: count
+		sourceColumn: ID
+
+		changedProperty = IsHidden
+
+		annotation SummarizationSetBy = Automatic
+
+	column CCT_Access
+		dataType: int64
+		formatString: 0
+		lineageTag: 44866cb9-b2ed-4c67-a556-4497c0a2802d
+		summarizeBy: sum
+		sourceColumn: CCT_Access
+
+		changedProperty = IsHidden
+
+		annotation SummarizationSetBy = Automatic
+
+	column Local_Practic_Division_transition
+		dataType: string
+		lineageTag: 80ca7a65-a814-4881-a4ea-f99a844a8a7c
+		summarizeBy: none
+		sourceColumn: Local_Practic_Division_transition
+
+		changedProperty = IsHidden
+
+		annotation SummarizationSetBy = Automatic
+
+	column Client_Dashboard_Access
+		dataType: int64
+		formatString: 0
+		lineageTag: bf0428e8-843f-4ab2-94e6-1f0a94064383
+		summarizeBy: sum
+		sourceColumn: Client_Dashboard_Access
+
+		changedProperty = IsHidden
+
+		annotation SummarizationSetBy = Automatic
+
+	column NPI
+		dataType: int64
+		formatString: 0
+		lineageTag: 1af88dcc-12a3-4b53-9db9-41da7100fe09
+		summarizeBy: sum
+		sourceColumn: NPI
+
+		annotation SummarizationSetBy = Automatic
+
+	column RVU_Weekly_pmm_subscription
+		dataType: int64
+		formatString: 0
+		lineageTag: 88975eea-6bbd-42b0-97f7-408cdbfe9e96
+		summarizeBy: sum
+		sourceColumn: RVU_Weekly_pmm_subscription
+
+		annotation SummarizationSetBy = Automatic
+
+	column TBWU_Weekly_pmm_subscription
+		dataType: int64
+		formatString: 0
+		lineageTag: 72c15af4-3b8f-4aab-860a-9097d8f48ed2
+		summarizeBy: sum
+		sourceColumn: TBWU_Weekly_pmm_subscription
+
+		annotation SummarizationSetBy = Automatic
+
+	column RLS_Exception
+		dataType: boolean
+		formatString: """TRUE"";""TRUE"";""FALSE"""
+		lineageTag: 9160beff-a004-40bd-aa0e-750fc9ff5dc7
+		summarizeBy: none
+		sourceColumn: RLS_Exception
+
+		annotation SummarizationSetBy = Automatic
+
+	column Exception_reason
+		dataType: string
+		lineageTag: 4502ed69-9961-49a2-9e6c-cf6687392d3b
+		summarizeBy: none
+		sourceColumn: Exception_reason
+
+		annotation SummarizationSetBy = Automatic
+
+	partition 'MODEL POWERBI_USER_FILTERS-c77c00aa-198b-4db7-aa88-b49534f317b8' = m
+		mode: import
+		source = ```
+				let
+				    Source = Value.NativeQuery(Databricks.Catalogs("adb-7306149455716415.15.azuredatabricks.net", "/sql/1.0/warehouses/fe0ad987563c672a", [Catalog="edw_prod", Database=null, EnableAutomaticProxyDiscovery=null]){[Name="edw_prod",Kind="Database"]}[Data], 
+				"SELECT * FROM edw_prod.bipa_analytics.model_powerbi_user_filters", 
+				null, [EnableFolding=true])
+				in
+				    Source
+				```
+
+	annotation PBI_ResultType = Table
+
+	annotation PBI_NavigationStepName = Navigation
+

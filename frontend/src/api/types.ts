@@ -144,25 +144,36 @@ export interface RadSurveySummary {
   by_practice: PracticeNpsStat[];
 }
 
-export type FeedbackSentiment = "positive" | "neutral" | "negative";
-
-export interface ExternalFeedbackItem {
-  practice: string | null;
-  radiologist_name: string | null;
-  sentiment: FeedbackSentiment;
-  category: string | null;
-  comment: string | null;
-  submitted_at: string;
+export interface Note {
+  entity_type: "radiologist" | "practice";
+  entity_key: string;
+  note_text: string;
+  created_at: string;
 }
 
-export interface ReconciliationFinding {
-  check: string;
-  scope: string;
-  entity: string;
-  expected: string;
-  actual: string;
-  magnitude: number;
-  detail: string | null;
+export interface RadiologistLookupMatch {
+  npi: number;
+  radiologist_name: string | null;
+  home_practice: string | null;
+}
+
+export interface RadiologistLookupEfficiencyRow {
+  exam_category: string | null;
+  reporting_tbwu: number | null;
+  reporting_time: number | null;
+  drafting_tbwu: number | null;
+  drafting_time: number | null;
+  capture_tbwu: number | null;
+  capture_time: number | null;
+  full_mosaic_tbwu_per_min: number | null;
+}
+
+export interface RadiologistLookupDetail {
+  npi: number;
+  roster: Record<string, unknown> | null;
+  capacity: Record<string, unknown> | null;
+  scorecard: Record<string, unknown> | null;
+  efficiency_by_category: RadiologistLookupEfficiencyRow[];
 }
 
 export interface RadSummaryStat {
@@ -190,6 +201,8 @@ export interface RadiologistRosterItem {
   npi: number;
   radiologist_name: string | null;
   home_practice: string | null;
+  primary_site: string | null;
+  site_count: number | null;
   working_subspecialty: string | null;
   deployment_status: string | null;
   deployment_launch_group: string | null;
@@ -215,41 +228,40 @@ export interface UtilizationPracticeRollup {
   rads_drafting: number | null;
 }
 
-export interface DeploymentRadiologistItem {
-  npi: number;
-  radiologist_name: string | null;
-  home_practice: string | null;
-  working_subspecialty: string | null;
-  xr_ct_head_status: string | null;
-  ct_abdpel_status: string | null;
-  ct_chest_status: string | null;
-  ct_head_drafts_last_14d: number;
-  xr_drafts_last_14d: number;
-  ct_abdpel_drafts_last_14d: number;
-  ct_chest_drafts_last_14d: number | null;
+export interface VolumeSummary {
+  total_exams: number;
+  mosaic_exams: number;
+  pct_mosaic: number | null;
+  drafting_exams: number;
+  pct_drafting: number | null;
+  pct_rpce_reporting: number | null;
+  pct_rpce_drafting: number | null;
 }
 
-export interface DeploymentPracticeRollup {
-  practice: string | null;
-  total_rads: number;
-  xr_ct_head_enabled_rads: number;
-  ct_abdpel_enabled_rads: number;
-  ct_chest_enabled_rads: number | null;
-  ct_head_cases_last_14d: number;
-  xr_cases_last_14d: number;
-  ct_abdpel_cases_last_14d: number;
-  ct_chest_cases_last_14d: number | null;
+export interface VolumeGroupRollup {
+  group: string | null;
+  total_exams: number;
+  mosaic_exams: number;
+  pct_mosaic: number | null;
+  drafting_exams: number;
+  pct_drafting: number | null;
+  pct_rpce_reporting: number | null;
+  pct_rpce_drafting: number | null;
 }
 
-export interface DeploymentFunnelStage {
-  stage: string;
-  rank: number;
-  count: number;
+export interface VolumeTrendPoint {
+  period: string;
+  total_exams: number;
+  mosaic_exams: number;
+  pct_mosaic: number | null;
+  drafting_exams: number;
+  pct_drafting: number | null;
 }
 
-export interface DeploymentFunnel {
-  domain: string;
-  stages: DeploymentFunnelStage[];
+export interface VolumeFilterOptions {
+  practices: string[];
+  teams: string[];
+  local_regions: string[];
 }
 
 export interface BlockerByPractice {
@@ -313,15 +325,23 @@ export interface EfficiencyTrendPoint {
   practice: string | null;
   exam_category: string | null;
   reporting_tbwu_per_min: number | null;
-  drafting_tbwu_per_min: number | null;
+  drafting_tbwu_per_min: number | null; // "Drafting + Capture" - Capture (US/BD) is a subset of Drafting
   full_mosaic_tbwu_per_min: number | null;
+  drafting_only_tbwu_per_min: number | null; // Drafting excluding Capture-modality rows
   reporting_pct_change: number | null;
   drafting_pct_change: number | null;
   full_mosaic_pct_change: number | null;
+  drafting_only_pct_change: number | null;
   reporting_rad_count: number;
   drafting_rad_count: number;
   reporting_exam_count: number;
   drafting_exam_count: number;
+}
+
+export interface MammoScreeningTrendPoint {
+  period: string;
+  screening_volume: number;
+  screening_efficiency_change_pct: number | null;
 }
 
 export interface EfficiencyTrendRpAvgPoint {
@@ -330,19 +350,118 @@ export interface EfficiencyTrendRpAvgPoint {
   full_mosaic_tbwu_per_min: number | null;
 }
 
-export interface FocusRadiologistItem {
+// Loosely typed (not exact nested shapes) - mirrors whatever
+// backend/app/data/mvp_dashboard_stats.py's compute_status_funnel/compute_impact_breakdown/
+// compute_escalations_by_owner currently return. This is the shape GET /mvp/weekly-report and
+// /mvp/weekly-report/history actually return (the persisted Postgres columns only) - NOT the
+// same shape as the POST /generate response, which additionally includes transient `deltas`/
+// `has_previous` fields used only to ground that one request's AI narrative generation server-
+// side. The frontend never reads deltas off a snapshot object - MvpWeeklyReport.tsx always
+// derives them client-side (utils/mvpDashboardStats.ts's diffCounts) from two adjacent entries
+// in the fetched history list, since that's the only data source this page actually uses.
+export interface WeeklyReportSnapshot {
+  scope: "overview" | "mammo";
+  week_ending: string;
+  funnel: Record<string, { on_track: number; escalated: number; declined: number }>;
+  impact: Record<string, number>;
+  escalations: Record<string, number>;
+  key_insights: string;
+  focus_next_week: string;
+  generated_at: string;
+}
+
+// Loosely typed - mirrors backend/app/data/mvp_methodology_checks.py's compute_methodology_check
+// return shape exactly (an internal/analytical payload, no response_model on its own route
+// either, same precedent as /capacity/review-activity).
+export interface MvpMethodologyCheck {
+  outlier_summary: {
+    per_field: Record<string, number>;
+    total_radiologists_affected: number;
+    total_radiologists: number;
+  };
+  outreach_week_reliability: {
+    future_dated_count: number;
+    already_past_outreached_count: number;
+    contamination_rate: number | null;
+  };
+  baseline_severity_by_stage: Record<string, { median_baseline_pct: number | null; n: number }>;
+}
+
+export interface MentorMatchStatus {
+  matching_status: string;
+  mentors_identified: string | null;
+  matching_notes: string | null;
+  mentorship_meeting_date: string | null;
+}
+
+export interface MvpRadiologistItem {
   npi: number;
   radiologist_name: string | null;
   practice: string | null;
-  subspecialty: string | null;
-  priority_tier: string;
-  baseline_capacity_per_shift: number | null;
-  dc_efficiency_change_pct: number | null;
-  capacity_change_pct: number | null;
-  ct_drafting_change_pct: number | null;
-  xr_drafting_change_pct: number | null;
-  us_capture_change_pct: number | null;
-  current_dc_exam_count: number;
+  mvp_cohort: string | null;
+  exclusion_reason: string | null;
+  mvp_target_outreach_week: string | null;
+  reads_500_plus_dx_cases: string | null;
+  baseline_capacity_tbwu_9h: number | null;
+  full_mosaic_efficiency_change_pct: number | null;
+  xr_drafting_efficiency_change_pct: number | null;
+  ct_head_efficiency_change_pct: number | null;
+  us_capture_efficiency_change_pct: number | null;
+  drafting_captured_efficiency_change_pct: number | null;
+  efficiency_change_last_30d_pct: number | null;
+  full_mosaic_change_l7d_pct: number | null;
+  full_mosaic_change_l14d_pct: number | null;
+  full_mosaic_change_l30d_pct: number | null;
+  xr_drafting_change_l7d_pct: number | null;
+  xr_drafting_change_l14d_pct: number | null;
+  xr_drafting_change_l30d_pct: number | null;
+  ct_head_change_l7d_pct: number | null;
+  ct_head_change_l14d_pct: number | null;
+  ct_head_change_l30d_pct: number | null;
+  us_capture_change_l7d_pct: number | null;
+  us_capture_change_l14d_pct: number | null;
+  us_capture_change_l30d_pct: number | null;
+  mosaic_mentor: string | null;
+  mosaic_mentor_status: string | null;
+  optimization_support_status: string | null;
+  optimization_support_notes: string | null;
+  utilization_plan_notes: string | null;
+  optimization_last_updated: string | null;
+  mentor_match: MentorMatchStatus | null;
+}
+
+export interface EngagementCapacityPlan {
+  source_date: string;
+  radiologists_on_list: number;
+  already_engaged_at_plan_time: number;
+  left_to_go_at_plan_time: number;
+  realistic_target: number;
+  hours_per_radiologist_all_in: number;
+  total_hours_of_work: number;
+  cols_today: number;
+  people_needed_at_full_col_hours: number;
+  people_to_add: number;
+  trainers_to_borrow_at_16hrs_week: number;
+  throughput_per_week_current_team: number;
+  start_date: string;
+  finish_by_date: string;
+  engaged_by_finish_by_date: number;
+  projected_finish_date_if_unaided: string;
+  summary: string;
+}
+
+export interface MvpProgramContext {
+  program_narrative: string;
+  program_history: string;
+  priority_tier_definitions: Record<string, string>;
+  exclusion_reason_glossary: Record<string, string>;
+  engagement_process_steps: string[];
+  mentorship_program_summary: string;
+  current_status_notes: string;
+  ai_generated_narrative: string;
+  engagement_capacity_plan: EngagementCapacityPlan;
+  overview_narrative: string;
+  mammo_narrative: string;
 }
 
 interface CapacityMeasures {
@@ -371,6 +490,8 @@ interface CapacityMeasures {
   ir_cases: number | null;
   adjustment_rvu: number | null;
   adjustment_tbwu: number | null;
+  pct_exams_with_valid_read_time: number | null;
+  pct_shifts_rpce_source: number | null;
 }
 
 export interface CapacityRadiologistItem extends CapacityMeasures {
@@ -383,39 +504,6 @@ export interface CapacityRadiologistItem extends CapacityMeasures {
 
 export interface CapacityPracticeRollup extends CapacityMeasures {
   practice: string | null;
-}
-
-export interface ScorecardMetrics {
-  top_n: string;
-  shifts_worked: number;
-  case_count: number;
-  addl_capacity_per_shift: number | null;
-  efficiency: number | null;
-  shift_utilization: number | null;
-  avg_units_per_shift: number | null;
-  ct_cases: number;
-  xr_cases: number;
-  us_cases: number;
-  mr_cases: number;
-  nm_cases: number;
-  pt_cases: number;
-  mg_cases: number;
-  ir_cases: number;
-  other_modality_cases: number;
-  routine_cases: number;
-  stat_cases: number;
-  stroke_cases: number;
-  trauma_cases: number;
-  otherp_cases: number;
-}
-
-export interface RadiologistScorecard {
-  npi: number;
-  radiologist_name: string | null;
-  team: string | null;
-  practice: string | null;
-  mosaic_go_live_date: string | null;
-  metrics: ScorecardMetrics[];
 }
 
 // week_start is the Monday the week begins; category_sort_order 0 is "Drafted" - included
@@ -537,4 +625,61 @@ export interface ReviewActivityItem extends BaselineReviewDecision {
   radiologist_name: string | null;
   practice: string | null;
   capacity_impact_tbwu_per_hour: number | null;
+}
+
+export interface AiContextRequest {
+  feature: string;
+  entity_label: string;
+  metric_label: string;
+  value: string;
+  extra?: Record<string, string>;
+}
+
+export interface AiContextResponse {
+  explanation: string;
+}
+
+export interface ShiftUtilizationItem {
+  npi: number;
+  radiologist_name: string | null;
+  practice: string | null;
+  shift_date: string;
+  utilization_pct: number | null;
+  pct_mosaic_read: number | null;
+  pct_ai_drafted: number | null;
+  reading_minutes: number | null;
+  shift_total_minutes: number | null;
+}
+
+export interface GenieAskRequest {
+  question: string;
+  conversation_id?: string | null;
+}
+
+export interface GenieAskResponse {
+  conversation_id: string;
+  message_id: string;
+}
+
+export type GenieMessageStatus =
+  | "SUBMITTED"
+  | "FILTERING_CONTEXT"
+  | "ASKING_AI"
+  | "EXECUTING_QUERY"
+  | "COMPLETED"
+  | "FAILED"
+  | "CANCELLED";
+
+export interface GenieResultTable {
+  columns: string[];
+  rows: (string | number | null)[][];
+}
+
+export interface GenieMessageResponse {
+  status: GenieMessageStatus;
+  text: string | null;
+  sql: string | null;
+  error: string | null;
+  suggested_questions: string[];
+  result: GenieResultTable | null;
 }

@@ -1,0 +1,46 @@
+table 'Mosaic Exam Count Table'
+	lineageTag: 36c8428b-efda-479e-8f94-850a8d066b10
+
+	measure 'Selected Exams - Mosaic' =
+			
+			var _expensemin = COALESCE(Min('Mosaic Exam Count Table'[Value]), CALCULATE(Min('Mosaic Exam Count Table'[Value]), ALL('Mosaic Exam Count Table')))
+			
+			var _expensemax = COALESCE(max('Mosaic Exam Count Table'[Value]), CALCULATE(max('Mosaic Exam Count Table'[Value]), ALL('Mosaic Exam Count Table')))
+			
+			var _result = IF([Mosaic Exam Ct] >= _expensemin,1,0)
+			
+			return _result
+		formatString: 0
+		lineageTag: 89d6faa5-b094-4388-a425-3c74a4c1647a
+
+	column Value
+		formatString: 0
+		lineageTag: f805af63-803c-43dc-807c-8e6b972d3dca
+		summarizeBy: sum
+		sourceColumn: [Column1]
+
+		annotation SummarizationSetBy = Automatic
+
+	column 'Mosaic Exams'
+		formatString: 0
+		lineageTag: d479ef67-f4b4-4726-9064-fac56294ba6a
+		summarizeBy: sum
+		sourceColumn: [Column2]
+
+		annotation SummarizationSetBy = Automatic
+
+	partition 'Mosaic Exam Count Table' = calculated
+		mode: import
+		source = ```
+				union (
+				    row ( "Column1" , 0, "Column2" , 1) , 
+				    row ("Column1", 1, "Column2",1), 
+				    addcolumns(
+				        generateseries( 5,100,5), 
+				        "Column2" , 1
+				    )
+				)
+				```
+
+	annotation PBI_Id = 3f7bab8057734653aa8579d6537dec34
+

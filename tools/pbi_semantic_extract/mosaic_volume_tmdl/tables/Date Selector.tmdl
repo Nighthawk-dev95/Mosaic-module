@@ -1,0 +1,45 @@
+table 'Date Selector'
+	lineageTag: e2f0f5a5-c20f-4e46-8655-47c84f1e69b8
+
+	column 'Date Selector'
+		lineageTag: 596d81c0-e4f1-41a5-9909-858bb880ae77
+		summarizeBy: none
+		sourceColumn: [Value1]
+		sortByColumn: 'Date Selector Order'
+
+		relatedColumnDetails
+			groupByColumn: 'Date Selector Fields'
+
+		annotation SummarizationSetBy = Automatic
+
+	column 'Date Selector Fields'
+		isHidden
+		lineageTag: f069ec8d-1931-421e-a61b-58d02f014a4a
+		summarizeBy: none
+		sourceColumn: [Value2]
+		sortByColumn: 'Date Selector Order'
+
+		extendedProperty ParameterMetadata = {"version":3,"kind":2}
+
+		annotation SummarizationSetBy = Automatic
+
+	column 'Date Selector Order'
+		isHidden
+		formatString: 0
+		lineageTag: 2ac7026c-4db2-4fca-b1b1-23a86c3bec85
+		summarizeBy: sum
+		sourceColumn: [Value3]
+
+		annotation SummarizationSetBy = Automatic
+
+	partition 'Date Selector' = calculated
+		mode: import
+		source =
+				{
+				    ("Day", NAMEOF('Daily_Extract'[Date]), 0),
+				    ("Week Of", NAMEOF('Daily_Extract'[Week_Of]), 1),
+				    ("Month", NAMEOF('Daily_Extract'[Month]), 2)
+				}
+
+	annotation PBI_Id = 2d4ee185f6be40bfb56ab9f106c17bb7
+

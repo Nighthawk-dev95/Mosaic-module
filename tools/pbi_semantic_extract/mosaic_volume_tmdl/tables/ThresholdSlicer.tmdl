@@ -1,0 +1,555 @@
+table ThresholdSlicer
+	lineageTag: 5fd652cd-7458-4d6a-bb23-785fbdd44cf3
+
+	measure Thresholdfilter = ```
+			
+			VAR SelectedThreshold = SELECTEDVALUE( ThresholdSlicer[Threshold], 0 )
+			
+			
+			
+			VAR ThisProvider = SELECTEDVALUE( 'Daily_Extract'[NPI] )
+			
+			var metricvalue = 
+			CALCULATE([selectedexammetric], 'Daily_Extract'[NPI] = ThisProvider, 
+			KEEPFILTERS('Daily_Extract'[Date])
+			)
+			
+			VAR thresholdforcompare = 
+			CALCULATE([Mosaic Exam %], 
+			
+			'Daily_Extract'[NPI] = ThisProvider, 
+			KEEPFILTERS('Daily_Extract'[Date])
+			)
+			
+			RETURN
+			IF(
+			    metricvalue >=SelectedThreshold
+			    || thresholdforcompare >=SelectedThreshold,1,0)
+			
+			```
+		formatString: 0
+		lineageTag: 35550bea-c02f-4361-9950-237a24fe4c72
+
+	measure selectedexammetric = ```
+			
+			var selectedmetric = SELECTEDVALUE('Mosaic Metric'[Mosaic Metric])
+			
+			RETURN
+			SWITCH(
+			TRUE(),
+			
+			selectedmetric = "Total Exams" , [Total Exam Ct], 
+			selectedmetric = "Reporting Exams", [Mosaic Exam Ct], 
+			selectedmetric = "% Reporting", [Mosaic Exam %], 
+			selectedmetric = "Drafting Exams" , [MosaicdraftCt], 
+			selectedmetric = "% Drafting", [% Mosaic drafting], 
+			0
+			)
+			```
+		lineageTag: 2dbd7a0b-2de6-4a42-b177-566c1a708afe
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	measure 'Metric Display Filtered' = ```
+			
+			
+			VAR SelectedMetricColumn = SELECTEDVALUE('Mosaic Metric'[Mosaic Metric Fields])
+			VAR SelectedThreshold = 
+			    CALCULATE(
+			        MAX('ThresholdSlicer'[Threshold]),
+			        ALLSELECTED('ThresholdSlicer')
+			    )
+			VAR SelectedDateColumn = SELECTEDVALUE('Date Selector'[Date Selector Fields])
+			
+			// Check if percentage metric
+			VAR IsPercentageMetric = 
+			    SelectedMetricColumn IN {
+			        NAMEOF('Daily_Extract'[Mosaic Exam %]),
+			        NAMEOF('Daily_Extract'[% Mosaic drafting])
+			    }
+			
+			// Calculate volume for filtering
+			VAR CurrentVolume = 
+			    SWITCH(
+			        TRUE(),
+			        // For percentage metrics, use Total Exam Ct
+			        IsPercentageMetric,
+			            SWITCH(
+			                TRUE(),
+			                SelectedDateColumn = NAMEOF('Daily_Extract'[Date]), 
+			                    SUM('Daily_Extract'[Exam Ct]),
+			                SelectedDateColumn = NAMEOF('Daily_Extract'[Week_Of]), 
+			                    CALCULATE(SUM('Daily_Extract'[Exam Ct]), ALLEXCEPT('Daily_Extract', 'Daily_Extract'[Week_Of], 'Daily_Extract'[Team], 'Daily_Extract'[Provider], 'Daily_Extract'[NPI],'Daily_Extract'[Interventional_Flag],Daily_Extract[Local Practice Division],Daily_Extract[Local Practice],Daily_Extract[Site],Daily_Extract[Modality],Daily_Extract[assisted_flag],Daily_Extract[Procedure])),
+			                SelectedDateColumn = NAMEOF('Daily_Extract'[Month]), 
+			                    CALCULATE(SUM('Daily_Extract'[Exam Ct]), ALLEXCEPT('Daily_Extract', 'Daily_Extract'[Month], 'Daily_Extract'[Team], 'Daily_Extract'[Provider], 'Daily_Extract'[NPI],'Daily_Extract'[Interventional_Flag],Daily_Extract[Local Practice Division],Daily_Extract[Local Practice],Daily_Extract[Site],Daily_Extract[Modality],Daily_Extract[assisted_flag],Daily_Extract[Procedure])),
+			                SUM('Daily_Extract'[Exam Ct])
+			            ),
+			        // For count metrics
+			        SelectedMetricColumn = NAMEOF('Daily_Extract'[Mosaic Exam Ct]), 
+			            SWITCH(
+			                TRUE(),
+			                SelectedDateColumn = NAMEOF('Daily_Extract'[Date]), 
+			                    SUM('Daily_Extract'[Mosaic Exam Flag]),
+			                SelectedDateColumn = NAMEOF('Daily_Extract'[Week_Of]), 
+			                    CALCULATE(SUM('Daily_Extract'[Mosaic Exam Flag]), ALLEXCEPT('Daily_Extract', 'Daily_Extract'[Week_Of], 'Daily_Extract'[Team], 'Daily_Extract'[Provider], 'Daily_Extract'[NPI],'Daily_Extract'[Interventional_Flag],Daily_Extract[Local Practice Division],Daily_Extract[Local Practice],Daily_Extract[Site],Daily_Extract[Modality],Daily_Extract[assisted_flag],Daily_Extract[Procedure])),
+			                SelectedDateColumn = NAMEOF('Daily_Extract'[Month]), 
+			                    CALCULATE(SUM('Daily_Extract'[Mosaic Exam Flag]), ALLEXCEPT('Daily_Extract', 'Daily_Extract'[Month], 'Daily_Extract'[Team], 'Daily_Extract'[Provider], 'Daily_Extract'[NPI],'Daily_Extract'[Interventional_Flag],Daily_Extract[Local Practice Division],Daily_Extract[Local Practice],Daily_Extract[Site],Daily_Extract[Modality],Daily_Extract[assisted_flag],Daily_Extract[Procedure])),
+			                SUM('Daily_Extract'[Mosaic Exam Flag])
+			            ),
+			        SelectedMetricColumn = NAMEOF('Daily_Extract'[Total Exam Ct]), 
+			            SWITCH(
+			                TRUE(),
+			                SelectedDateColumn = NAMEOF('Daily_Extract'[Date]), 
+			                    SUM('Daily_Extract'[Exam Ct]),
+			                SelectedDateColumn = NAMEOF('Daily_Extract'[Week_Of]), 
+			                    CALCULATE(SUM('Daily_Extract'[Exam Ct]), ALLEXCEPT('Daily_Extract', 'Daily_Extract'[Week_Of], 'Daily_Extract'[Team], 'Daily_Extract'[Provider], 'Daily_Extract'[NPI],'Daily_Extract'[Interventional_Flag],Daily_Extract[Local Practice Division],Daily_Extract[Local Practice],Daily_Extract[Site],Daily_Extract[Modality],Daily_Extract[assisted_flag],Daily_Extract[Procedure])),
+			                SelectedDateColumn = NAMEOF('Daily_Extract'[Month]), 
+			                    CALCULATE(SUM('Daily_Extract'[Exam Ct]), ALLEXCEPT('Daily_Extract', 'Daily_Extract'[Month], 'Daily_Extract'[Team], 'Daily_Extract'[Provider], 'Daily_Extract'[NPI],'Daily_Extract'[Interventional_Flag],Daily_Extract[Local Practice Division],Daily_Extract[Local Practice],Daily_Extract[Site],Daily_Extract[Modality],Daily_Extract[assisted_flag],Daily_Extract[Procedure])),
+			                SUM('Daily_Extract'[Exam Ct])
+			            ),
+			        SelectedMetricColumn = NAMEOF('Daily_Extract'[MosaicdraftCt]), 
+			            SWITCH(
+			                TRUE(),
+			                SelectedDateColumn = NAMEOF('Daily_Extract'[Date]), 
+			                    SUM('Daily_Extract'[mosaic_draft_flag]),
+			                SelectedDateColumn = NAMEOF('Daily_Extract'[Week_Of]), 
+			                    CALCULATE(SUM('Daily_Extract'[mosaic_draft_flag]), ALLEXCEPT('Daily_Extract', 'Daily_Extract'[Week_Of], 'Daily_Extract'[Team], 'Daily_Extract'[Provider], 'Daily_Extract'[NPI],'Daily_Extract'[Interventional_Flag],Daily_Extract[Local Practice Division],Daily_Extract[Local Practice],Daily_Extract[Site],Daily_Extract[Modality],Daily_Extract[assisted_flag],Daily_Extract[Procedure])),
+			                SelectedDateColumn = NAMEOF('Daily_Extract'[Month]), 
+			                    CALCULATE(SUM('Daily_Extract'[mosaic_draft_flag]), ALLEXCEPT('Daily_Extract', 'Daily_Extract'[Month], 'Daily_Extract'[Team], 'Daily_Extract'[Provider], 'Daily_Extract'[NPI],'Daily_Extract'[Interventional_Flag],Daily_Extract[Local Practice Division],Daily_Extract[Local Practice],Daily_Extract[Site],Daily_Extract[Modality],Daily_Extract[assisted_flag],Daily_Extract[Procedure])),
+			                SUM('Daily_Extract'[mosaic_draft_flag])
+			            ),
+			        0
+			    )
+			
+			// Calculate display value
+			VAR MosaicdraftCt_Calc = SUM('Daily_Extract'[mosaic_draft_flag])
+			VAR TotalExamCt_Calc = SUM('Daily_Extract'[Exam Ct])
+			VAR MosaicExamFlag_Calc = SUM('Daily_Extract'[Mosaic Exam Flag])
+			
+			VAR DisplayValue = 
+			    SWITCH(
+			        TRUE(),
+			        SelectedMetricColumn = NAMEOF('Daily_Extract'[Mosaic Exam Ct]), 
+			            MosaicExamFlag_Calc,
+			        SelectedMetricColumn = NAMEOF('Daily_Extract'[Total Exam Ct]), 
+			            TotalExamCt_Calc,
+			        SelectedMetricColumn = NAMEOF('Daily_Extract'[Mosaic Exam %]), 
+			            DIVIDE(MosaicExamFlag_Calc, TotalExamCt_Calc, 0),  // Keep as decimal (0.75)
+			        SelectedMetricColumn = NAMEOF('Daily_Extract'[MosaicdraftCt]), 
+			            MosaicdraftCt_Calc,
+			        SelectedMetricColumn = NAMEOF('Daily_Extract'[% Mosaic drafting]), 
+			            DIVIDE(MosaicdraftCt_Calc, TotalExamCt_Calc, 0),  // Keep as decimal (0.75)
+			        BLANK()
+			    )
+			
+			RETURN
+			    IF(CurrentVolume >= SelectedThreshold, DisplayValue, BLANK())
+			```
+		lineageTag: c85e4ec8-1c38-485e-919a-4e3ea3716168
+
+		formatStringDefinition = [Metric Display Filtered Format]
+
+	measure 'Debug Info' = ```
+			
+			VAR SelectedMetricColumn = SELECTEDVALUE('Mosaic Metric'[Mosaic Metric Fields])
+			VAR SelectedDateColumn = SELECTEDVALUE('Date Selector'[Date Selector Fields])
+			VAR SelectedThreshold1 = MAX('ThresholdSlicer'[Threshold])
+			VAR SelectedThreshold2 = 
+			    CALCULATE(
+			        MAX('ThresholdSlicer'[Threshold]),
+			        ALL('ThresholdSlicer')
+			    )
+			
+			VAR CurrentVolume = 
+			    SWITCH(
+			        TRUE(),
+			        SelectedMetricColumn = NAMEOF('Daily_Extract'[Mosaic Exam Ct]), 
+			            SUM('Daily_Extract'[Mosaic Exam Flag]),
+			        SelectedMetricColumn = NAMEOF('Daily_Extract'[Total Exam Ct]), 
+			            SUM('Daily_Extract'[Exam Ct]),
+			        SelectedMetricColumn = NAMEOF('Daily_Extract'[MosaicdraftCt]), 
+			            SUM('Daily_Extract'[mosaic_draft_flag]),
+			        0
+			    )
+			
+			RETURN
+			    "Vol:" & CurrentVolume & " T1:" & SelectedThreshold1 & " T2:" & SelectedThreshold2
+			```
+		lineageTag: bf9adcd7-a754-4151-b3ef-14dde74003b0
+
+	measure 'Test Threshold' =
+			
+			VAR Method1 = SELECTEDVALUE('ThresholdSlicer'[Threshold], -999)
+			VAR Method2 = MAX('ThresholdSlicer'[Threshold])
+			VAR Method3 = MIN('ThresholdSlicer'[Threshold])
+			VAR CountValues = COUNTROWS(VALUES('ThresholdSlicer'[Threshold]))
+			
+			RETURN
+			    "M1:" & Method1 & " M2:" & Method2 & " M3:" & Method3 & " Cnt:" & CountValues
+		lineageTag: 53d30a35-c026-4558-be04-49f47903fe14
+
+	measure 'Percentage Metrics Filtered' = ```
+			
+			
+			VAR SelectedMetricColumn = SELECTEDVALUE('Mosaic Metric'[Mosaic Metric Fields])
+			VAR SelectedThreshold = 
+			    CALCULATE(
+			        MAX('ThresholdSlicer'[Threshold]),
+			        ALLSELECTED('ThresholdSlicer')
+			    )
+			VAR SelectedDateColumn = SELECTEDVALUE('Date Selector'[Date Selector Fields])
+			
+			// For percentage metrics, use Total Exam Ct as the volume check
+			VAR CurrentVolume = 
+			    SWITCH(
+			        TRUE(),
+			        SelectedMetricColumn = NAMEOF('Daily_Extract'[Mosaic Exam %]) || SelectedMetricColumn = NAMEOF('Daily_Extract'[% Mosaic drafting]),
+			            SWITCH(
+			                TRUE(),
+			                SelectedDateColumn = NAMEOF('Daily_Extract'[Date]), 
+			                    SUM('Daily_Extract'[Exam Ct]),
+			                SelectedDateColumn = NAMEOF('Daily_Extract'[Week_Of]), 
+			                    CALCULATE(SUM('Daily_Extract'[Exam Ct]), ALLEXCEPT('Daily_Extract', 'Daily_Extract'[Week_Of], 'Daily_Extract'[Team], 'Daily_Extract'[Provider], 'Daily_Extract'[NPI])),
+			                SelectedDateColumn = NAMEOF('Daily_Extract'[Month]), 
+			                    CALCULATE(SUM('Daily_Extract'[Exam Ct]), ALLEXCEPT('Daily_Extract', 'Daily_Extract'[Month], 'Daily_Extract'[Team], 'Daily_Extract'[Provider], 'Daily_Extract'[NPI])),
+			                SUM('Daily_Extract'[Exam Ct])
+			            ),
+			        BLANK()  // Return blank for non-percentage metrics
+			    )
+			
+			VAR MosaicdraftCt_Calc = SUM('Daily_Extract'[mosaic_draft_flag])
+			VAR TotalExamCt_Calc = SUM('Daily_Extract'[Exam Ct])
+			VAR MosaicExamFlag_Calc = SUM('Daily_Extract'[Mosaic Exam Flag])
+			
+			VAR DisplayValue = 
+			    SWITCH(
+			        TRUE(),
+			        SelectedMetricColumn = NAMEOF('Daily_Extract'[Mosaic Exam %]), 
+			            DIVIDE(MosaicExamFlag_Calc, TotalExamCt_Calc, 0),
+			        SelectedMetricColumn = NAMEOF('Daily_Extract'[% Mosaic drafting]), 
+			            DIVIDE(MosaicdraftCt_Calc, TotalExamCt_Calc, 0),
+			        BLANK()
+			    )
+			
+			RETURN
+			    IF(NOT ISBLANK(CurrentVolume) && CurrentVolume >= SelectedThreshold, DisplayValue, BLANK())
+			```
+		formatString: 0%;-0%;0%
+		lineageTag: fcb17d01-4043-4f7b-b30d-70e2f90da99b
+
+	measure 'Metric Display Filtered Format' = ```
+			
+			VAR SelectedMetricColumn = SELECTEDVALUE('Mosaic Metric'[Mosaic Metric Fields])
+			VAR IsPercentageMetric = 
+			    SelectedMetricColumn IN {
+			        NAMEOF('Daily_Extract'[Mosaic Exam %]),
+			        NAMEOF('Daily_Extract'[% Mosaic drafting])
+			    }
+			
+			RETURN
+			    IF(IsPercentageMetric, "0%", "#,##0")
+			```
+		lineageTag: 8d484dee-54c2-45b5-a540-42e52316b490
+
+	measure 'Mosaic Exam % Color' = ```
+			
+			VAR SelectedMetricColumn = SELECTEDVALUE('Mosaic Metric'[Mosaic Metric Fields])
+			
+			// Only apply color formatting for Mosaic Exam %
+			VAR IsMosaicExamPercent = SelectedMetricColumn = NAMEOF('Daily_Extract'[Mosaic Exam %])
+			
+			// Calculate the percentage value
+			VAR MosaicExamFlag_Calc = SUM('Daily_Extract'[Mosaic Exam Flag])
+			VAR TotalExamCt_Calc = SUM('Daily_Extract'[Exam Ct])
+			VAR PercentageValue = DIVIDE(MosaicExamFlag_Calc, TotalExamCt_Calc, 0)
+			
+			// Define your color logic (adjust thresholds as needed)
+			VAR ColorResult = 
+			    IF(
+			        NOT IsMosaicExamPercent,
+			        BLANK(),  // No formatting for other metrics
+			        SWITCH(
+			            TRUE(),
+			            PercentageValue >= 0.50 && PercentageValue <0.80, "#FFEB9C",  // Green for 90% and above
+			           PercentageValue >=0.80 , "#C6EFCE"
+			           
+			        )
+			    )
+			
+			RETURN ColorResult
+			```
+		lineageTag: dd23c7db-f297-4d97-a20b-ccaf05bf3a46
+
+	measure 'Mosaic Exam % Colorfont' = ```
+			
+			VAR SelectedMetricColumn = SELECTEDVALUE('Mosaic Metric'[Mosaic Metric Fields])
+			
+			// Only apply color formatting for Mosaic Exam %
+			VAR IsMosaicExamPercent = SelectedMetricColumn = NAMEOF('Daily_Extract'[Mosaic Exam %])
+			
+			// Calculate the percentage value
+			VAR MosaicExamFlag_Calc = SUM('Daily_Extract'[Mosaic Exam Flag])
+			VAR TotalExamCt_Calc = SUM('Daily_Extract'[Exam Ct])
+			VAR PercentageValue = DIVIDE(MosaicExamFlag_Calc, TotalExamCt_Calc, 0)
+			
+			// Define your color logic (adjust thresholds as needed)
+			VAR ColorResult = 
+			    IF(
+			        NOT IsMosaicExamPercent,
+			        BLANK(),  // No formatting for other metrics
+			        SWITCH(
+			            TRUE(),
+			          
+			           PercentageValue <0.50 , "#DE6A73"
+			        )
+			    )
+			
+			RETURN ColorResult
+			```
+		lineageTag: a11d619b-3f5a-4f96-aa26-6b9034ac9e2e
+
+	measure 'Metric Display Filtered prac' = ```
+			
+			
+			VAR SelectedMetricColumn = SELECTEDVALUE('Mosaic Metric'[Mosaic Metric Fields])
+			VAR SelectedThreshold = 
+			    CALCULATE(
+			        MAX('ThresholdSlicer'[Threshold]),
+			        ALLSELECTED('ThresholdSlicer')
+			    )
+			VAR SelectedDateColumn = SELECTEDVALUE('Date Selector'[Date Selector Fields])
+			
+			// Check if percentage metric
+			VAR IsPercentageMetric = 
+			    SelectedMetricColumn IN {
+			        NAMEOF('Daily_Extract'[Mosaic Exam %]),
+			        NAMEOF('Daily_Extract'[% Mosaic drafting])
+			    }
+			
+			// Calculate volume for filtering
+			VAR CurrentVolume = 
+			    SWITCH(
+			        TRUE(),
+			        // For percentage metrics, use Total Exam Ct
+			        IsPercentageMetric,
+			            SWITCH(
+			                TRUE(),
+			                SelectedDateColumn = NAMEOF('Daily_Extract'[Date]), 
+			                    SUM('Daily_Extract'[Exam Ct]),
+			                SelectedDateColumn = NAMEOF('Daily_Extract'[Week_Of]), 
+			                    CALCULATE(SUM('Daily_Extract'[Exam Ct]), ALLEXCEPT('Daily_Extract', 'Daily_Extract'[Week_Of], 'Daily_Extract'[Local Practice], 'Daily_Extract'[Provider], 'Daily_Extract'[NPI])),
+			                SelectedDateColumn = NAMEOF('Daily_Extract'[Month]), 
+			                    CALCULATE(SUM('Daily_Extract'[Exam Ct]), ALLEXCEPT('Daily_Extract', 'Daily_Extract'[Month], 'Daily_Extract'[Local Practice], 'Daily_Extract'[Provider], 'Daily_Extract'[NPI])),
+			                SUM('Daily_Extract'[Exam Ct])
+			            ),
+			        // For count metrics
+			        SelectedMetricColumn = NAMEOF('Daily_Extract'[Mosaic Exam Ct]), 
+			            SWITCH(
+			                TRUE(),
+			                SelectedDateColumn = NAMEOF('Daily_Extract'[Date]), 
+			                    SUM('Daily_Extract'[Mosaic Exam Flag]),
+			                SelectedDateColumn = NAMEOF('Daily_Extract'[Week_Of]), 
+			                    CALCULATE(SUM('Daily_Extract'[Mosaic Exam Flag]), ALLEXCEPT('Daily_Extract', 'Daily_Extract'[Week_Of], 'Daily_Extract'[Local Practice], 'Daily_Extract'[Provider], 'Daily_Extract'[NPI])),
+			                SelectedDateColumn = NAMEOF('Daily_Extract'[Month]), 
+			                    CALCULATE(SUM('Daily_Extract'[Mosaic Exam Flag]), ALLEXCEPT('Daily_Extract', 'Daily_Extract'[Month], 'Daily_Extract'[Local Practice], 'Daily_Extract'[Provider], 'Daily_Extract'[NPI])),
+			                SUM('Daily_Extract'[Mosaic Exam Flag])
+			            ),
+			        SelectedMetricColumn = NAMEOF('Daily_Extract'[Total Exam Ct]), 
+			            SWITCH(
+			                TRUE(),
+			                SelectedDateColumn = NAMEOF('Daily_Extract'[Date]), 
+			                    SUM('Daily_Extract'[Exam Ct]),
+			                SelectedDateColumn = NAMEOF('Daily_Extract'[Week_Of]), 
+			                    CALCULATE(SUM('Daily_Extract'[Exam Ct]), ALLEXCEPT('Daily_Extract', 'Daily_Extract'[Week_Of], 'Daily_Extract'[Local Practice], 'Daily_Extract'[Provider], 'Daily_Extract'[NPI])),
+			                SelectedDateColumn = NAMEOF('Daily_Extract'[Month]), 
+			                    CALCULATE(SUM('Daily_Extract'[Exam Ct]), ALLEXCEPT('Daily_Extract', 'Daily_Extract'[Month], 'Daily_Extract'[Local Practice], 'Daily_Extract'[Provider], 'Daily_Extract'[NPI])),
+			                SUM('Daily_Extract'[Exam Ct])
+			            ),
+			        SelectedMetricColumn = NAMEOF('Daily_Extract'[MosaicdraftCt]), 
+			            SWITCH(
+			                TRUE(),
+			                SelectedDateColumn = NAMEOF('Daily_Extract'[Date]), 
+			                    SUM('Daily_Extract'[mosaic_draft_flag]),
+			                SelectedDateColumn = NAMEOF('Daily_Extract'[Week_Of]), 
+			                    CALCULATE(SUM('Daily_Extract'[mosaic_draft_flag]), ALLEXCEPT('Daily_Extract', 'Daily_Extract'[Week_Of], 'Daily_Extract'[Local Practice], 'Daily_Extract'[Provider], 'Daily_Extract'[NPI])),
+			                SelectedDateColumn = NAMEOF('Daily_Extract'[Month]), 
+			                    CALCULATE(SUM('Daily_Extract'[mosaic_draft_flag]), ALLEXCEPT('Daily_Extract', 'Daily_Extract'[Month], 'Daily_Extract'[Local Practice], 'Daily_Extract'[Provider], 'Daily_Extract'[NPI])),
+			                SUM('Daily_Extract'[mosaic_draft_flag])
+			            ),
+			        0
+			    )
+			
+			// Calculate display value
+			VAR MosaicdraftCt_Calc = SUM('Daily_Extract'[mosaic_draft_flag])
+			VAR TotalExamCt_Calc = SUM('Daily_Extract'[Exam Ct])
+			VAR MosaicExamFlag_Calc = SUM('Daily_Extract'[Mosaic Exam Flag])
+			
+			VAR DisplayValue = 
+			    SWITCH(
+			        TRUE(),
+			        SelectedMetricColumn = NAMEOF('Daily_Extract'[Mosaic Exam Ct]), 
+			            MosaicExamFlag_Calc,
+			        SelectedMetricColumn = NAMEOF('Daily_Extract'[Total Exam Ct]), 
+			            TotalExamCt_Calc,
+			        SelectedMetricColumn = NAMEOF('Daily_Extract'[Mosaic Exam %]), 
+			            DIVIDE(MosaicExamFlag_Calc, TotalExamCt_Calc, 0),  // Keep as decimal (0.75)
+			        SelectedMetricColumn = NAMEOF('Daily_Extract'[MosaicdraftCt]), 
+			            MosaicdraftCt_Calc,
+			        SelectedMetricColumn = NAMEOF('Daily_Extract'[% Mosaic drafting]), 
+			            DIVIDE(MosaicdraftCt_Calc, TotalExamCt_Calc, 0),  // Keep as decimal (0.75)
+			        BLANK()
+			    )
+			
+			RETURN
+			    IF(CurrentVolume >= SelectedThreshold, DisplayValue, BLANK())
+			```
+		lineageTag: 33616d2c-c6f1-4ce3-a3ee-450b42e5e128
+
+		formatStringDefinition = [Metric Display Filtered Format]
+
+	measure 'Metric Display Filtered site' = ```
+			
+			
+			VAR SelectedMetricColumn = SELECTEDVALUE('Mosaic Metric'[Mosaic Metric Fields])
+			VAR SelectedThreshold = 
+			    CALCULATE(
+			        MAX('ThresholdSlicer'[Threshold]),
+			        ALLSELECTED('ThresholdSlicer')
+			    )
+			VAR SelectedDateColumn = SELECTEDVALUE('Date Selector'[Date Selector Fields])
+			
+			// Check if percentage metric
+			VAR IsPercentageMetric = 
+			    SelectedMetricColumn IN {
+			        NAMEOF('Daily_Extract'[Mosaic Exam %]),
+			        NAMEOF('Daily_Extract'[% Mosaic drafting])
+			    }
+			
+			// Calculate volume for filtering
+			VAR CurrentVolume = 
+			    SWITCH(
+			        TRUE(),
+			        // For percentage metrics, use Total Exam Ct
+			        IsPercentageMetric,
+			            SWITCH(
+			                TRUE(),
+			                SelectedDateColumn = NAMEOF('Daily_Extract'[Date]), 
+			                    SUM('Daily_Extract'[Exam Ct]),
+			                SelectedDateColumn = NAMEOF('Daily_Extract'[Week_Of]), 
+			                    CALCULATE(SUM('Daily_Extract'[Exam Ct]), ALLEXCEPT('Daily_Extract', 'Daily_Extract'[Week_Of], 'Daily_Extract'[Team], 'Daily_Extract'[Provider], 'Daily_Extract'[NPI],'Daily_Extract'[Interventional_Flag],Daily_Extract[Local Practice Division],Daily_Extract[Local Practice],Daily_Extract[Site],Daily_Extract[Modality],Daily_Extract[assisted_flag],Daily_Extract[Procedure])),
+			                SelectedDateColumn = NAMEOF('Daily_Extract'[Month]), 
+			                    CALCULATE(SUM('Daily_Extract'[Exam Ct]), ALLEXCEPT('Daily_Extract', 'Daily_Extract'[Week_Of], 'Daily_Extract'[Team], 'Daily_Extract'[Provider], 'Daily_Extract'[NPI],'Daily_Extract'[Interventional_Flag],Daily_Extract[Local Practice Division],Daily_Extract[Local Practice],Daily_Extract[Site],Daily_Extract[Modality],Daily_Extract[assisted_flag],Daily_Extract[Procedure])),
+			                SUM('Daily_Extract'[Exam Ct])
+			            ),
+			        // For count metrics
+			        SelectedMetricColumn = NAMEOF('Daily_Extract'[Mosaic Exam Ct]), 
+			            SWITCH(
+			                TRUE(),
+			                SelectedDateColumn = NAMEOF('Daily_Extract'[Date]), 
+			                    SUM('Daily_Extract'[Mosaic Exam Flag]),
+			                SelectedDateColumn = NAMEOF('Daily_Extract'[Week_Of]), 
+			                    CALCULATE(SUM('Daily_Extract'[Mosaic Exam Flag]), ALLEXCEPT('Daily_Extract', 'Daily_Extract'[Week_Of], 'Daily_Extract'[Team], 'Daily_Extract'[Provider], 'Daily_Extract'[NPI],'Daily_Extract'[Interventional_Flag],Daily_Extract[Local Practice Division],Daily_Extract[Local Practice],Daily_Extract[Site],Daily_Extract[Modality],Daily_Extract[assisted_flag],Daily_Extract[Procedure])),
+			                SelectedDateColumn = NAMEOF('Daily_Extract'[Month]), 
+			                    CALCULATE(SUM('Daily_Extract'[Mosaic Exam Flag]), ALLEXCEPT('Daily_Extract', 'Daily_Extract'[Week_Of], 'Daily_Extract'[Team], 'Daily_Extract'[Provider], 'Daily_Extract'[NPI],'Daily_Extract'[Interventional_Flag],Daily_Extract[Local Practice Division],Daily_Extract[Local Practice],Daily_Extract[Site],Daily_Extract[Modality],Daily_Extract[assisted_flag],Daily_Extract[Procedure])),
+			                SUM('Daily_Extract'[Mosaic Exam Flag])
+			            ),
+			        SelectedMetricColumn = NAMEOF('Daily_Extract'[Total Exam Ct]), 
+			            SWITCH(
+			                TRUE(),
+			                SelectedDateColumn = NAMEOF('Daily_Extract'[Date]), 
+			                    SUM('Daily_Extract'[Exam Ct]),
+			                SelectedDateColumn = NAMEOF('Daily_Extract'[Week_Of]), 
+			                    CALCULATE(SUM('Daily_Extract'[Exam Ct]), ALLEXCEPT('Daily_Extract', 'Daily_Extract'[Week_Of], 'Daily_Extract'[Team], 'Daily_Extract'[Provider], 'Daily_Extract'[NPI],'Daily_Extract'[Interventional_Flag],Daily_Extract[Local Practice Division],Daily_Extract[Local Practice],Daily_Extract[Site],Daily_Extract[Modality],Daily_Extract[assisted_flag],Daily_Extract[Procedure])),
+			                SelectedDateColumn = NAMEOF('Daily_Extract'[Month]), 
+			                    CALCULATE(SUM('Daily_Extract'[Exam Ct]), ALLEXCEPT('Daily_Extract', 'Daily_Extract'[Week_Of], 'Daily_Extract'[Team], 'Daily_Extract'[Provider], 'Daily_Extract'[NPI],'Daily_Extract'[Interventional_Flag],Daily_Extract[Local Practice Division],Daily_Extract[Local Practice],Daily_Extract[Site],Daily_Extract[Modality],Daily_Extract[assisted_flag],Daily_Extract[Procedure])),
+			                SUM('Daily_Extract'[Exam Ct])
+			            ),
+			        SelectedMetricColumn = NAMEOF('Daily_Extract'[MosaicdraftCt]), 
+			            SWITCH(
+			                TRUE(),
+			                SelectedDateColumn = NAMEOF('Daily_Extract'[Date]), 
+			                    SUM('Daily_Extract'[mosaic_draft_flag]),
+			                SelectedDateColumn = NAMEOF('Daily_Extract'[Week_Of]), 
+			                    CALCULATE(SUM('Daily_Extract'[mosaic_draft_flag]), ALLEXCEPT('Daily_Extract', 'Daily_Extract'[Week_Of], 'Daily_Extract'[Team], 'Daily_Extract'[Provider], 'Daily_Extract'[NPI],'Daily_Extract'[Interventional_Flag],Daily_Extract[Local Practice Division],Daily_Extract[Local Practice],Daily_Extract[Site],Daily_Extract[Modality],Daily_Extract[assisted_flag],Daily_Extract[Procedure])),
+			                SelectedDateColumn = NAMEOF('Daily_Extract'[Month]), 
+			                    CALCULATE(SUM('Daily_Extract'[mosaic_draft_flag]), ALLEXCEPT('Daily_Extract', 'Daily_Extract'[Week_Of], 'Daily_Extract'[Team], 'Daily_Extract'[Provider], 'Daily_Extract'[NPI],'Daily_Extract'[Interventional_Flag],Daily_Extract[Local Practice Division],Daily_Extract[Local Practice],Daily_Extract[Site],Daily_Extract[Modality],Daily_Extract[assisted_flag],Daily_Extract[Procedure])),
+			                SUM('Daily_Extract'[mosaic_draft_flag])
+			            ),
+			        0
+			    )
+			
+			// Calculate display value
+			VAR MosaicdraftCt_Calc = SUM('Daily_Extract'[mosaic_draft_flag])
+			VAR TotalExamCt_Calc = SUM('Daily_Extract'[Exam Ct])
+			VAR MosaicExamFlag_Calc = SUM('Daily_Extract'[Mosaic Exam Flag])
+			
+			VAR DisplayValue = 
+			    SWITCH(
+			        TRUE(),
+			        SelectedMetricColumn = NAMEOF('Daily_Extract'[Mosaic Exam Ct]), 
+			            MosaicExamFlag_Calc,
+			        SelectedMetricColumn = NAMEOF('Daily_Extract'[Total Exam Ct]), 
+			            TotalExamCt_Calc,
+			        SelectedMetricColumn = NAMEOF('Daily_Extract'[Mosaic Exam %]), 
+			            DIVIDE(MosaicExamFlag_Calc, TotalExamCt_Calc, 0),  // Keep as decimal (0.75)
+			        SelectedMetricColumn = NAMEOF('Daily_Extract'[MosaicdraftCt]), 
+			            MosaicdraftCt_Calc,
+			        SelectedMetricColumn = NAMEOF('Daily_Extract'[% Mosaic drafting]), 
+			            DIVIDE(MosaicdraftCt_Calc, TotalExamCt_Calc, 0),  // Keep as decimal (0.75)
+			        BLANK()
+			    )
+			
+			RETURN
+			    IF(CurrentVolume >= SelectedThreshold, DisplayValue, BLANK())
+			```
+		lineageTag: d856f5f9-3965-4a73-ac3e-797e8dd09fd9
+
+		formatStringDefinition = [Metric Display Filtered Format]
+
+	column Threshold
+		formatString: 0
+		lineageTag: 149d5694-4ede-4b7d-ace9-58c3eb20177b
+		summarizeBy: sum
+		isNameInferred
+		sourceColumn: [Threshold]
+
+		annotation SummarizationSetBy = Automatic
+
+	partition ThresholdSlicer = calculated
+		mode: import
+		source = ```
+				
+				DATATABLE(
+				    "Threshold", INTEGER, 
+				    { 
+				        {0}, 
+				        {1},
+				        {5}, 
+				        {10}, 
+				        {15},
+				        {20}, 
+				        {25},
+				        {30},
+				        {35},
+				        {40},
+				        {45},
+				        {50}, 
+				        {60}, 
+				        {70}, 
+				        {80}, 
+				        {100}, 
+				        {200}, 
+				        {300}, 
+				        {400}, 
+				        {500}, 
+				        {1000}, 
+				        {2000}, 
+				        {3000}, 
+				        {5000},
+				         {10000}
+				    }
+				)
+				```
+
+	annotation PBI_Id = 46c2203d042c44fe9b7f23d58fbcf7bc
+

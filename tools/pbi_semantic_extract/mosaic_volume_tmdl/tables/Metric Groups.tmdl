@@ -1,0 +1,106 @@
+table 'Metric Groups'
+	lineageTag: 0d965c98-1c94-4fc4-901a-c9e250c5cc35
+
+	measure 'Selected Metric Value' = ```
+			
+			VAR SelectedMetric = SELECTEDVALUE('Metric Groups'[Metric])
+			RETURN
+			    SWITCH(
+			        SelectedMetric,
+			        
+			        "Total Mosaic Exams", [Total Mosaic Cases (All Time)],
+			        "% Mosaic (14 days)", [%reportingadjagnostic],
+			        "% Mosaic Eligible (14 days)", [%reportingeligagnostic],
+			        "Fully Utilizing", CALCULATE([adoptionstatusflag]),
+			        "Total Exams", [Total Exam Ct],
+			        "Mosaic Exams", [Mosaic Exam Ct],
+			        "% Mosaic", [% Mosaic Exams],
+			        "% Mosaic Eligible" , [%mosaiceligible],
+			        "Draftable XR Exams", [MosaicdraftCt XR],
+			        "Drafted XR", [Total Drafted XR],
+			        "% XR Drafted", [%XR Drafable],
+			        "Draftable CT Exams", [MosaicdraftCt CT],
+			        "Drafted CT", [Total Drafted CT],
+			        "% CT Drafted", [% CT Draftable],
+			        "Capturable US Exams", [US Capturable],
+			        "Captured US", [Captured US],
+			        "% Captured", [% Captured],
+			        BLANK()
+			    )
+			```
+		lineageTag: dce6ce0d-0863-42e0-b0d6-b54747a0821f
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column Group
+		lineageTag: 4ab952db-5567-4974-9a55-7e753a89add3
+		summarizeBy: none
+		isNameInferred
+		sourceColumn: [Group]
+		sortByColumn: GroupSort
+
+		annotation SummarizationSetBy = Automatic
+
+	column Metric
+		lineageTag: 7060a542-9529-4ab0-b83b-9fb513fb942f
+		summarizeBy: none
+		isNameInferred
+		sourceColumn: [Metric]
+		sortByColumn: MetricSort
+
+		annotation SummarizationSetBy = Automatic
+
+	column GroupSort
+		formatString: 0
+		lineageTag: 4d83c49d-de73-4348-9bdb-cc7ffdbe17f8
+		summarizeBy: sum
+		isNameInferred
+		sourceColumn: [GroupSort]
+
+		annotation SummarizationSetBy = Automatic
+
+	column MetricSort
+		formatString: 0
+		lineageTag: f0125455-8694-43c8-9c90-b50108246532
+		summarizeBy: sum
+		isNameInferred
+		sourceColumn: [MetricSort]
+
+		annotation SummarizationSetBy = Automatic
+
+	partition 'Metric Groups' = calculated
+		mode: import
+		source = ```
+				
+				DATATABLE(
+				    "Group", STRING,
+				    "GroupSort", INTEGER,
+				    "Metric", STRING,
+				    "MetricSort", INTEGER,
+				    {
+				        
+				        {"Ever", 1, "Total Mosaic Exams", 1},
+				        
+				        {"Last 14 days or since go-live", 2, "% Mosaic (14 days)", 1},
+				        {"Last 14 days or since go-live", 2, "% Mosaic Eligible (14 days)", 2},
+				        {"Last 14 days or since go-live", 2, "Fully Utilizing", 3},
+				        
+				        {"In selected time frame", 3, "Total Exams", 1},
+				        {"In selected time frame", 3, "Mosaic Exams", 2},
+				        {"In selected time frame", 3, "% Mosaic", 3},
+				        {"In selected time frame", 3, "% Mosaic Eligible", 4},
+				        {"In selected time frame", 3, "Draftable XR Exams", 5},
+				        {"In selected time frame", 3, "Drafted XR", 6},
+				        {"In selected time frame", 3, "% XR Drafted", 7},
+				        {"In selected time frame", 3, "Draftable CT Exams", 8},
+				        {"In selected time frame", 3, "Drafted CT", 9},
+				        {"In selected time frame", 3, "% CT Drafted", 10},
+				        {"In selected time frame", 3, "Capturable US Exams", 11},
+				        {"In selected time frame", 3, "Captured US", 12},
+				        {"In selected time frame", 3, "% Captured", 13}
+				    }
+				)
+				```
+
+	annotation PBI_Id = 520ccc9429954aa198aa487d3e0fcd13
+

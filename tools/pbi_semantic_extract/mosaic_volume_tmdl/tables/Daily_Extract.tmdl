@@ -1,0 +1,5288 @@
+table Daily_Extract
+	lineageTag: b04f7b37-f638-4c50-a11d-e19baac486ea
+
+	refreshPolicy
+		policyType: basic
+		rollingWindowGranularity: month
+		rollingWindowPeriods: 24
+		incrementalGranularity: day
+		incrementalPeriods: 7
+		sourceExpression = ```
+			let
+			    // Step 1: Create dynamic SQL filter clause
+			    FilterClause = if LoadFullData then 
+			        // Production mode - use RangeStart and RangeEnd for incremental refresh
+			        " WHERE Calendar_Date >= DATE('" & Date.ToText(DateTime.Date(RangeStart), "yyyy-MM-dd") & "') " &
+			        " AND Calendar_Date < DATE('" & Date.ToText(DateTime.Date(RangeEnd), "yyyy-MM-dd") & "')"
+			    else 
+			        // Desktop mode - load last 10 days only
+			        " WHERE Calendar_Date >= CURRENT_DATE - INTERVAL 10 DAYS",
+			
+			    // Step 2: Load CLEAN data from Databricks (now deduplicated at source)
+			    // NOTE: Deduplication now happens in the view itself via ROW_NUMBER
+			    Source = Value.NativeQuery(
+			        Databricks.Catalogs("adb-7306149455716415.15.azuredatabricks.net", "/sql/1.0/warehouses/fe0ad987563c672a", 
+			        [Catalog="edw_dev", Database=null, EnableAutomaticProxyDiscovery=null]){[Name="edw_dev",Kind="Database"]}[Data],
+			        "SELECT * FROM edw_dev.bipa_analytics.presentation_mosaicdailyvolume_vw" & FilterClause,
+			        null,
+			        [EnableFolding=true]
+			    ),
+			
+			    // Step 3: Continue with your transformations (NO deduplication needed)
+			    #"Renamed Columns" = Table.RenameColumns(Source,{{"Case_Count", "Exam Ct"}, {"modality_code", "Modality"}, {"Available_To_MD_Date", "Available To MD"}, {"Radiologist", "Provider"}}),
+			    #"Duplicated Column" = Table.DuplicateColumn(#"Renamed Columns", "Available To MD", "Available To MD - Copy"),
+			    #"Split Column by Delimiter" = Table.SplitColumn(Table.TransformColumnTypes(#"Duplicated Column", {{"Available To MD - Copy", type text}}, "en-US"), "Available To MD - Copy", Splitter.SplitTextByEachDelimiter({" "}, QuoteStyle.Csv, false), {"Available To MD - Copy.1", "Available To MD - Copy.2"}),
+			    #"Changed Type" = Table.TransformColumnTypes(#"Split Column by Delimiter",{{"Available To MD - Copy.1", type date}, {"Available To MD - Copy.2", type time}}),
+			    #"Duplicated Column1" = Table.DuplicateColumn(#"Changed Type", "Final_DateTime", "Final_DateTime - Copy"),
+			    #"Renamed Columns1" = Table.RenameColumns(#"Duplicated Column1",{{"Available To MD - Copy.1", "Available To MD - Date"}, {"Available To MD - Copy.2", "Available To MD - Time"}}),
+			    #"Split Column by Delimiter1" = Table.SplitColumn(Table.TransformColumnTypes(#"Renamed Columns1", {{"Final_DateTime - Copy", type text}}, "en-US"), "Final_DateTime - Copy", Splitter.SplitTextByEachDelimiter({" "}, QuoteStyle.Csv, false), {"Final_DateTime - Copy.1", "Final_DateTime - Copy.2"}),
+			    #"Changed Type1" = Table.TransformColumnTypes(#"Split Column by Delimiter1",{{"Final_DateTime - Copy.1", type date}, {"Final_DateTime - Copy.2", type time}}),
+			    #"Renamed Columns2" = Table.RenameColumns(#"Changed Type1",{{"Final_DateTime - Copy.1", "Final_DateTime - Date"}, {"Final_DateTime - Copy.2", "Final- Time"}, {"Available To MD - Time", "Available  Time"}, {"Practice_Short_Name", "Practice"}, {"Sub_Practice_Short_Name", "Sub-Practice"}, {"Location_Name", "Site"}, {"Calendar_Date", "Date"}, {"Month_Num", "Month"}}),
+			    #"Renamed Columns3" = Table.RenameColumns(#"Renamed Columns2",{{"local_practice_short_name", "Local Practice"}, {"local_practice_division", "Local Practice Division"}, {"Mosaic_flag", "Mosaic Exam Flag"}, {"Linked_Charge_Flag", "Linked Charge Flag"}, {"Place_Of_Service_Name", "Place Of Service"}}),
+			    #"Removed Columns" = Table.RemoveColumns(#"Renamed Columns3",{"Yesterday", "Tertiary_Subspecialty", "Termination", "Suffix", "Home_Phone", "Work_Phone", "Cell_Phone", "Provider_name_format1", "Useage", "Middle_Name", "First_Name", "Last_Name", "FTE % (other than 100%)", "Missing_RAD_Flag", "physician_day", "Resident/Fellow", "hour", "Employment_Status_Change_Date", "Day_Of_Week_Number", "Hire_Date", "Week_End_Date", "Time_Hour", "Client_System", "30_min_flag", "Emergency_Room",  "Credential", "Ind_Contractor", "Patient_MRN", "UKG_ID", "Associate_ID"}),
+			    #"Changed Type2" = Table.TransformColumnTypes(#"Removed Columns",{{"Date", type date}}),
+			    #"Added Custom" = Table.AddColumn(#"Changed Type2", "Startofmonth", each Date.StartOfMonth([Date])),
+			    #"Changed Type3" = Table.TransformColumnTypes(#"Added Custom",{{"Startofmonth", type date}}),
+			    #"Added Custom1" = Table.AddColumn(#"Changed Type3", "Weekstart", each Date.AddDays([Date],1 - Date.DayOfWeek([Date], Day.Sunday))),
+			    #"Changed Type4" = Table.TransformColumnTypes(#"Added Custom1",{{"Weekstart", type date}}),
+			    #"Added Custom2" = Table.AddColumn(#"Changed Type4", "Week_Of", each Date.AddDays([Date] ,1-Date.DayOfWeek([Date]))),
+			    #"Changed Type5" = Table.TransformColumnTypes(#"Added Custom2",{{"Week_Of", type date}}),
+			    #"Added Custom3" = Table.AddColumn(#"Changed Type5", "RANK", each Duration.Days([#"Final_DateTime - Date"] - DateTime.Date(DateTime.LocalNow()))),
+			    #"Duplicated Column2" = Table.DuplicateColumn(#"Added Custom3", "Final_DateTime - Date", "Final_DateTime - Date - Copy"),
+			    #"Removed Columns1" = Table.RemoveColumns(#"Duplicated Column2",{"Date"}),
+			    #"Renamed Columns4" = Table.RenameColumns(#"Removed Columns1",{{"Final_DateTime - Date - Copy", "Date"}}),
+			    #"Changed Type6" = Table.TransformColumnTypes(#"Renamed Columns4",{{"Date", type date}}),
+			    #"Removed Columns2" = Table.RemoveColumns(#"Changed Type6",{"Physician_Partner_Status", "TAT_Filter", "TAT_Minutes", "Team"}),
+			    #"Renamed Columns5" = Table.RenameColumns(#"Removed Columns2",{{"teamro", "Team"}})
+			in
+			    #"Renamed Columns5"
+			```
+
+	measure Best = SUM(Daily_Extract[best_rvu])
+		formatString: #,0
+		lineageTag: 81bf9ac7-c4ce-453f-a247-ea1804a1e87f
+
+		changedProperty = IsHidden
+
+		annotation PBI_FormatHint = {"isDecimal":true}
+
+	measure WU = SUM(Daily_Extract[TBWU])
+		formatString: #,0
+		lineageTag: ae832599-0858-45e7-83dc-759769170e69
+
+		changedProperty = IsHidden
+
+		annotation PBI_FormatHint = {"isDecimal":true}
+
+	measure 'wRVU est' = sum(Daily_Extract[RVU])
+		formatString: #,0
+		lineageTag: 5c0217de-6919-4589-b8f1-bf4029e5f169
+
+		changedProperty = IsHidden
+
+		annotation PBI_FormatHint = {"isDecimal":true}
+
+	measure Adj_Best = SUM(Daily_Extract[Adjusted_Best_RVU])
+		lineageTag: 5a8dd7f8-5a44-4047-ae9a-b6040f5560bd
+
+		changedProperty = IsHidden
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	measure 'adj_wRVU est' = sum(Daily_Extract[Allocated_RVU])
+		lineageTag: 729151c1-1f70-4823-8cc9-981d4dd09468
+
+		changedProperty = IsHidden
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	measure adj_WU = SUM(Daily_Extract[Allocated_WU])
+		lineageTag: ad390cd9-66ae-41ca-9039-c9c549061e24
+
+		changedProperty = IsHidden
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	measure 'Mosaic Exam %' = sum(Daily_Extract[Mosaic Exam Flag])/[Total Exam Ct]
+		formatString: 0%;-0%;0%
+		lineageTag: e4485ac2-66d4-48f8-a038-366d98d810a9
+
+		changedProperty = IsHidden
+
+	measure 'Total Exam Ct' =
+			
+			CALCULATE(SUM('Daily_Extract'[Exam Ct]))
+		formatString: #,0
+		lineageTag: f70d5524-8e8a-4959-8f83-5be930bf0c04
+
+		extendedProperty MeasureTemplate = {"version":0,"daxTemplateName":"TotalForAllCategory"}
+
+		changedProperty = FormatString
+
+		changedProperty = IsHidden
+
+	measure 'Mosaic Exam Ct' = ```
+			
+			
+				SUM('Daily_Extract'[Mosaic Exam Flag])
+				
+			
+			```
+		formatString: #,0
+		lineageTag: 950c0b10-fa6b-4d62-b30c-60e2fd056db8
+
+	measure 'All Exam Ct' =
+			
+			CALCULATE(
+				SUM('Daily_Extract'[Exam Ct]),
+				ALL(Daily_Extract[Mosaic Exam Flag])
+			)
+		formatString: 0
+		lineageTag: 9cce23ab-3d92-4222-a8ce-0e314d925726
+
+	measure '% Mosaic Exams Last 7 Days' = IFERROR(SUM(Daily_Extract[Mosaic 7 Day Flag])/SUM(Daily_Extract[7 day flag]),0)
+		formatString: 0%;-0%;0%
+		lineageTag: 2300712f-2434-45c3-945c-828c5cf63619
+
+	measure 'RPCE as % of Clinical' = DIVIDE([DynamicRPCECases], [DynamicClinicalcases], 0)
+		formatString: 0%;-0%;0%
+		lineageTag: e08c1e4e-d611-4d58-917e-ae86a2a08489
+
+	measure '% of RPCE' = DIVIDE([DynamicMosaicCases], [DynamicRPCECases], 0) + 0.02
+		formatString: 0.0%;-0.0%;0.0%
+		lineageTag: 7271053c-d6c3-480a-bf56-1db171e89e94
+
+	measure '% of RPCE XR' = SUM(Daily_Extract[RPCE XR Flag]) / SUM(Daily_Extract[XR Flag])
+		formatString: 0%;-0%;0%
+		lineageTag: 9fd5103a-aeb8-4544-9ba2-0fd478dba477
+
+	measure '# of Mosaic Rads' =
+			CALCULATE (
+			DISTINCTCOUNT ( Daily_Extract[Provider]),
+			FILTER(Daily_Extract,Daily_Extract[Mosaic Exam Flag] = 1
+			))
+		formatString: 0
+		lineageTag: 58412190-e41b-46da-925d-4af3103ee8e0
+
+	measure '# of RPCE Rads' =
+			CALCULATE (
+			DISTINCTCOUNT ( Daily_Extract[Provider]),
+			FILTER(Daily_Extract,Daily_Extract[RPCE Exam Flag] = 1
+			))
+		formatString: 0
+		lineageTag: b3e4bd05-8069-4bc8-95d8-83cb7ab83391
+
+	measure '% of Rads' = Daily_Extract[# of Mosaic Rads] / Daily_Extract[# of RPCE Rads]
+		formatString: 0.0%;-0.0%;0.0%
+		lineageTag: 9f6ecb10-800a-402a-ab69-635909e50337
+
+	measure 'First Mosaic Case' =
+			
+			VAR CurrentNPI = MAX('Daily_Extract'[NPI])
+			VAR CurrentProvider = MAX('Daily_Extract'[Provider])
+			
+			RETURN
+			    IF(
+			        NOT(ISBLANK(CurrentNPI)),
+			        CALCULATE(
+			            MIN('Daily_Extract'[Final_DateTime - Date]),
+			            ALLSELECTED('Daily_Extract'),  // Keeps all filters EXCEPT what we remove below
+			            ALL('Daily_Extract'[Date]),
+			            ALL('Daily_Extract'[Month]),
+			            ALL('Daily_Extract'[Final_DateTime - Date]),
+			            ALL('Daily_Extract'[Week_Of]),
+			            'Daily_Extract'[NPI] = CurrentNPI,
+			            'Daily_Extract'[Mosaic Exam Flag] = 1
+			        ),
+			        IF(
+			            NOT(ISBLANK(CurrentProvider)),
+			            CALCULATE(
+			                MIN('Daily_Extract'[Final_DateTime - Date]),
+			                ALLSELECTED('Daily_Extract'),
+			                ALL('Daily_Extract'[Date]),
+			                ALL('Daily_Extract'[Month]),
+			                ALL('Daily_Extract'[Final_DateTime - Date]),
+			                ALL('Daily_Extract'[Week_Of]),
+			                'Daily_Extract'[Provider] = CurrentProvider,
+			                'Daily_Extract'[Mosaic Exam Flag] = 1
+			            ),
+			            BLANK()
+			        )
+			    )
+		formatString: Short Date
+		lineageTag: 784fc495-70e2-460e-a98c-3ebd9e5a61e4
+
+	measure 'first case' = ```
+			calculate ( min ('Daily_Extract'[Final_DateTime - Date]), filter ( 'Daily_Extract','Daily_Extract'[Mosaic Exam Flag] = 1 ), 
+			removefilters('Daily_Extract') ,removefilters('Date Selector') , removefilters('DataRefresh') , removefilters ('MODEL POWERBI_USER_FILTERS'), removefilters(Hour_order) , removefilters('RLSTeamTable'), removefilters( 'Metrictypeselector'), removefilters ('Mini_practice_directory') , removefilters('Mosaic Metric') , removefilters ('Mosaic Exam Count Table') ,  removefilters ('Daily_Extract'[Team]),
+			removefilters('Daily_Extract'[Date]), removefilters('Daily_Extract'[Date Range Shown]),
+			
+			
+			allexcept('Daily_Extract','Daily_Extract'[Provider])
+			
+			)
+			
+			```
+		formatString: Short Date
+		lineageTag: ca426b67-66cd-4d0a-88df-86464595b134
+
+	measure examslast14days = calculate( sum('Daily_Extract'[Exam Ct]),filter ('Daily_Extract','Daily_Extract'[Date] >=TODAY() -14 && 'Daily_Extract'[Date] <=today () ))
+		formatString: 0
+		lineageTag: ba5b0c90-5ff4-4561-b4b6-a50aed8aba69
+
+	measure mosaiceamslast14days = calculate( sum('Daily_Extract'[Exam Ct]),filter ('Daily_Extract','Daily_Extract'[Date] >=TODAY() -14 && 'Daily_Extract'[Date] <=today () && 'Daily_Extract'[Mosaic Exam Flag] =1 ) )
+		formatString: 0
+		lineageTag: e45e7d4e-7482-4ff5-8602-0783b3f915a0
+
+	measure '% Mosaic Exmas last 14 days' = divide ( [mosaiceamslast14days],[examslast14days] , 0)
+		formatString: 0%;-0%;0%
+		lineageTag: d786d5a6-bd0d-4c47-bf34-9e2d9ce76ac6
+
+	measure 'Is mosaic exam selected' = ```
+			if ( selectedvalue( 'Mosaic Metric'[Mosaic Metric]) = "Mosaic Exam %",1,0) 
+			```
+		formatString: 0
+		lineageTag: b7949106-29c8-4d87-b266-ee8e456fcb3f
+
+	measure 'Total mosaic exams' = ```
+			
+			
+			 VAR daysback = [selecteddays]
+			return
+			   CALCULATE( SUM('Daily_Extract'[Exam Ct]),
+			
+			        FILTER( 'Daily_Extract', isblank (daysback) ||
+			
+			           
+			
+			           ( 'Daily_Extract'[Date] >= today() - (daysback -1) &&
+			
+			            'Daily_Extract'[Date] <= Today())
+			        )
+			            ,'Daily_Extract'[Mosaic Exam Flag] =1
+			
+			        
+			   )
+			```
+		formatString: 0
+		lineageTag: 42b3d496-ae8e-479e-abee-ded642d80f40
+
+	measure '% Mosaic Exams' = divide ( [Mosaic Exam Ct] , [Total Exam Ct] ,0)
+		formatString: 0%;-0%;0%
+		lineageTag: 4e3ccf3f-78ff-4891-9b64-1bfc6b1f066a
+
+	measure examslast7days = calculate( sum('Daily_Extract'[Exam Ct]),filter ('Daily_Extract','Daily_Extract'[Date] >=TODAY() -6 && 'Daily_Extract'[Date] <=today () ))
+		formatString: 0
+		lineageTag: 7fa0d50b-3355-476b-9cf5-6e5185a70f2e
+
+	measure mosaicexxamslast7days = calculate( sum('Daily_Extract'[Exam Ct]),filter ('Daily_Extract','Daily_Extract'[Date] >=TODAY() -6 && 'Daily_Extract'[Date] <=today () && 'Daily_Extract'[Mosaic Exam Flag] =1 ) )
+		formatString: 0
+		lineageTag: e04a4567-5bc6-4102-b4e6-4a4ab00b285d
+
+	measure mosaicexams%last7days = divide ( [mosaicexxamslast7days] ,[examslast7days] ,0)
+		formatString: 0%;-0%;0%
+		lineageTag: fea2829c-50a5-44f9-806b-4f91ff590efb
+
+	measure '% Mosaic Exams Last N Days' = ```
+			
+			VAR daysback = [selecteddays]
+			VAR MosaicExamsInRange =
+			    CALCULATE(
+			        SUM('Daily_Extract'[Exam Ct]),
+			        FILTER( 'Daily_Extract', (isblank(daysback) ||
+			            
+			           ( 'Daily_Extract'[Date] >= today() - (daysback -1) &&
+			            'Daily_Extract'[Date] <= Today() ))
+			            && 'Daily_Extract'[Mosaic Exam Flag] =1
+			        )
+			    )
+			VAR TotalMosaicExams =
+			    CALCULATE(
+			        SUM('Daily_Extract'[Exam Ct]), 
+			        filter ('Daily_Extract', isblank(daysback) ||
+			        ('Daily_Extract'[Date] >= today() - (daysback -1) &&
+			            'Daily_Extract'[Date] <= Today() ))
+			      
+			    )
+			RETURN
+			    if ( isblank(daysback), blank(),
+			    divide ( mosaicexamsinrange, totalmosaicexams ,0))
+			```
+		formatString: 0%;-0%;0%
+		lineageTag: afac5062-d64b-4bd0-ba20-08bb4e7d12b4
+
+	measure 'Dynamic Title' = "Percentage of Mosaic Exams in the Last " & selectedvalue('Daysselection'[Days] , "N" ) & " Days"
+		lineageTag: ae423ee0-df0a-4851-84a8-5b16d89c54cf
+
+	measure 'Left Total' = ```
+			
+			
+			VAR SelectedMetricName =
+			
+			   SELECTEDVALUE('Mosaic Metric'[Mosaic Metric])
+			
+			VAR SelectedDateName =
+			
+			   SELECTEDVALUE('Date Selector'[Date Selector])
+			
+			VAR BaseMetric =
+			
+			   SWITCH(
+			
+			       SelectedMetricName,
+			
+			       "Mosaic Exam Ct", [Mosaic Exam Ct],
+			
+			       "Total Exam Ct",  [Total Exam Ct],
+			
+			       "Mosaic Exam %",  [Mosaic Exam %]
+			
+			   )
+			return
+			switch ( 
+			    selecteddatename , "Day", calculate( basemetric, allselected('Daily_Extract'[date])), 
+			    "week off", calculate( basemetric, allselected('Daily_Extract'[Week_Of])), 
+			    "month", calculate (BaseMetric , allselected ('Daily_Extract'[month])) )
+			
+			
+			
+			 
+			```
+		lineageTag: bc247d51-48c1-40ee-a9f9-0c34e4923a2c
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	measure 'Dynamic Mosaic Title' =
+			
+			var daysback= selectedvalue('Daysselection'[Days])
+			return
+			"% Reporting Last " & Daysback & " Days"
+		lineageTag: 860179e1-5d3f-4d6d-a9bd-80147b0b83ea
+
+	measure 'Left Total Header' = "Total " & selectedvalue('Mosaic Metric'[Mosaic Metric])
+		lineageTag: 66db61ac-e91d-488e-9cf9-807eaaf959b5
+
+	measure totalradslive = ```
+			
+			
+			
+			VAR SelectedStatuses = VALUES(FullyAdoptedSlicer[Status])
+			
+			RETURN
+			
+			CALCULATE(DISTINCTCOUNT('Daily_Extract'[NPI]),
+			
+			'Daily_Extract'[Mosaic Exam Flag] = 1,
+			
+			FILTER(
+			
+			    ALLSELECTED('Daily_Extract'[NPI]),
+			
+			    VAR FirstCase =
+			
+			        CALCULATE(
+			
+			            MIN('Daily_Extract'[Final_DateTime - Date]),
+			
+			            'Daily_Extract'[Mosaic Exam Flag] = 1,
+			
+			            ALLEXCEPT('Daily_Extract', 'Daily_Extract'[NPI])
+			
+			        )
+			
+			   
+			
+			    VAR PctMosaic = [% Mosaic Exmas last 14 days]
+			
+			    VAR StatusFlag =
+			
+			        IF(
+			
+			            NOT ISBLANK(FirstCase) &&
+			
+			            FirstCase <= TODAY() - 14 &&
+			
+			            PctMosaic > 0.8,
+			
+			            "Fully Adopted",
+			
+			            "Not Fully Adopted"
+			
+			        )
+			
+			    RETURN
+			
+			        IF(ISFILTERED('FullyAdoptedSlicer'[Status]),
+			
+			            StatusFlag in SelectedStatuses , TRUE())
+			)
+			)
+			```
+		formatString: 0
+		lineageTag: 4205192f-24a1-440a-b96e-415c4bc1013f
+
+	measure EligibleProviders = ```
+			
+			var selectedstatus = VALUES(FullyAdoptedSlicer[Status])
+			var applysinglestatus = COUNTROWS(selectedstatus) = 1
+			var selstatus = IF(applysinglestatus, MAX(FullyAdoptedSlicer[Status]), BLANK())
+			
+			RETURN
+			SUMX(
+			    VALUES(
+			 'Daily_Extract'[NPI]), 
+			 var thisnpi = 'Daily_Extract'[NPI]
+			
+			            var firstcase = CALCULATE(
+			                MIN('Daily_Extract'[Final_DateTime - Date]), 
+			                'Daily_Extract'[Mosaic Exam Flag] = 1, 
+			                ALLEXCEPT('Daily_Extract', 'Daily_Extract'[NPI])
+			            )
+			          
+			          var isdeployed = NOT(ISBLANK(firstcase)) && firstcase <=TODAY() - 2
+			          var isfullyadopted = [adoptionstatusflag] = 1
+			          var isnotfullyadopted = [adoptionstatusflag] = 0
+			
+			          RETURN
+			          IF(
+			            NOT applysinglestatus , 
+			            IF(isdeployed, 1,0), 
+			            IF(
+			                selstatus = "Fully Utilizing", 
+			                IF(isfullyadopted && isdeployed ,1,0), 
+			                IF(selstatus = "Not Fully Utilizing", 
+			                IF(isnotfullyadopted && isdeployed ,1,0), 
+			                IF(isdeployed,1,0)
+			                )
+			            )
+			          )
+			)
+			
+			
+			
+			
+			
+			
+			
+			
+			
+			
+			
+			
+			
+			
+			
+			
+			
+			```
+		formatString: 0
+		lineageTag: f4bc30d0-25cf-498b-881b-90170fbe183e
+
+	measure IsFullyAdopted = ```
+			
+			var iseligible = [first case] <= today()-14
+			var providerexams = calculate (
+			    countrows('Daily_Extract') , 
+			    'Daily_Extract'[Date] >today() -14,
+			    'Daily_Extract'[Date] <=today()
+			)
+			
+			var providermosaicexams = 
+			
+			calculate(
+			    countrows('Daily_Extract'), 
+			    Daily_Extract[Date] >today() -14, 
+			    Daily_Extract[Date] <=today() , 
+			    Daily_Extract[Mosaic Exam Flag] =1 
+			)
+			var pctmosaic= divide ( providermosaicexams , providerexams)
+			
+			return 
+			if(iseligible && pctmosaic > 0.8 , 1,0)
+			```
+		formatString: 0
+		lineageTag: 1d7f4d9c-8de9-406b-ba27-9f9b6f5bea54
+
+	measure Fullyadoptedrads = ```
+			sumx( 
+			    values ('Daily_Extract'[NPI]), 
+			    [IsFullyAdopted]
+			)
+			```
+		formatString: 0
+		lineageTag: e07e3aef-e9ce-4595-af90-1aa00ab12151
+
+	measure clinicalofmosaicreporting =
+			
+			SWITCH(
+			    TRUE(),
+			    [SelectedMeasure] = "Exam Count", DIVIDE(SUM('Daily_Extract'[Mosaic Exam Flag]), SUM('Daily_Extract'[Exam Ct]), 0),
+			    [SelectedMeasure] = "RVUs", DIVIDE([rvu_mosaic], SUM('Daily_Extract'[RVU-decimal]), 0),
+			    DIVIDE(SUM('Daily_Extract'[Mosaic Exam Flag]), SUM('Daily_Extract'[Exam Ct]), 0)
+			)
+		formatString: 0%;-0%;0%
+		lineageTag: f5b33a78-476d-4129-91a6-005bc1315ea3
+
+	measure Mosaicreportingrvu = calculate(sum('Daily_Extract'[RVU-decimal]), filter ('Daily_Extract', 'Daily_Extract'[Mosaic Exam Flag] =1))
+		lineageTag: 9d8ac3bd-76bd-4cd1-b0f6-d90b5cec9bc8
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	measure '% of Mosaic XR' =
+			
+			SWITCH(
+			    TRUE(),
+			    [SelectedMeasure] = "Exam Count", DIVIDE(SUM(Daily_Extract[Mosaic XR Flag]), SUM(Daily_Extract[XR Flag]), 0),
+			    [SelectedMeasure] = "RVUs", DIVIDE(
+			        CALCULATE(SUM(Daily_Extract[RVU-decimal]), Daily_Extract[Mosaic XR Flag] = 1),
+			        CALCULATE(SUM(Daily_Extract[RVU-decimal]), Daily_Extract[XR Flag] = 1),
+			        0
+			    ),
+			    DIVIDE(SUM(Daily_Extract[Mosaic XR Flag]), SUM(Daily_Extract[XR Flag]), 0)
+			)
+		formatString: 0.0%;-0.0%;0.0%
+		lineageTag: 37e85dd7-4a74-4344-ad44-cfcb6c39f740
+
+	measure 'Selected measure' = ```
+			
+			
+			switch( 
+			    selectedvalue('Measureselector'[Measure]), 
+			    "Exam Count" , sum('Daily_Extract'[Exam Ct]),
+			    "RVUs" , sum('Daily_Extract'[RVU-decimal]), 
+			    blank()
+			)
+			```
+		lineageTag: 947a965e-6afc-454c-ab79-e99c9c8c8f79
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	measure rvu_mosaic = calculate ( sum('Daily_Extract'[RVU-decimal]), FILTER( 'Daily_Extract', 'Daily_Extract'[Mosaic Exam Flag] =1 ))
+		lineageTag: fd0f6761-6c43-4eb5-9582-d3bb804d2520
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	measure selectedmeasure = selectedvalue('Measureselector'[Measure] , "Exam Count")
+		lineageTag: 3687f9d1-0748-4580-916c-117b917ac4e9
+
+	measure DynamicMosaicCases = ```
+			
+			SWITCH(
+			TRUE(),
+			[SelectedMeasure] = "Exam Count", [Mosaic Exam Ct],
+			
+			[SelectedMeasure] = "RVUs", [rvu_mosaic], 
+			SUM(Daily_Extract[Mosaic Exam Flag])
+			)
+			```
+		lineageTag: 0afbab64-543d-4fee-aefa-d9451f1caea3
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	measure DynamicTotalMosaicFullyadopted = ```
+			
+			
+			var sel = [selectedmeasure]
+			
+			return
+			
+			switch( 
+			
+			    true(), 
+			
+			    sel = "Exam Count" , 
+			
+			    calculate( sum('Daily_Extract'[Exam Ct]), 
+			    filter (
+			        values(Daily_Extract[NPI]), 
+			        [IsFullyAdopted] =1 ), 
+			        'Daily_Extract'[Mosaic Exam Flag] = 1
+			
+			    ),
+			
+			    sel = "RVUs" , 
+			
+			    calculate ( sum ( 'Daily_Extract'[RVU]), 
+			
+			    filter (
+			        values (Daily_Extract[NPI]), 
+			        [IsFullyAdopted] = 1 
+			    ), Daily_Extract[Mosaic Exam Flag] = 1 
+			    ), 
+			
+			    sumx(values('Daily_Extract'[NPI]) , [IsFullyAdopted]
+			    )
+			)
+			```
+		formatString: 0
+		lineageTag: bf152011-857d-4b8c-a4a6-dd4e2d3b847e
+
+	measure RPCEEXAMS = sum ('Daily_Extract'[RPCE Exam Flag] )
+		formatString: 0
+		lineageTag: 0902eff7-415f-413a-9eef-d3914900aa2b
+
+	measure RPCERVU = ```
+			calculate ( sum ('Daily_Extract'[RVU-decimal]), 
+			'Daily_Extract'[Source_System_Code] = "rpceMidwest" || 'Daily_Extract'[Source_System_Code] = "rpceSouthwest"
+			)
+			```
+		lineageTag: 0e7f6e74-fcbe-4f91-ba43-8d88ec787593
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	measure DynamicRPCECases = ```
+			
+			
+			switch(
+			    true(), 
+			    [selectedmeasure] = "Exam Count" , [RPCEEXAMS], 
+			    [selectedmeasure] = "RVUs" , [RPCERVU], 
+			
+			    sum (Daily_Extract[RPCE Exam Flag])
+			)
+			```
+		lineageTag: d2fb8bb9-cca2-4bfa-b3c7-c7645e00c0a5
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	measure DynamicClinicalcases = ```
+			
+			
+			switch(
+			    true(), 
+			    [selectedmeasure] = "Exam Count" , sum('Daily_Extract'[Exam Ct]), 
+			    [selectedmeasure] ="RVUs" , sum('Daily_Extract'[RVU]), 
+			
+			    sum('Daily_Extract'[Exam Ct])
+			)
+			```
+		lineageTag: b74b90db-a332-42cd-bed9-65aafcd4c7e8
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	measure Totalproviders_week = ```
+			
+			var weekstart = min('Daily_Extract'[WeekStart])
+			var weekend = weekstart +6
+			return
+			calculate ( distinctcount ('Daily_Extract'[NPI]), 
+			datesbetween('Daily_Extract'[Date], weekstart , weekend)
+			)
+			```
+		formatString: 0
+		lineageTag: 89a99c33-664c-466c-bd5a-7d7f553df3c8
+
+	measure 'Mosaic Drafting Ct' = ```
+			
+			 VAR daysback = [selecteddays]
+			return
+			   CALCULATE( SUM('Daily_Extract'[Exam Ct]),
+			
+			        FILTER( 'Daily_Extract', isblank (daysback) ||
+			
+			           
+			
+			           ( 'Daily_Extract'[Date] >= today() - (daysback -1) &&
+			
+			            'Daily_Extract'[Date] <= Today())
+			        )
+			            ,'Daily_Extract'[mosaic_draft_flag] =1
+			
+			        
+			   )
+			```
+		formatString: 0
+		lineageTag: 81c8daac-765c-4053-8744-c54f8fe15ab2
+
+	measure totalradslivedrafting = calculate ( distinctcount('Daily_Extract'[NPI]), FILTER( 'Daily_Extract','Daily_Extract'[mosaic_draft_flag] =1))
+		formatString: 0
+		lineageTag: 017a5558-a293-46af-8c21-aeb6fb75ab5d
+
+	measure rvu_mosaicdrafting = calculate ( sum('Daily_Extract'[RVU-decimal]), FILTER( 'Daily_Extract', 'Daily_Extract'[mosaic_draft_flag] =1 ))
+		lineageTag: e94a154b-7cba-41f2-8d12-a14b7a950b55
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	measure DynamicMosaicCasesDrafting = ```
+			
+			SWITCH(
+			TRUE(),
+			[SelectedMeasure] = "Exam Count", [Mosaic Drafting Ct],
+			
+			[SelectedMeasure] = "RVUs", [rvu_mosaicdrafting], 
+			SUM(Daily_Extract[mosaic_draft_flag])
+			)
+			```
+		lineageTag: 6f8bdb91-cbe7-488c-99ce-7933e9f23b85
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	measure clinicalofmosaicdrafting = DIVIDE([DynamicMosaicCasesDrafting], [DynamicClinicalcases], 0)
+		formatString: 0.0%;-0.0%;0.0%
+		lineageTag: 75fff3fc-ed8d-4bd4-8f56-421b9409d0ed
+
+	measure '% of Mosaicdrafting XR' =
+			
+			SWITCH(
+			    TRUE(),
+			    [SelectedMeasure] = "Exam Count", DIVIDE(SUM(Daily_Extract[Mosaicdraft XR Flag]), SUM(Daily_Extract[XR Flag]), 0),
+			    [SelectedMeasure] = "RVUs", DIVIDE(
+			        CALCULATE(SUM(Daily_Extract[RVU-decimal]), Daily_Extract[Mosaicdraft XR Flag] = 1),
+			        CALCULATE(SUM(Daily_Extract[RVU-decimal]), Daily_Extract[XR Flag] = 1),
+			        0
+			    ),
+			    DIVIDE(SUM(Daily_Extract[Mosaicdraft XR Flag]), SUM(Daily_Extract[XR Flag]), 0)
+			)
+		formatString: 0.0%;-0.0%;0.0%
+		lineageTag: a74663f4-98d3-4e20-bb32-af95b6cb592b
+
+	measure '% of RPCE_drafting' = DIVIDE([DynamicMosaicCasesDrafting], [DynamicRPCECases], 0) + 0.02
+		formatString: 0.0%;-0.0%;0.0%
+		lineageTag: 5a3d56e4-5cc2-4e1a-8426-651044465919
+
+	measure firstdraft = ```
+			
+			VAR CurrentNPI = SELECTEDVALUE('Daily_Extract'[NPI])
+			VAR HasADGroupDate = 
+			    CALCULATE(
+			        COUNTROWS(VRARP_radpipeline),
+			        VRARP_radpipeline[NPI] = CurrentNPI,
+			        OR(
+			            NOT(ISBLANK(vrarp_radpipeline[Added to AD Group (CT Head)])),
+			            NOT(ISBLANK(vrarp_radpipeline[Added to AD Group (CXR/ABD/MSK)]))
+			        )
+			    ) > 0
+			
+			RETURN
+			    IF(
+			        HasADGroupDate,
+			        CALCULATE(
+			            MIN('Daily_Extract'[Final_DateTime - Date]),
+			            FILTER(
+			                'Daily_Extract',
+			                'Daily_Extract'[mosaic_draft_flag] = 1
+			            )
+			        ),
+			        BLANK()
+			    )
+			```
+		formatString: Short Date
+		lineageTag: 8e239da1-c7a2-4b07-b2d2-150a448d1602
+
+	measure MosaicdraftCt = ```
+			
+			VAR CurrentNPI = SELECTEDVALUE('Daily_Extract'[Provider_NPI])
+			VAR HasADGroupDate = 
+			    CALCULATE(
+			        COUNTROWS(VRARP_radpipeline),
+			        VRARP_radpipeline[NPI] = CurrentNPI,
+			        OR(
+			            NOT(ISBLANK(vrarp_radpipeline[Added to AD Group (CT Head)])),
+			            NOT(ISBLANK(vrarp_radpipeline[Added to AD Group (CXR/ABD/MSK)]))
+			        )
+			    ) > 0
+			
+			RETURN
+			    IF(
+			        HasADGroupDate,
+			        CALCULATE(
+			            SUM('Daily_Extract'[mosaic_draft_flag])
+			        ),
+			        BLANK()
+			    )
+			```
+		formatString: 0
+		lineageTag: 36f4650f-9ac7-4965-9ce2-1710dc8e6e91
+
+	measure '% Mosaic drafting Last N Days' = ```
+			
+			VAR daysback = [selecteddays]
+			VAR MosaicdraftingExamsInRange =
+			    CALCULATE(
+			        SUM('Daily_Extract'[Exam Ct]),
+			        FILTER( 'Daily_Extract', (isblank(daysback) ||
+			            
+			           ( 'Daily_Extract'[Date] >= today() - (daysback -1) &&
+			            'Daily_Extract'[Date] <= Today() ))
+			            && 'Daily_Extract'[mosaic_draft_flag] =1
+			        )
+			    )
+			VAR TotaldraftingExams =
+			    CALCULATE(
+			        SUM('Daily_Extract'[Exam Ct]), 
+			        filter ('Daily_Extract', isblank(daysback) ||
+			        ('Daily_Extract'[Date] >= today() - (daysback -1) &&
+			            'Daily_Extract'[Date] <= Today() ))
+			      
+			    )
+			RETURN
+			    if ( isblank(daysback), blank(),
+			    divide ( MosaicdraftingExamsInRange,totaldraftingExams ,0))
+			```
+		formatString: 0%;-0%;0%
+		lineageTag: d841a528-4156-4322-84ca-0b45e92ab80f
+
+	measure 'Dynamic Mosaic Title Drafting' =
+			
+			var daysback= selectedvalue('Daysselection'[Days])
+			return
+			"% Drafting Last " & Daysback & " Days"
+		lineageTag: f38f582f-c7c2-4ba4-89cc-31370bd22411
+
+	measure '% Mosaic drafting' = divide ( [MosaicdraftCt] , [Total Exam Ct] ,0)
+		formatString: 0%;-0%;0%
+		lineageTag: b83c0dae-3aa0-4874-8455-62087a1f38c2
+
+	measure Adj_Bestrvureporting = calculate(sum('Daily_Extract'[Adjusted_Best_RVU]), filter ('Daily_Extract', 'Daily_Extract'[Mosaic Exam Flag] =1))
+		lineageTag: 281a04fc-7a1e-4fb9-9c93-93483260ead4
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	measure Adj_Bestrvudrafting = calculate(sum('Daily_Extract'[Adjusted_Best_RVU]), filter ('Daily_Extract', 'Daily_Extract'[mosaic_draft_flag] =1))
+		lineageTag: 1a60127e-c4b9-4d9b-8d43-5a4cafcf9fb8
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	measure Adj_estrvudrafting = calculate(sum('Daily_Extract'[Allocated_RVU]), filter ('Daily_Extract', 'Daily_Extract'[mosaic_draft_flag] =1))
+		lineageTag: 05a4f055-e7b9-4e3b-919d-325325b008f7
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	measure Adj_estrvureporting = calculate(sum('Daily_Extract'[Allocated_RVU]), filter ('Daily_Extract', 'Daily_Extract'[Mosaic Exam Flag] =1))
+		lineageTag: b9863869-8368-42ea-bc30-d8268511ebf7
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	measure Adjwu_reporting = calculate(sum('Daily_Extract'[Allocated_WU]), filter ('Daily_Extract', 'Daily_Extract'[Mosaic Exam Flag] =1))
+		lineageTag: 8b7474ca-127a-4113-85fd-2eee83adbb95
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	measure Adjwu_drafting = calculate(sum('Daily_Extract'[Allocated_WU]), filter ('Daily_Extract', 'Daily_Extract'[mosaic_draft_flag] =1))
+		lineageTag: 426ea5bf-d5b3-4b7c-b8af-86f3a635fe08
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	measure Bestrvu_reporting = calculate(sum('Daily_Extract'[best_rvu]), filter ('Daily_Extract', 'Daily_Extract'[Mosaic Exam Flag] =1))
+		lineageTag: d801552f-c803-4b25-a0dc-a2ae9a7b7bc1
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	measure Bestrvu_drafting = calculate(sum('Daily_Extract'[best_rvu]), filter ('Daily_Extract', 'Daily_Extract'[mosaic_draft_flag] =1))
+		lineageTag: f7f8be86-c46c-43ff-a045-3558db5ee0e1
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	measure TBWU_reporting = calculate(sum('Daily_Extract'[TBWU]), filter ('Daily_Extract', 'Daily_Extract'[Mosaic Exam Flag] =1))
+		lineageTag: b9bd26a9-463c-490a-bd54-ea33b7f787ca
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	measure TBWU_drafting = calculate(sum('Daily_Extract'[TBWU]), filter ('Daily_Extract', 'Daily_Extract'[mosaic_draft_flag] =1))
+		lineageTag: e8a252ca-e87c-4775-9a35-86c02cf5ba82
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	measure wrvuest_reporting = calculate(sum('Daily_Extract'[RVU-decimal]), filter ('Daily_Extract', 'Daily_Extract'[Mosaic Exam Flag] =1))
+		lineageTag: e1ff4f79-ddcf-492f-bb16-26498cdc1b08
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	measure wrvuest_drafting = calculate(sum('Daily_Extract'[RVU-decimal]), filter ('Daily_Extract', 'Daily_Extract'[mosaic_draft_flag] =1))
+		lineageTag: c0141f8c-8486-4d23-b11b-8db3562825bc
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	measure 'Row Count (Dynamic)' = ```
+			
+			var selectedpos = VALUES('Placeofserviceslicer'[Category])
+			RETURN
+			CALCULATE(
+			   COUNTROWS(Daily_Extract), 
+			
+			   FILTER('Daily_Extract', 
+			   COUNTROWS( selectedpos) = 0
+			   ||
+			   SWITCH(
+			    TRUE(), 
+			    'Daily_Extract'[Place Of Service] = "Inpatient Hospital" && "Inpatient" in selectedpos, TRUE(), 
+			    'Daily_Extract'[Place Of Service] = "On Campus-Outpatient Hospital" && "Outpatient" in selectedpos, true(), 
+			    'Daily_Extract'[Place Of Service] = "UNK" && "Outpatient" in selectedpos, TRUE(), 
+			    'Daily_Extract'[Place Of Service] = "Urgent Care Facility" && "Outpatient" in selectedpos, TRUE(), 
+			    'Daily_Extract'[Place Of Service] = "N/A" && "Inpatient" in selectedpos, TRUE(), 
+			    'Daily_Extract'[Place Of Service] = "Emergency Room – Hospital" && "Emergency Room" in selectedpos, TRUE(), 
+			    FALSE()
+			   )
+			   )
+			)
+			```
+		formatString: 0
+		lineageTag: cfcfd013-3705-4e55-970c-961067ebb50f
+
+	measure 'Provider Count' = ```
+			
+			var selectedthreshold = MAX('Mosaic Exam Count Table'[Value])
+			
+			RETURN
+			
+			
+			COUNTROWS(FILTER(
+			    SUMMARIZE(Daily_Extract, Daily_Extract[NPI]), 
+			
+			    CALCULATE([Mosaic Exam Ct]) >= selectedthreshold
+			)
+			)
+			```
+		formatString: 0
+		lineageTag: 875c742a-32fb-4e31-b339-956af3dfa50b
+
+	measure SelectedMonthsText = ```
+			
+			var minmonth = min ('Daily_Extract'[Startofmonth])
+			var maxmonth = max ('Daily_Extract'[Startofmonth])
+			var currentmonth = eomonth( today() , 0) 
+			var totalmonths = countrows ( 'Daily_Extract')
+			var selectedmonthscount = distinctcount ('Daily_Extract'[Startofmonth])
+			var allmonthsselected = selectedmonthscount = totalmonths
+			return
+			if(
+			    allmonthsselected , 
+			    format( minmonth, "MMM-yy") & " - " & format(currentmonth, "MMM-yy"), 
+			    if (
+			        selectedmonthscount >1, 
+			        format( minmonth , "MMM-yy") & " - " & format (maxmonth, "MMM-yy"), 
+			        format( minmonth, "MMM-yy")))
+			```
+		lineageTag: 0107527d-12a3-4786-b82f-940caff70584
+
+	measure Maxrows = CALCULATE(COUNTROWS('Daily_Extract'), ALL('Daily_Extract'))
+		formatString: 0
+		lineageTag: a36d2254-417c-4e72-866d-8143cbf9f87d
+
+	measure '% drafting Exams' = divide ( [MosaicdraftCt] , [Total Exam Ct] ,0)
+		formatString: 0%;-0%;0%
+		lineageTag: e72a7ea0-5fd1-4421-a9dd-fa31f26efbfd
+
+	measure Draftingexamslat14days = calculate( sum('Daily_Extract'[Exam Ct]),filter ('Daily_Extract','Daily_Extract'[Date] >=TODAY() -14 && 'Daily_Extract'[Date] <=today () && 'Daily_Extract'[mosaic_draft_flag] =1 ) )
+		formatString: 0
+		lineageTag: 7d7895cc-81cc-44fe-9d98-bf04c7a7cc93
+
+	measure '%Draftinglast 14days' = divide( [Draftingexamslat14days], [examslast14days], 0)
+		formatString: 0%;-0%;0%
+		lineageTag: e56ea8e8-9a7a-4425-ab75-c33e22b7f07f
+
+	measure EligibleProvidersnum = ```
+			calculate(distinctcount('Daily_Extract'[NPI]), filter (VALUES( 'Daily_Extract'[NPI]), 
+			[first case] <=TODAY() -14
+			&&
+			CALCULATE( MAX('Daily_Extract'[Mosaic Exam Flag])) = 1
+			&& [% Mosaic Exmas last 14 days] >0.8 
+			)
+			)
+			
+			```
+		formatString: 0
+		lineageTag: 5218db85-e288-4cc0-9905-77bfa3b6021a
+
+	measure fullyadoptednew = divide( [EligibleProvidersnum], [EligibleProviders], 0)
+		formatString: 0%;-0%;0%
+		lineageTag: 6a296aeb-03f0-4468-86f8-76a095d105da
+
+	measure totalradslivedep =
+			
+			VAR LiveNPIs =
+			    FILTER(
+			        VALUES('Daily_Extract'[NPI]),
+			        VAR CurrentNPI = 'Daily_Extract'[NPI]
+			        VAR RadPctMosaic =
+			            CALCULATE(
+			                [% Mosaic Exams],
+			                'Daily_Extract'[NPI] = CurrentNPI
+			            )
+			        VAR IsFullyLive = RadPctMosaic > 0.98
+			        VAR IsPartiallyLive = RadPctMosaic <= 0.98 && RadPctMosaic > 0.01
+			        RETURN IsFullyLive || IsPartiallyLive
+			    )
+			RETURN
+			    COUNTROWS(LiveNPIs)
+		formatString: 0
+		lineageTag: 0e0488af-25b0-4f26-83f0-89bc1a73a108
+
+	measure totalfullyadoptedmonthdd = ```
+			
+			
+			CALCULATE(
+			    DISTINCTCOUNT('Daily_Extract'[NPI]),
+			    FILTER(
+			        VALUES('Daily_Extract'[NPI]),
+			var monthstart = MIN('Daily_Extract'[Date])
+			var monthend = MAX('Daily_Extract'[Date])
+			        VAR FirstCase =
+			            CALCULATE(
+			                MIN('Daily_Extract'[Final_DateTime - Date]),
+			                'Daily_Extract'[Mosaic Exam Flag] = 1
+			            )
+			
+			            var examstartdate = 
+			            IF(FirstCase > monthend - 14, FirstCase, monthend - 14)
+			        VAR ProviderExams =
+			            CALCULATE(
+			                COUNTROWS('Daily_Extract'),
+			                'Daily_Extract'[Date] <= monthend &&
+			                'Daily_Extract'[Date] >= examstartdate
+			            )
+			        VAR ProviderMosaicExams =
+			            CALCULATE(
+			                COUNTROWS('Daily_Extract'),
+			                'Daily_Extract'[Mosaic Exam Flag] = 1,
+			                'Daily_Extract'[Date] <= monthend &&
+			                'Daily_Extract'[Date] >= examstartdate
+			            )
+			        VAR PctMosaic = DIVIDE(ProviderMosaicExams, ProviderExams, 0)
+			        
+			        RETURN
+			            FirstCase <= monthend - 2 &&
+			            PctMosaic > 0.8 
+			          
+			    )
+			)
+			```
+		formatString: 0
+		lineageTag: 629b04a7-4113-494b-9742-f0601b90ed99
+
+	measure pctfullyadopredmonthaware =
+			
+			
+			VAR SelectedNPIs = VALUES('Daily_Extract'[NPI])
+			var lastdateincontext = MAX('Daily_Extract'[Date])
+			-- Determine the dynamic start date for last 14 days or beginning of selected month
+			
+			
+			-- Count of fully adopted providers per current slicer context (including month)
+			VAR FullyAdoptedCount =
+			    CALCULATE(
+			        DISTINCTCOUNT('Daily_Extract'[NPI]),
+			        FILTER(
+			            SelectedNPIs,
+			            VAR ThisNPI = 'Daily_Extract'[NPI]
+			            VAR FirstCase =
+			                CALCULATE(
+			                    MIN('Daily_Extract'[Final_DateTime - Date]),
+			                    'Daily_Extract'[Mosaic Exam Flag] = 1,
+			                    ALLEXCEPT('Daily_Extract', 'Daily_Extract'[NPI])
+			                )
+			
+			                var iseligible = NOT(ISBLANK(FirstCase)) && FirstCase <=lastdateincontext - 2
+			                var examstartdate = IF(FirstCase > lastdateincontext - 14, FirstCase, lastdateincontext-13)
+			            VAR ProviderTotalExams =
+			                CALCULATE(
+			                    COUNTROWS('Daily_Extract'),
+			                    'Daily_Extract'[NPI] = ThisNPI,
+			                    'Daily_Extract'[Date] >= examstartdate,
+			                    'Daily_Extract'[Date] <= lastdateincontext
+			                )
+			            VAR ProviderMosaicExams =
+			                CALCULATE(
+			                    COUNTROWS('Daily_Extract'),
+			                    'Daily_Extract'[NPI] = ThisNPI,
+			                    'Daily_Extract'[Date] >= examstartdate,
+			                    'Daily_Extract'[Date] <= lastdateincontext,
+			                    'Daily_Extract'[Mosaic Exam Flag] = 1
+			                )
+			            VAR PctMosaic = DIVIDE(ProviderMosaicExams, ProviderTotalExams, 0)
+			            RETURN
+			                iseligible && PctMosaic > 0.8
+			        )
+			    )
+			
+			-- Count of eligible providers (deployed 14+ days ago or deployed within the month if less than 14 days)
+			VAR DeployedCount =
+			    CALCULATE(
+			        DISTINCTCOUNT('Daily_Extract'[NPI]),
+			        FILTER(
+			            SelectedNPIs,
+			            VAR FirstCase =
+			                CALCULATE(
+			                    MIN('Daily_Extract'[Final_DateTime - Date]),
+			                    'Daily_Extract'[Mosaic Exam Flag] = 1,
+			                    ALLEXCEPT('Daily_Extract', 'Daily_Extract'[NPI])
+			                )
+			            RETURN NOT ISBLANK(FirstCase) && FirstCase <= lastdateincontext - 2
+			        )
+			    )
+			
+			RETURN
+			DIVIDE(FullyAdoptedCount, DeployedCount, 0)
+		formatString: 0%;-0%;0%
+		lineageTag: 2a16129b-c705-4485-a21c-913f6d875e03
+
+	measure TotalRadsLive_ByAdoption_Final2 = ```
+			
+			VAR SelectedStatuses = VALUES( FullyAdoptedSlicer[Status] )
+			VAR ApplySingleStatus = COUNTROWS( SelectedStatuses ) = 1
+			VAR SelStatus = IF( ApplySingleStatus, MAX( FullyAdoptedSlicer[Status] ), BLANK() )
+			
+			RETURN
+			SUMX(
+			    VALUES( 'Daily_Extract'[NPI] ),   -- iterate only providers visible under current slicers
+			    VAR ThisNPI = 'Daily_Extract'[NPI]
+			
+			    -- does this provider have any mosaic activity in the current visual/filter scope?
+			  
+			
+			        /* First (static) go-live date for the provider (always provider-level, not filtered by current slicers) */
+			        VAR FirstCase =
+			            CALCULATE(
+			                MIN( 'Daily_Extract'[Final_DateTime - Date] ),
+			                'Daily_Extract'[Mosaic Exam Flag] = 1,
+			                ALLEXCEPT( 'Daily_Extract', 'Daily_Extract'[NPI] )
+			            )
+			
+			        /* provider activity in the last 14 days *within the current slicer scope* */
+			        VAR ProviderTotalExams_Last14 =
+			            CALCULATE(
+			                COUNTROWS( 'Daily_Extract' ),
+			                'Daily_Extract'[NPI] = ThisNPI,
+			                'Daily_Extract'[Date] > TODAY() - 14,
+			                'Daily_Extract'[Date] <= TODAY()
+			            )
+			        VAR ProviderMosaicExams_Last14 =
+			            CALCULATE(
+			                COUNTROWS( 'Daily_Extract' ),
+			                'Daily_Extract'[NPI] = ThisNPI,
+			                'Daily_Extract'[Date] > TODAY() - 14,
+			                'Daily_Extract'[Date] <= TODAY(),
+			                'Daily_Extract'[Mosaic Exam Flag] = 1
+			            )
+			
+			        VAR PctMosaic = DIVIDE( ProviderMosaicExams_Last14, ProviderTotalExams_Last14, 0 )
+			
+			        /* eligibility & fully-adopted test */
+			        VAR hasgolive = NOT( ISBLANK( FirstCase ) ) 
+			        VAR IsFullyAdopted = hasgolive && FirstCase <=TODAY() - 14 && PctMosaic > 0.8
+			        var isnotfullyadopted = hasgolive || FirstCase <=TODAY() - 14 || FirstCase > TODAY() -14 || PctMosaic <0.8
+			
+			        /* selection logic:
+			            - if the slicer has no single selection (none or both) => include provider (overall)
+			            - if single selection Fully Adopted => count only IsFullyAdopted
+			            - if single selection Not Fully Adopted => count providers that are live but NOT fully adopted
+			        */
+			        RETURN
+			        IF(
+			            NOT ApplySingleStatus,            -- no single selection or both selected => overall
+			            IF( hasgolive ,1,0),
+			            IF(
+			                SelStatus = "Fully Adopted",
+			                IF( IsFullyAdopted, 1, 0 ),
+			                IF(
+			                    SelStatus = "Not Fully Adopted",
+			                    IF( isnotfullyadopted, 1, 0 ),
+			                    0   -- fallback: include
+			                )
+			            )
+			        )
+			    )
+			
+			```
+		formatString: 0
+		lineageTag: 9040372c-7fb6-4342-a8ce-63a73e4ce431
+
+	measure PctFullyAdopteddisclinew = ```
+			
+			VAR SelectedStatus = VALUES ( FullyAdoptedSlicer[Status] )
+			var countsel = COUNTROWS(SelectedStatus)
+			var selstatus = IF(countsel = 1, MAX(FullyAdoptedSlicer[Status]), BLANK())
+			
+			-- core numerator: fully adopted providers
+			VAR FullyAdoptedCount =
+			    CALCULATE (
+			        DISTINCTCOUNT ( 'Daily_Extract'[NPI] ),
+			        -- providers deployed 14+ days ago
+			        FILTER (
+			            VALUES ( 'Daily_Extract'[NPI] ),
+			            VAR FirstCase =
+			                CALCULATE (
+			                    MIN ( 'Daily_Extract'[Final_DateTime - Date] ),
+			                    'Daily_Extract'[Mosaic Exam Flag] = 1,
+			                    ALLEXCEPT ( 'Daily_Extract', 'Daily_Extract'[NPI] )
+			                )
+			
+			                var dayssincefirst = DATEDIFF(FirstCase, TODAY(), DAY)
+			                var startdate = IF(dayssincefirst <14 , FirstCase, TODAY() -14)
+			            VAR ProviderTotalExams =
+			                CALCULATE (
+			                    COUNTROWS ( 'Daily_Extract' ),
+			                    'Daily_Extract'[Date] >=startdate,
+			                    'Daily_Extract'[Date] <= TODAY()
+			                )
+			            VAR ProviderMosaicExams =
+			                CALCULATE (
+			                    COUNTROWS ( 'Daily_Extract' ),
+			                    'Daily_Extract'[Date] >= startdate,
+			                    'Daily_Extract'[Date] <= TODAY(),
+			                    'Daily_Extract'[Mosaic Exam Flag] = 1
+			                )
+			            VAR PctMosaic = DIVIDE ( ProviderMosaicExams, ProviderTotalExams, 0 )
+			            RETURN NOT ISBLANK ( FirstCase ) && dayssincefirst >=2 && PctMosaic > 0.8
+			        )
+			    )
+			
+			-- denominator: deployed providers (14+ days)
+			VAR DeployedCount =
+			    CALCULATE (
+			        DISTINCTCOUNT ( 'Daily_Extract'[NPI] ),
+			        FILTER (
+			            VALUES ( 'Daily_Extract'[NPI] ),
+			            VAR FirstCase =
+			                CALCULATE (
+			                    MIN ( 'Daily_Extract'[Final_DateTime - Date] ),
+			                    'Daily_Extract'[Mosaic Exam Flag] = 1,
+			                    ALLEXCEPT ( 'Daily_Extract', 'Daily_Extract'[NPI] )
+			                )
+			                var dayssincefirst = DATEDIFF(FirstCase, TODAY(), DAY)
+			            RETURN NOT ISBLANK ( FirstCase ) && dayssincefirst >=2
+			        )
+			    )
+			
+			-- base %
+			VAR BasePct = DIVIDE ( FullyAdoptedCount, DeployedCount, 0 )
+			
+			-- slicer interaction
+			RETURN
+			SWITCH(
+			    TRUE(), 
+			    selstatus = "Fully Utilizing", 1,
+			    selstatus = "Not Fully Utilizing", 0, 
+			    TRUE() , BasePct
+			)
+			```
+		formatString: 0%;-0%;0%
+		lineageTag: eb489ef7-e034-4dd9-bbb1-acf601def18c
+
+	measure TotalRadsLiverespectingeverything =
+			
+			
+			
+			VAR SelectedStatuses = VALUES( FullyAdoptedSlicer[Status] )
+			VAR ApplySingleStatus = COUNTROWS( SelectedStatuses ) = 1
+			VAR SelStatus = IF( ApplySingleStatus, MAX( FullyAdoptedSlicer[Status] ), BLANK() )
+			
+			RETURN
+			SUMX(
+			    VALUES( 'Daily_Extract'[NPI] ),   -- iterate only providers visible under current slicers
+			    VAR ThisNPI = 'Daily_Extract'[NPI]
+			
+			    -- does this provider have any mosaic activity in the current visual/filter scope?
+			    VAR HasMosaicInScope =
+			        CALCULATE(
+			            MAX( 'Daily_Extract'[Mosaic Exam Flag] ),
+			            'Daily_Extract'[NPI] = ThisNPI
+			        )
+			
+			    -- if provider has no mosaic rows in the current scope, skip
+			    RETURN
+			    IF( HasMosaicInScope <> 1, 0,
+			
+			        /* First (static) go-live date for the provider (always provider-level, not filtered by current slicers) */
+			        VAR FirstCase =
+			            CALCULATE(
+			                MIN( 'Daily_Extract'[Final_DateTime - Date] ),
+			                'Daily_Extract'[Mosaic Exam Flag] = 1,
+			                ALLEXCEPT( 'Daily_Extract', 'Daily_Extract'[NPI] )
+			            )
+			
+			           var dayssincefirstcase = DATEDIFF(FirstCase, TODAY(), DAY)
+			           var lookbackdays = MIN(14, dayssincefirstcase)
+			
+			        /* provider activity in the last 14 days *within the current slicer scope* */
+			        VAR ProviderTotalExams_Last14 =
+			            CALCULATE(
+			                COUNTROWS( 'Daily_Extract' ),
+			                'Daily_Extract'[NPI] = ThisNPI,
+			                'Daily_Extract'[Date] > TODAY() - lookbackdays,
+			                'Daily_Extract'[Date] <= TODAY()
+			            )
+			        VAR ProviderMosaicExams_Last14 =
+			            CALCULATE(
+			                COUNTROWS( 'Daily_Extract' ),
+			                'Daily_Extract'[NPI] = ThisNPI,
+			                'Daily_Extract'[Date] > TODAY() - lookbackdays,
+			                'Daily_Extract'[Date] <= TODAY(),
+			                'Daily_Extract'[Mosaic Exam Flag] = 1
+			            )
+			
+			        VAR PctMosaic = DIVIDE( ProviderMosaicExams_Last14, ProviderTotalExams_Last14, 0 )
+			
+			        /* eligibility & fully-adopted test */
+			        VAR IsEligible = NOT( ISBLANK( FirstCase ) ) && FirstCase <= TODAY() - 2
+			        VAR IsFullyAdopted = IsEligible && PctMosaic > 0.8
+			
+			        /* selection logic:
+			            - if the slicer has no single selection (none or both) => include provider (overall)
+			            - if single selection Fully Adopted => count only IsFullyAdopted
+			            - if single selection Not Fully Adopted => count providers that are live but NOT fully adopted
+			        */
+			        RETURN
+			        IF(
+			            NOT ApplySingleStatus,            -- no single selection or both selected => overall
+			            1,
+			            IF(
+			                SelStatus = "Fully Utilizing",
+			                IF( IsFullyAdopted, 1, 0 ),
+			                IF(
+			                    SelStatus = "Not Fully Utilizing",
+			                    IF( NOT IsFullyAdopted, 1, 0 ),
+			                    1   -- fallback: include
+			                )
+			            )
+			        )
+			    )
+			)
+		formatString: 0
+		lineageTag: 87499399-dd56-4248-af7b-42ac404ba7e6
+
+	measure %reportingadj = ```
+			
+			
+			var firstcasedate = 
+			CALCULATE(MIN('Daily_Extract'[Final_DateTime - Date]), 
+			'Daily_Extract'[Mosaic Exam Flag] = 1, 
+			ALLEXCEPT('Daily_Extract', 'Daily_Extract'[NPI])
+			)
+			
+			var dayssincefirstcase = DATEDIFF(firstcasedate, TODAY() , DAY)
+			
+			var windowstart = 
+			IF(dayssincefirstcase <14, firstcasedate, TODAY() - 14)
+			
+			var totalexxamswindow = 
+			CALCULATE(COUNTROWS('Daily_Extract'), 'Daily_Extract'[Date] >=windowstart, 
+			'Daily_Extract'[Date] <=TODAY()
+			)
+			
+			
+			var mosaicexamswindow = 
+			CALCULATE(COUNTROWS('Daily_Extract'), 'Daily_Extract'[Date] >=windowstart, 'Daily_Extract'[Date] <=TODAY() , 'Daily_Extract'[Mosaic Exam Flag] = 1
+			)
+			
+			RETURN
+			DIVIDE(mosaicexamswindow, totalexxamswindow, 0)
+			```
+		formatString: 0%;-0%;0%
+		lineageTag: 42d7c7ee-827d-4ade-bece-ac87bc1c5930
+
+	measure Total_headct = ```
+			
+			CALCULATE(COUNTROWS('Daily_Extract'), 
+			'Daily_Extract'[Clinical_Procedure_Code] = "RPID22"
+			)
+			```
+		formatString: 0
+		lineageTag: 4b38396a-0d36-469d-8158-0f832c3f585c
+
+	measure headct_reporting = ```
+			CALCULATE(COUNTROWS('Daily_Extract'), 
+			'Daily_Extract'[Clinical_Procedure_Code] = "RPID22", 
+			'Daily_Extract'[Mosaic Exam Flag] = 1 
+			)
+			```
+		formatString: 0
+		lineageTag: 8251844c-681b-482a-8bef-54886a8a2392
+
+	measure hEADCT_Drafting = ```
+			CALCULATE(COUNTROWS('Daily_Extract'), 
+			'Daily_Extract'[Clinical_Procedure_Code] = "RPID22", 
+			'Daily_Extract'[mosaic_draft_flag] = 1 
+			)
+			```
+		formatString: 0
+		lineageTag: 4239b39e-166a-4b49-a874-143d94d54161
+
+	measure Pct_HeadCT_reporting =
+			
+			DIVIDE([headct_reporting] , [Total_headct], 0)
+		formatString: 0.0%;-0.0%;0.0%
+		lineageTag: ac9aeca0-36f2-43a9-b2a7-1607bffd5814
+
+	measure Pct_Headct_drafting =
+			
+			DIVIDE([hEADCT_Drafting] , [Total_headct],0)
+		formatString: 0.0%;-0.0%;0.0%
+		lineageTag: 5a0a1d1b-5486-403a-a905-9358098f6d0e
+
+	measure rpce_Ct_head_co =
+			CALCULATE( COUNTROWS('Daily_Extract'), 'Daily_Extract'[RPCE_CT_HEAD_FLAG] = 1
+			)
+		formatString: 0
+		lineageTag: 4e9cf926-5bfb-4e76-aae0-7ae3b5ef0efb
+
+	measure Pct_ct_head_rpce = DIVIDE([rpce_Ct_head_co] , [Total_headct] , 0)
+		formatString: 0.0%;-0.0%;0.0%
+		lineageTag: 47f52a40-efbe-4ee5-a9a8-74a3c4c7401a
+
+	measure 'Avg RVUs per Month (Last 12 Months)' = ```
+			
+			    VAR E = TODAY()
+			    VAR S = EDATE(E, -12)
+			    VAR TotalRVUs_Last12Months =
+			        CALCULATE(
+			            SUM('Daily_Extract'[RVU-decimal]),
+			            'Daily_Extract'[Date] > S,
+			            'Daily_Extract'[Date] <= E,
+			            ALLEXCEPT('Daily_Extract', 'Daily_Extract'[NPI])
+			        )
+			    RETURN
+			        DIVIDE(TotalRVUs_Last12Months, 12, 0)
+			```
+		lineageTag: da418b00-ced0-496a-8e43-a4866e6b9046
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	measure 'Avg TBWU per Month (Last 12 Months)' = ```
+			
+			    VAR E = TODAY()
+			    VAR S = EDATE(E, -12)
+			    VAR TotalRVUs_Last12Months =
+			        CALCULATE(
+			            SUM('Daily_Extract'[TBWU]),
+			            'Daily_Extract'[Date] > S,
+			            'Daily_Extract'[Date] <= E,
+			            ALLEXCEPT('Daily_Extract', 'Daily_Extract'[NPI])
+			        )
+			    RETURN
+			        DIVIDE(TotalRVUs_Last12Months, 12, 0)
+			```
+		lineageTag: 2c29209f-dad3-49f0-9a34-11a47c7e39d3
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	measure 'Avg TBWU per Month (Last 3 Months)' = ```
+			
+			    VAR E = TODAY()
+			    VAR S = EDATE(E, -3)
+			    VAR TotalRVUs_Last12Months =
+			        CALCULATE(
+			            SUM('Daily_Extract'[TBWU]),
+			            'Daily_Extract'[Date] > S,
+			            'Daily_Extract'[Date] <= E,
+			            ALLEXCEPT('Daily_Extract', 'Daily_Extract'[NPI])
+			        )
+			    RETURN
+			        DIVIDE(TotalRVUs_Last12Months, 3, 0)
+			```
+		lineageTag: 64c59225-30c3-4ebf-b165-0bd57865ea36
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	measure 'Avg RVUs per Month (Last 3 Months)' = ```
+			
+			    VAR E = TODAY()
+			    VAR S = EDATE(E, -3)
+			    VAR TotalRVUs_Last12Months =
+			        CALCULATE(
+			            SUM('Daily_Extract'[RVU-decimal]),
+			            'Daily_Extract'[Date] > S,
+			            'Daily_Extract'[Date] <= E,
+			            ALLEXCEPT('Daily_Extract', 'Daily_Extract'[NPI])
+			        )
+			    RETURN
+			        DIVIDE(TotalRVUs_Last12Months, 3, 0)
+			```
+		lineageTag: 80852ef7-4128-4115-8649-6518e76f0fb0
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	measure 'Total RVUs (Last 12 Months)' =
+			
+			VAR EndDate = TODAY()
+			VAR StartDate = EDATE(EndDate, -12)
+			VAR TotalRVUs_Last12Months =
+			    CALCULATE(
+			        SUM('Daily_Extract'[RVU-decimal]),
+			        'Daily_Extract'[Date] > StartDate,
+			        'Daily_Extract'[Date] <= EndDate,
+			         ALLEXCEPT('Daily_Extract', 'Daily_Extract'[NPI])
+			    )
+			RETURN
+			    TotalRVUs_Last12Months
+		lineageTag: e31707e2-bc86-43bf-919b-86be7798df56
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	measure 'Total TBWU (Last 12 Months)' =
+			
+			VAR EndDate = TODAY()
+			VAR StartDate = EDATE(EndDate, -12)
+			VAR TotalRVUs_Last12Months =
+			    CALCULATE(
+			        SUM('Daily_Extract'[TBWU]),
+			        'Daily_Extract'[Date] > StartDate,
+			        'Daily_Extract'[Date] <= EndDate,
+			         ALLEXCEPT('Daily_Extract', 'Daily_Extract'[NPI])
+			    )
+			RETURN
+			    TotalRVUs_Last12Months
+		lineageTag: 028b997f-1a8b-4f45-b2bb-594a4fec0e2f
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	measure 'Total TBWU (Last 3 Months)' =
+			
+			VAR EndDate = TODAY()
+			VAR StartDate = EDATE(EndDate, -3)
+			VAR TotalRVUs_Last12Months =
+			    CALCULATE(
+			        SUM('Daily_Extract'[TBWU]),
+			        'Daily_Extract'[Date] > StartDate,
+			        'Daily_Extract'[Date] <= EndDate,
+			         ALLEXCEPT('Daily_Extract', 'Daily_Extract'[NPI])
+			    )
+			RETURN
+			    TotalRVUs_Last12Months
+		lineageTag: b683455b-ab18-4362-8b96-e5b44fa83386
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	measure 'Total RVUs (Last 3 Months)' =
+			
+			VAR EndDate = TODAY()
+			VAR StartDate = EDATE(EndDate, -3)
+			VAR TotalRVUs_Last12Months =
+			    CALCULATE(
+			        SUM('Daily_Extract'[RVU-decimal]),
+			        'Daily_Extract'[Date] > StartDate,
+			        'Daily_Extract'[Date] <= EndDate,
+			         ALLEXCEPT('Daily_Extract', 'Daily_Extract'[NPI])
+			    )
+			RETURN
+			    TotalRVUs_Last12Months
+		lineageTag: ada96b39-dd17-468f-bb0d-1c436f4f5e96
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	measure EligibleExams = ```
+			
+			CALCULATE(COUNTROWS('Daily_Extract'), 
+			'Daily_Extract'[drafteligibleproc] <> BLANK() , 
+			NOT(ISBLANK('vrarp_radpipeline'[Added to AD Group (CXR/ABD/MSK)])))
+			```
+		formatString: 0
+		lineageTag: a4921a65-7858-4bff-aed7-028b75f06d8c
+
+	measure Mosaicexamselg = ```
+			CALCULATE(COUNTROWS('Daily_Extract'), 
+			'Daily_Extract'[drafteligibleproc] <> BLANK(), 
+			'Daily_Extract'[Mosaic Exam Flag] = 1 , 
+			NOT(ISBLANK('vrarp_radpipeline'[Added to AD Group (CXR/ABD/MSK)])))
+			```
+		formatString: 0
+		lineageTag: b4ccc5dd-40bb-42ce-b7bb-dbfc279da625
+
+	measure mosaicdraftexamselg = ```
+			CALCULATE(COUNTROWS('Daily_Extract'), 
+			'Daily_Extract'[drafteligibleproc] <> BLANK(), 
+			'Daily_Extract'[Mosaic Exam Flag] =1 , 
+			'Daily_Extract'[mosaic_draft_flag] = 1, 
+			NOT(ISBLANK('vrarp_radpipeline'[Added to AD Group (CXR/ABD/MSK)])))
+			```
+		formatString: 0
+		lineageTag: 0eca9c89-e0f3-420f-9a9a-05e5fa40f2dd
+
+	measure '%Drafted of eligible exams' =
+			
+			
+			DIVIDE( [mosaicdraftexamselg] , [EligibleExams] ,0)
+		formatString: 0%;-0%;0%
+		lineageTag: 0d71b925-8a31-42db-9bc9-0167a84b8551
+
+	measure '%Drafted of Mosaic Exams' =
+			
+			DIVIDE( [mosaicdraftexamselg] , [Mosaicexamselg] ,0)
+		formatString: 0%;-0%;0%
+		lineageTag: e9618eb3-40b9-4c80-8360-46cf8d42c737
+
+	measure 'VRA Prepped Exams' = ```
+			
+			VAR CurrentContext = 
+			    CALCULATE(
+			        DISTINCTCOUNT('Daily_Extract'[Exam_ID]), 
+			        'Daily_Extract'[assisted_flag] = 1,
+			        (
+			            NOT(ISBLANK('Daily_Extract'[VRAname])) ||
+			            NOT(ISBLANK('Daily_Extract'[Commnotetimestamp]))
+			        )
+			    )
+			RETURN
+			    IF(ISBLANK(CurrentContext), 0, CurrentContext)
+			```
+		formatString: 0
+		lineageTag: 4acf0f2e-342b-49bc-90b1-ea88b4d0c9af
+
+	measure '% VRA Prepped of Total Exams' =
+			
+			VAR VRACount = [VRA Prepped Exams]
+			VAR TotalCount = [Total Exam Ct]
+			RETURN
+			    IF(TotalCount = 0, 0, DIVIDE(VRACount, TotalCount, 0))
+		formatString: 0%;-0%;0%
+		lineageTag: a89753af-1536-4d80-93a8-8a702e143391
+
+	measure '% VRA Prepped Mosaic Exams' =
+			
+			VAR VRAMosaicCount = [VRA Prepped Mosaic Exams]
+			VAR MosaicCount = [Mosaic Exam Ct]
+			RETURN
+			    IF(MosaicCount = 0, 0, DIVIDE(VRAMosaicCount, MosaicCount, 0))
+		formatString: 0%;-0%;0%
+		lineageTag: 784ea484-17e4-49df-bb44-809afd010321
+
+	measure 'VRA Prepped Mosaic Exams' = ```
+			
+			VAR CurrentContext = 
+			    CALCULATE(
+			        DISTINCTCOUNT('Daily_Extract'[Exam_ID]), 
+			        'Daily_Extract'[assisted_flag] = 1,
+			        'Daily_Extract'[Mosaic Exam Flag] = 1,
+			        (
+			            NOT(ISBLANK('Daily_Extract'[VRAname])) ||
+			            NOT(ISBLANK('Daily_Extract'[Commnotetimestamp]))
+			        )
+			    )
+			RETURN
+			    IF(ISBLANK(CurrentContext), 0, CurrentContext)
+			```
+		formatString: 0
+		lineageTag: a4559a34-ed17-457e-b226-d1484b2767fd
+
+	measure 'MosaicdraftCt XR' =
+			
+			CALCULATE(
+			    COUNTROWS('Daily_Extract'),
+			    'Daily_Extract'[Modality] = "CR",
+			    NOT(ISBLANK('Daily_Extract'[drafteligibleproc]))
+			)
+		formatString: 0
+		lineageTag: 9c161cf7-7f99-412a-9ef0-6d3b9a8f45cd
+
+	measure 'Total Drafted XR' =
+			
+			CALCULATE(
+			    SUM('Daily_Extract'[mosaic_draft_flag]),
+			    'Daily_Extract'[Modality] = "CR"
+			)
+		formatString: 0
+		lineageTag: 9b1f0b87-a0ad-4aec-97b5-d8bcafdef423
+
+	measure 'MosaicdraftCt CT' =
+			
+			CALCULATE(
+			    COUNTROWS('Daily_Extract'),
+			    'Daily_Extract'[Modality] = "CT",
+			    'Daily_Extract'[Drafteligiblecode] = "RPID22"
+			)
+		formatString: 0
+		lineageTag: 4b08f11b-39b0-4788-91d3-dd6b2ce6f2f6
+
+	measure 'Total Drafted CT' = ```
+			
+			CALCULATE(
+			    SUM('Daily_Extract'[mosaic_draft_flag]),
+			    'Daily_Extract'[Modality] = "CT",
+			    'Daily_Extract'[Drafteligiblecode] = "RPID22"  
+			)
+			```
+		formatString: 0
+		lineageTag: 93819590-2722-4a6b-a2a3-71a6e90c9217
+
+	measure %reportingelig = ```
+			
+			
+			 CALCULATE(
+			            [%reportingadj],
+			            NOT(daily_extract[Modality] IN {"BD", "MG"}),
+			            NOT(daily_extract[Site] IN { "Tampa General Hospital North Brooksville", "Tampa General Hospital North Spring Hill","TGHI Bayonet Point", "TGHI Bloomingale", "TGHI Bruce B Downs" , "TGHI Carrollwood" , "TGHI Habana" , "TGHI New Port Richey" , "TGHI New Tampa" , "TGHI North Dale Mabry" ,"TGHI Northcliff", "TGHI Oldsmar" , "TGHI Palm Beach Gardens","TGHI Parsons" , "TGHI Riverview" , "TGHI South Tampa" , "TGHI Sun City", "TGHI Sunlake" , "TGHI Trinity" , "TGHI Wesley Chapel"}),
+			            NOT(daily_extract[Clinical_Procedure_Description] IN {"CT LUNG SCREENING", "CT LUNG SCREENING FOLLOW UP WITH IV CONTRAST", "CT LUNG SCREENING FOLLOW UP WITHOUT IV CONTRAST", "CT LUNG SCREENING WITHOUT CONTRAST", "CT Lung WO Screening (LDCT) Initial | 71271", "CT LUNG WO Screening (LDCT) Initial, CT Lung WO Screening (LDCT) Initial"})
+			        )
+			```
+		formatString: 0%;-0%;0%
+		lineageTag: 831edc23-7dc8-45a0-85f7-9ce73978a232
+
+	measure '%XR Drafable' =
+			
+			
+			divide([Total Drafted XR],[MosaicdraftCt XR],0)
+		formatString: 0%;-0%;0%
+		lineageTag: fc23b484-5f03-4238-acb1-9c41bd8bb413
+
+	measure '% CT Draftable' =
+			
+			
+			DIVIDE( [Total Drafted CT],[MosaicdraftCt CT], 0)
+		formatString: 0%;-0%;0%
+		lineageTag: 106db853-adb3-4dd6-bf8c-0c9c3c9e7000
+
+	measure 'Provider Count RSS' = ```
+			
+			VAR SelectedWeeks = VALUES('Daily_Extract'[Week of First Mosaic Case])
+			VAR IsBlankSelected = 
+			    COUNTROWS(
+			        FILTER(SelectedWeeks, ISBLANK('Daily_Extract'[Week of First Mosaic Case]))
+			    ) > 0
+			VAR HasSpecificWeeks = 
+			    COUNTROWS(
+			        FILTER(SelectedWeeks, NOT(ISBLANK('Daily_Extract'[Week of First Mosaic Case])))
+			    ) > 0
+			VAR IsWeekFiltered = ISFILTERED('Daily_Extract'[Week of First Mosaic Case])
+			
+			-- Drafting Group Logic
+			VAR SelectedGroups = VALUES('Drafting Groups'[Drafting Group])
+			VAR IsDraftingFiltered = ISFILTERED('Drafting Groups'[Drafting Group])
+			VAR AllGroupsSelected = COUNTROWS(SelectedGroups) = 6  -- ✅ Updated to 6
+			VAR ShowXR =           COUNTROWS(FILTER(SelectedGroups, [Drafting Group] = "Rads on XR Drafting")) > 0
+			VAR ShowCTHead =       COUNTROWS(FILTER(SelectedGroups, [Drafting Group] = "Rads on CT Head Drafting")) > 0
+			VAR ShowCTAbd =        COUNTROWS(FILTER(SelectedGroups, [Drafting Group] = "Rads on CT Abd/Pel Drafting")) > 0
+			VAR ShowCTChest =      COUNTROWS(FILTER(SelectedGroups, [Drafting Group] = "Rads on CT Chest Drafting")) > 0
+			VAR ShowNotOnDraft =   COUNTROWS(FILTER(SelectedGroups, [Drafting Group] = "Rads Not on Drafting")) > 0
+			VAR ShowPrevious =     COUNTROWS(FILTER(SelectedGroups, [Drafting Group] = "Previously on Drafting")) > 0
+			
+			-- Threshold Logic
+			VAR SelectedThreshold = 
+			    COALESCE(
+			        CALCULATE(MAX('ThresholdSlicer'[Threshold]), ALLSELECTED('ThresholdSlicer')),
+			        0
+			    )
+			VAR IsThresholdFiltered = SelectedThreshold > 0
+			
+			-- Utilizing >90% Logic
+			VAR SelectedUtilizing = SELECTEDVALUE('Utilizing 90 Filter'[Utilizing >90%])
+			VAR IsUtilizingFiltered = NOT(ISBLANK(SelectedUtilizing))
+			
+			-- DraftingEligibleNPIs with updated logic
+			VAR DraftingEligibleNPIs =
+			    FILTER(
+			        VALUES('Daily_Extract'[NPI]),
+			        VAR CurrentNPI = 'Daily_Extract'[NPI]
+			        VAR IsXR = 
+			            CALCULATE(MAX('Daily_Extract'[Is On XR Drafting]), 'Daily_Extract'[NPI] = CurrentNPI) = 1
+			        VAR IsCTHead = 
+			            CALCULATE(MAX('Daily_Extract'[Is On CT Head Drafting]), 'Daily_Extract'[NPI] = CurrentNPI) = 1
+			        VAR IsCTAbd = 
+			            CALCULATE(MAX('Daily_Extract'[Is On CT Abd/Pel Drafting]), 'Daily_Extract'[NPI] = CurrentNPI) = 1
+			        VAR IsCTChest = 
+			            CALCULATE(MAX('Daily_Extract'[Is On CT Chest Drafting]), 'Daily_Extract'[NPI] = CurrentNPI) = 1
+			
+			        -- Not in any current group
+			        VAR NotInAnyGroup = 
+			            NOT(IsXR) && NOT(IsCTHead) && NOT(IsCTAbd) && NOT(IsCTChest)
+			
+			        -- Has any drafted cases historically
+			        VAR HasDraftedCases = 
+			            CALCULATE(
+			                SUM('Daily_Extract'[mosaic_draft_flag]),
+			                'Daily_Extract'[NPI] = CurrentNPI
+			            ) > 0
+			
+			        -- Previously on drafting: not in any group now BUT has drafted cases
+			        VAR IsPrevious = NotInAnyGroup && HasDraftedCases
+			
+			        -- Truly not on drafting: not in any group AND no drafted cases ever
+			        VAR IsNone = NotInAnyGroup && NOT(HasDraftedCases)
+			
+			        RETURN
+			            (ShowXR && IsXR) ||
+			            (ShowCTHead && IsCTHead) ||
+			            (ShowCTAbd && IsCTAbd) ||
+			            (ShowCTChest && IsCTChest) ||
+			            (ShowPrevious && IsPrevious) ||
+			            (ShowNotOnDraft && IsNone)
+			    )
+			
+			-- Base NPI list applying Threshold + Utilizing filters
+			VAR FilteredNPIs =
+			    FILTER(
+			        VALUES('Daily_Extract'[NPI]),
+			        VAR CurrentNPI = 'Daily_Extract'[NPI]
+			        VAR RadTotalExams = 
+			            CALCULATE(
+			                SUM('Daily_Extract'[Exam Ct]),
+			                'Daily_Extract'[NPI] = CurrentNPI
+			            )
+			        VAR RadPctMosaic = 
+			            CALCULATE(
+			                [% Mosaic Exams],
+			                'Daily_Extract'[NPI] = CurrentNPI
+			            )
+			        VAR PassesThreshold = RadTotalExams >= SelectedThreshold
+			        VAR PassesUtilizing = 
+			            IF(
+			                ISBLANK(SelectedUtilizing), TRUE(),
+			                IF(
+			                    SelectedUtilizing = "Yes - Above 90%",
+			                    RadPctMosaic >= 0.9,
+			                    RadPctMosaic < 0.9
+			                )
+			            )
+			        RETURN PassesThreshold && PassesUtilizing
+			    )
+			
+			-- Combined NPI list: Drafting + Threshold + Utilizing
+			VAR DraftingAndFilteredNPIs =
+			    FILTER(
+			        DraftingEligibleNPIs,
+			        VAR CurrentNPI = 'Daily_Extract'[NPI]
+			        VAR RadTotalExams = 
+			            CALCULATE(
+			                SUM('Daily_Extract'[Exam Ct]),
+			                'Daily_Extract'[NPI] = CurrentNPI
+			            )
+			        VAR RadPctMosaic = 
+			            CALCULATE(
+			                [% Mosaic Exams],
+			                'Daily_Extract'[NPI] = CurrentNPI
+			            )
+			        VAR PassesThreshold = RadTotalExams >= SelectedThreshold
+			        VAR PassesUtilizing = 
+			            IF(
+			                ISBLANK(SelectedUtilizing), TRUE(),
+			                IF(
+			                    SelectedUtilizing = "Yes - Above 90%",
+			                    RadPctMosaic >= 0.9,
+			                    RadPctMosaic < 0.9
+			                )
+			            )
+			        RETURN PassesThreshold && PassesUtilizing
+			    )
+			
+			RETURN
+			    SWITCH(
+			        TRUE(),
+			        // No filters applied - show ALL radiologists
+			        NOT(IsWeekFiltered) && NOT(IsDraftingFiltered) && NOT(IsThresholdFiltered) && NOT(IsUtilizingFiltered),
+			            CALCULATE(
+			                DISTINCTCOUNT('Daily_Extract'[NPI]),
+			                ALLSELECTED('Daily_Extract')
+			            ),
+			
+			        // Only Threshold and/or Utilizing filters
+			        NOT(IsWeekFiltered) && NOT(IsDraftingFiltered),
+			            COUNTROWS(FilteredNPIs),
+			
+			        // Only Drafting filter (with Threshold + Utilizing)
+			        IsDraftingFiltered && NOT(IsWeekFiltered),
+			            IF(
+			                AllGroupsSelected,
+			                COUNTROWS(FilteredNPIs),
+			                COUNTROWS(DraftingAndFilteredNPIs)
+			            ),
+			
+			        // Only Week filter (with Threshold + Utilizing)
+			        IsWeekFiltered && NOT(IsDraftingFiltered),
+			            SWITCH(
+			                TRUE(),
+			                IsBlankSelected && NOT(HasSpecificWeeks),
+			                    COUNTROWS(
+			                        FILTER(
+			                            FilteredNPIs,
+			                            VAR CurrentNPI = 'Daily_Extract'[NPI]
+			                            RETURN
+			                                CALCULATE(
+			                                    ISBLANK(MAX('Daily_Extract'[Week of First Mosaic Case])),
+			                                    'Daily_Extract'[NPI] = CurrentNPI
+			                                )
+			                        )
+			                    ),
+			                COUNTROWS(FilteredNPIs)
+			            ),
+			
+			        // Week + Drafting (with Threshold + Utilizing)
+			        IsWeekFiltered && IsDraftingFiltered,
+			            SWITCH(
+			                TRUE(),
+			                IsBlankSelected && NOT(HasSpecificWeeks),
+			                    COUNTROWS(
+			                        FILTER(
+			                            DraftingAndFilteredNPIs,
+			                            VAR CurrentNPI = 'Daily_Extract'[NPI]
+			                            RETURN
+			                                CALCULATE(
+			                                    ISBLANK(MAX('Daily_Extract'[Week of First Mosaic Case])),
+			                                    'Daily_Extract'[NPI] = CurrentNPI
+			                                )
+			                        )
+			                    ),
+			                COUNTROWS(DraftingAndFilteredNPIs)
+			            ),
+			
+			        // Default fallback
+			        CALCULATE(
+			            DISTINCTCOUNT('Daily_Extract'[NPI]),
+			            ALLSELECTED('Daily_Extract')
+			        )
+			    )
+			```
+		formatString: 0
+		lineageTag: d207f759-c194-41d5-8148-abe8bbc0e6f4
+
+	measure 'Practice Count' = ```
+			
+			VAR SelectedWeeks = VALUES('Daily_Extract'[Week of First Mosaic Case])
+			VAR IsBlankSelected = 
+			    COUNTROWS(
+			        FILTER(SelectedWeeks, ISBLANK('Daily_Extract'[Week of First Mosaic Case]))
+			    ) > 0
+			VAR HasSpecificWeeks = 
+			    COUNTROWS(
+			        FILTER(SelectedWeeks, NOT(ISBLANK('Daily_Extract'[Week of First Mosaic Case])))
+			    ) > 0
+			VAR sel = ISFILTERED('Daily_Extract'[Week of First Mosaic Case])
+			
+			RETURN
+			    SWITCH(
+			        TRUE(),
+			        NOT(sel),
+			            // No filter applied - show ALL practices (Mosaic + Non-Mosaic)
+			            CALCULATE(
+			                DISTINCTCOUNT('Daily_Extract'[Local Practice]),
+			                ALLSELECTED('Daily_Extract')
+			            ),
+			        IsBlankSelected && NOT(HasSpecificWeeks),
+			            // Only blank selected - show practices with rads NOT on Mosaic
+			            CALCULATE(
+			                DISTINCTCOUNT('Daily_Extract'[Local Practice]),
+			                ISBLANK('Daily_Extract'[Week of First Mosaic Case]),
+			                ALLSELECTED('Daily_Extract')
+			            ),
+			        HasSpecificWeeks && NOT(IsBlankSelected),
+			            // Only specific weeks selected - show practices with rads on Mosaic in those weeks
+			            CALCULATE(
+			                DISTINCTCOUNT('Daily_Extract'[Local Practice]),
+			                Daily_Extract[Mosaic Exam Flag] = 1,
+			                NOT(ISBLANK('Daily_Extract'[Week of First Mosaic Case])),
+			                ALLSELECTED('Daily_Extract')
+			            ),
+			        // Both blank and specific weeks selected
+			        CALCULATE(
+			            DISTINCTCOUNT('Daily_Extract'[Local Practice]),
+			            ALLSELECTED('Daily_Extract')
+			        )
+			    )
+			```
+		formatString: 0
+		lineageTag: 6120cd03-6841-4e28-ab9f-b884475c0efc
+
+	measure 'Total Mosaic Cases (All Time)' = ```
+			
+			VAR CurrentNPI = SELECTEDVALUE('Daily_Extract'[NPI])
+			VAR AllTimeMosaicCount = 
+			    CALCULATETABLE(
+			        'Daily_Extract',
+			        ALL('Daily_Extract'),
+			        'Daily_Extract'[NPI] = CurrentNPI,
+			        'Daily_Extract'[Mosaic Exam Flag] = 1
+			    )
+			RETURN
+			    COUNTROWS(AllTimeMosaicCount)
+			```
+		formatString: 0
+		lineageTag: 346be2ca-5336-4bf8-a790-3419845e6c1f
+
+	measure %reportingadjagnostic = ```
+			
+			VAR CurrentNPI = SELECTEDVALUE('Daily_Extract'[NPI])
+			
+			VAR firstcasedate = 
+			    CALCULATE(
+			        MIN('Daily_Extract'[Final_DateTime - Date]), 
+			        ALL('Daily_Extract'),
+			        'Daily_Extract'[NPI] = CurrentNPI,
+			        'Daily_Extract'[Mosaic Exam Flag] = 1
+			    )
+			
+			VAR dayssincefirstcase = DATEDIFF(firstcasedate, TODAY(), DAY)
+			
+			VAR windowstart = 
+			    IF(dayssincefirstcase < 14, firstcasedate, TODAY() - 14)
+			
+			VAR totalexxamswindow = 
+			    CALCULATE(
+			        COUNTROWS('Daily_Extract'), 
+			        ALL('Daily_Extract'),
+			        'Daily_Extract'[NPI] = CurrentNPI,
+			        'Daily_Extract'[Final_DateTime - Date] >= windowstart, 
+			        'Daily_Extract'[Final_DateTime - Date] <= TODAY()
+			    )
+			
+			VAR mosaicexamswindow = 
+			    CALCULATE(
+			        COUNTROWS('Daily_Extract'), 
+			        ALL('Daily_Extract'),
+			        'Daily_Extract'[NPI] = CurrentNPI,
+			        'Daily_Extract'[Final_DateTime - Date] >= windowstart, 
+			        'Daily_Extract'[Final_DateTime - Date] <= TODAY(), 
+			        'Daily_Extract'[Mosaic Exam Flag] = 1
+			    )
+			
+			RETURN
+			    DIVIDE(mosaicexamswindow, totalexxamswindow, 0)
+			```
+		formatString: 0%;-0%;0%
+		lineageTag: a52751e8-fc9d-42a9-b08d-09d81d2f01e7
+
+	measure %reportingeligagnostic = ```
+			
+			VAR CurrentNPI = SELECTEDVALUE('Daily_Extract'[NPI])
+			
+			VAR firstcasedate = 
+			    CALCULATE(
+			        MIN('Daily_Extract'[Final_DateTime - Date]), 
+			        ALL('Daily_Extract'),
+			        'Daily_Extract'[NPI] = CurrentNPI,
+			        'Daily_Extract'[Mosaic Exam Flag] = 1
+			    )
+			
+			VAR dayssincefirstcase = DATEDIFF(firstcasedate, TODAY(), DAY)
+			
+			VAR windowstart = 
+			    IF(dayssincefirstcase < 14, firstcasedate, TODAY() - 14)
+			
+			VAR totalexxamswindow = 
+			    CALCULATE(
+			        COUNTROWS('Daily_Extract'), 
+			        ALL('Daily_Extract'),
+			        'Daily_Extract'[NPI] = CurrentNPI,
+			        'Daily_Extract'[Final_DateTime - Date] >= windowstart, 
+			        'Daily_Extract'[Final_DateTime - Date] <= TODAY(),
+			        NOT(Daily_Extract[Modality] IN {"BD", "MG"}),
+			        NOT(Daily_Extract[Site] IN { 
+			            "Tampa General Hospital North Brooksville", 
+			            "Tampa General Hospital North Spring Hill",
+			            "TGHI Bayonet Point", "TGHI Bloomingale", "TGHI Bruce B Downs", 
+			            "TGHI Carrollwood", "TGHI Habana", "TGHI New Port Richey", 
+			            "TGHI New Tampa", "TGHI North Dale Mabry", "TGHI Northcliff", 
+			            "TGHI Oldsmar", "TGHI Palm Beach Gardens", "TGHI Parsons", 
+			            "TGHI Riverview", "TGHI South Tampa", "TGHI Sun City", 
+			            "TGHI Sunlake", "TGHI Trinity", "TGHI Wesley Chapel"
+			        }),
+			        NOT(Daily_Extract[Clinical_Procedure_Description] IN {
+			            "CT LUNG SCREENING", 
+			            "CT LUNG SCREENING FOLLOW UP WITH IV CONTRAST", 
+			            "CT LUNG SCREENING FOLLOW UP WITHOUT IV CONTRAST", 
+			            "CT LUNG SCREENING WITHOUT CONTRAST", 
+			            "CT Lung WO Screening (LDCT) Initial | 71271", 
+			            "CT LUNG WO Screening (LDCT) Initial, CT Lung WO Screening (LDCT) Initial"
+			        })
+			    )
+			
+			VAR mosaicexamswindow = 
+			    CALCULATE(
+			        COUNTROWS('Daily_Extract'), 
+			        ALL('Daily_Extract'),
+			        'Daily_Extract'[NPI] = CurrentNPI,
+			        'Daily_Extract'[Final_DateTime - Date] >= windowstart, 
+			        'Daily_Extract'[Final_DateTime - Date] <= TODAY(), 
+			        'Daily_Extract'[Mosaic Exam Flag] = 1,
+			        NOT(Daily_Extract[Modality] IN {"BD", "MG"}),
+			        NOT(Daily_Extract[Site] IN { 
+			            "Tampa General Hospital North Brooksville", 
+			            "Tampa General Hospital North Spring Hill",
+			            "TGHI Bayonet Point", "TGHI Bloomingale", "TGHI Bruce B Downs", 
+			            "TGHI Carrollwood", "TGHI Habana", "TGHI New Port Richey", 
+			            "TGHI New Tampa", "TGHI North Dale Mabry", "TGHI Northcliff", 
+			            "TGHI Oldsmar", "TGHI Palm Beach Gardens", "TGHI Parsons", 
+			            "TGHI Riverview", "TGHI South Tampa", "TGHI Sun City", 
+			            "TGHI Sunlake", "TGHI Trinity", "TGHI Wesley Chapel"
+			        }),
+			        NOT(Daily_Extract[Clinical_Procedure_Description] IN {
+			            "CT LUNG SCREENING", 
+			            "CT LUNG SCREENING FOLLOW UP WITH IV CONTRAST", 
+			            "CT LUNG SCREENING FOLLOW UP WITHOUT IV CONTRAST", 
+			            "CT LUNG SCREENING WITHOUT CONTRAST", 
+			            "CT Lung WO Screening (LDCT) Initial | 71271", 
+			            "CT LUNG WO Screening (LDCT) Initial, CT Lung WO Screening (LDCT) Initial"
+			        })
+			    )
+			
+			RETURN
+			    DIVIDE(mosaicexamswindow, totalexxamswindow, 0)
+			```
+		formatString: 0%;-0%;0%
+		lineageTag: 59e9d19f-a700-4fac-99a5-c5de62a2f379
+
+	measure %mosaiceligible = ```
+			
+			
+			 CALCULATE(
+			            [% Mosaic Exams],
+			            NOT(daily_extract[Modality] IN {"BD", "MG"}),
+			            NOT(daily_extract[Site] IN { "Tampa General Hospital North Brooksville", "Tampa General Hospital North Spring Hill","TGHI Bayonet Point", "TGHI Bloomingale", "TGHI Bruce B Downs" , "TGHI Carrollwood" , "TGHI Habana" , "TGHI New Port Richey" , "TGHI New Tampa" , "TGHI North Dale Mabry" ,"TGHI Northcliff", "TGHI Oldsmar" , "TGHI Palm Beach Gardens","TGHI Parsons" , "TGHI Riverview" , "TGHI South Tampa" , "TGHI Sun City", "TGHI Sunlake" , "TGHI Trinity" , "TGHI Wesley Chapel"}),
+			            NOT(daily_extract[Clinical_Procedure_Description] IN {"CT LUNG SCREENING", "CT LUNG SCREENING FOLLOW UP WITH IV CONTRAST", "CT LUNG SCREENING FOLLOW UP WITHOUT IV CONTRAST", "CT LUNG SCREENING WITHOUT CONTRAST", "CT Lung WO Screening (LDCT) Initial | 71271", "CT LUNG WO Screening (LDCT) Initial, CT Lung WO Screening (LDCT) Initial"})
+			        )
+			```
+		formatString: 0%;-0%;0%
+		lineageTag: 2c8cc469-0195-4e32-bdbb-a1c3172dc49e
+
+	measure 'US Capturable' =
+			
+			CALCULATE(
+			    COUNTROWS('Daily_Extract'),
+			    'Daily_Extract'[Modality] = "US",
+			    NOT(ISBLANK('Daily_Extract'[Mexproc]))
+			)
+		formatString: 0
+		lineageTag: d053581c-a952-495f-8a72-abf6005e6784
+
+	measure 'Captured US' =
+			
+			CALCULATE(
+			    SUM('Daily_Extract'[mosaic_draft_flag]),
+			    'Daily_Extract'[Modality] = "US"
+			)
+		formatString: 0
+		lineageTag: d750e318-0098-4767-b7e2-a60528b9c348
+
+	measure '% Captured' = divide( [Captured US] ,[US Capturable] ,0)
+		formatString: 0%;-0%;0%
+		lineageTag: 7a3bcd91-5a38-4894-b5c2-bb1acd954d00
+
+	measure 'Draftable XRs per Month (Last 3m)' = ```
+			
+			VAR ThreeMonthsAgo = EDATE(TODAY(), -3)
+			VAR DraftableXRCount = 
+			    CALCULATE(
+			        COUNTROWS('Daily_Extract'),
+			        'Daily_Extract'[Modality] = "CR",
+			        NOT(ISBLANK('Daily_Extract'[drafteligibleproc])),
+			        'Daily_Extract'[Final_DateTime - Date] >= ThreeMonthsAgo,
+			        'Daily_Extract'[Final_DateTime - Date] <= TODAY()
+			    )
+			VAR MonthCount = 3
+			RETURN
+			    DIVIDE(DraftableXRCount, MonthCount, 0)
+			```
+		lineageTag: 962c6237-874e-4b24-9356-74b7cead213e
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	measure 'Draftable CTs per Month (Last 3m)' = ```
+			
+			VAR ThreeMonthsAgo = EDATE(TODAY(), -3)
+			VAR DraftableCTCount = 
+			    CALCULATE(
+			        COUNTROWS('Daily_Extract'),
+			        'Daily_Extract'[Modality] = "CT",
+			        NOT(ISBLANK('Daily_Extract'[drafteligibleproc])),
+			        'Daily_Extract'[Final_DateTime - Date] >= ThreeMonthsAgo,
+			        'Daily_Extract'[Final_DateTime - Date] <= TODAY()
+			    )
+			VAR MonthCount = 3
+			RETURN
+			    DIVIDE(DraftableCTCount, MonthCount, 0)
+			```
+		lineageTag: 13a7f059-f5cf-498c-aec7-59dbd30c1ba3
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	measure '% Draftable XRs Read in Mosaic (last 14d)' = ```
+			
+			VAR CurrentNPI = SELECTEDVALUE('Daily_Extract'[NPI])
+			
+			VAR firstcasedate = 
+			    CALCULATE(
+			        MIN('Daily_Extract'[Final_DateTime - Date]), 
+			        ALL('Daily_Extract'),
+			        'Daily_Extract'[NPI] = CurrentNPI,
+			        'Daily_Extract'[Mosaic Exam Flag] = 1
+			    )
+			
+			VAR dayssincefirstcase = DATEDIFF(firstcasedate, TODAY(), DAY)
+			
+			VAR windowstart = 
+			    IF(dayssincefirstcase < 14, firstcasedate, TODAY() - 14)
+			
+			VAR DraftableXRTotal = 
+			    CALCULATE(
+			        COUNTROWS('Daily_Extract'),
+			        ALL('Daily_Extract'),
+			        'Daily_Extract'[NPI] = CurrentNPI,
+			        'Daily_Extract'[Modality] = "CR",
+			        NOT(ISBLANK('Daily_Extract'[drafteligibleproc])),
+			        'Daily_Extract'[Final_DateTime - Date] >= windowstart,
+			        'Daily_Extract'[Final_DateTime - Date] <= TODAY()
+			    )
+			
+			VAR DraftableXRInMosaic = 
+			    CALCULATE(
+			        COUNTROWS('Daily_Extract'),
+			        ALL('Daily_Extract'),
+			        'Daily_Extract'[NPI] = CurrentNPI,
+			        'Daily_Extract'[Modality] = "CR",
+			        NOT(ISBLANK('Daily_Extract'[drafteligibleproc])),
+			        'Daily_Extract'[Mosaic Exam Flag] = 1,
+			        'Daily_Extract'[Final_DateTime - Date] >= windowstart,
+			        'Daily_Extract'[Final_DateTime - Date] <= TODAY()
+			    )
+			
+			RETURN
+			    DIVIDE(DraftableXRInMosaic, DraftableXRTotal, 0)
+			```
+		lineageTag: e2c6be6b-6711-408e-bd0f-590249348137
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	measure '% Draftable CTs Read in Mosaic (last 14d)' = ```
+			
+			VAR CurrentNPI = SELECTEDVALUE('Daily_Extract'[NPI])
+			
+			VAR firstcasedate = 
+			    CALCULATE(
+			        MIN('Daily_Extract'[Final_DateTime - Date]), 
+			        ALL('Daily_Extract'),
+			        'Daily_Extract'[NPI] = CurrentNPI,
+			        'Daily_Extract'[Mosaic Exam Flag] = 1
+			    )
+			
+			VAR dayssincefirstcase = DATEDIFF(firstcasedate, TODAY(), DAY)
+			
+			VAR windowstart = 
+			    IF(dayssincefirstcase < 14, firstcasedate, TODAY() - 14)
+			
+			VAR DraftableCTTotal = 
+			    CALCULATE(
+			        COUNTROWS('Daily_Extract'),
+			        ALL('Daily_Extract'),
+			        'Daily_Extract'[NPI] = CurrentNPI,
+			        'Daily_Extract'[Modality] = "CT",
+			        NOT(ISBLANK('Daily_Extract'[drafteligibleproc])),
+			        'Daily_Extract'[Final_DateTime - Date] >= windowstart,
+			        'Daily_Extract'[Final_DateTime - Date] <= TODAY()
+			    )
+			
+			VAR DraftableCTInMosaic = 
+			    CALCULATE(
+			        COUNTROWS('Daily_Extract'),
+			        ALL('Daily_Extract'),
+			        'Daily_Extract'[NPI] = CurrentNPI,
+			        'Daily_Extract'[Modality] = "CT",
+			        NOT(ISBLANK('Daily_Extract'[drafteligibleproc])),
+			        'Daily_Extract'[Mosaic Exam Flag] = 1,
+			        'Daily_Extract'[Final_DateTime - Date] >= windowstart,
+			        'Daily_Extract'[Final_DateTime - Date] <= TODAY()
+			    )
+			
+			RETURN
+			    DIVIDE(DraftableCTInMosaic, DraftableCTTotal, 0)
+			```
+		lineageTag: 00146d98-5e66-47a4-a5f3-594fabfeae77
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	measure '% Eligible (Last 14d)' = ```
+			
+			VAR Last14DaysStart = TODAY() - 14
+			
+			VAR TotalCasesLast14Days = 
+			    CALCULATE(
+			        COUNTROWS('Daily_Extract'),
+			        REMOVEFILTERS('Daily_Extract'[Date]),
+			        REMOVEFILTERS('Daily_Extract'[Month]),
+			        REMOVEFILTERS('Daily_Extract'[Final_DateTime - Date]),
+			        'Daily_Extract'[Final_DateTime - Date] >= Last14DaysStart,
+			        'Daily_Extract'[Final_DateTime - Date] <= TODAY()
+			    )
+			
+			VAR EligibleCasesLast14Days = 
+			    CALCULATE(
+			        COUNTROWS('Daily_Extract'),
+			        REMOVEFILTERS('Daily_Extract'[Date]),
+			        REMOVEFILTERS('Daily_Extract'[Month]),
+			        REMOVEFILTERS('Daily_Extract'[Final_DateTime - Date]),
+			        'Daily_Extract'[Final_DateTime - Date] >= Last14DaysStart,
+			        'Daily_Extract'[Final_DateTime - Date] <= TODAY(), 
+			        NOT(daily_extract[Modality] IN {"BD", "MG","IR"}),
+			            NOT(daily_extract[Site] IN { "Tampa General Hospital North Brooksville", "Tampa General Hospital North Spring Hill","TGHI Bayonet Point", "TGHI Bloomingale", "TGHI Bruce B Downs" , "TGHI Carrollwood" , "TGHI Habana" , "TGHI New Port Richey" , "TGHI New Tampa" , "TGHI North Dale Mabry" ,"TGHI Northcliff", "TGHI Oldsmar" , "TGHI Palm Beach Gardens","TGHI Parsons" , "TGHI Riverview" , "TGHI South Tampa" , "TGHI Sun City", "TGHI Sunlake" , "TGHI Trinity" , "TGHI Wesley Chapel"}),
+			            NOT(daily_extract[Clinical_Procedure_Description] IN {"CT LUNG SCREENING", "CT LUNG SCREENING FOLLOW UP WITH IV CONTRAST", "CT LUNG SCREENING FOLLOW UP WITHOUT IV CONTRAST", "CT LUNG SCREENING WITHOUT CONTRAST", "CT Lung WO Screening (LDCT) Initial | 71271", "CT LUNG WO Screening (LDCT) Initial, CT Lung WO Screening (LDCT) Initial"})
+			        
+			    )
+			
+			RETURN
+			    DIVIDE(EligibleCasesLast14Days, TotalCasesLast14Days, 0)
+			
+			```
+		formatString: 0%;-0%;0%
+		lineageTag: 1d9fa8d0-a225-4a5f-a63e-e9bdbdb6bce9
+
+	measure 'Fully Utilizing Filter' = ```
+			
+			VAR SelectedStatus = SELECTEDVALUE('Query (3)'[vrarp_fullyutilizingname])
+			VAR CurrentNPI = SELECTEDVALUE('Daily_Extract'[NPI])
+			VAR RadFullyUtilizingStatus = 
+			    CALCULATE(
+			        MAX('Query (3)'[vrarp_fullyutilizingname]),
+			        'Query (3)'[vrarp_npi] = CurrentNPI
+			    )
+			VAR HasMosaicCases = 
+			    CALCULATE(
+			        COUNTROWS('Daily_Extract'),
+			        'Daily_Extract'[NPI] = CurrentNPI,
+			        'Daily_Extract'[Mosaic Exam Flag] = 1
+			    ) > 0
+			
+			RETURN
+			    SWITCH(
+			        TRUE(),
+			        // No selection - show everyone
+			        ISBLANK(SelectedStatus), 1,
+			        // "Yes" selected - only show fully utilizing rads (must have Mosaic)
+			        SelectedStatus = "Yes" && RadFullyUtilizingStatus = "Yes" && HasMosaicCases, 1,
+			        // "No" selected - only show non-fully utilizing rads who ARE on Mosaic
+			        SelectedStatus = "No" && RadFullyUtilizingStatus = "No" && HasMosaicCases, 1,
+			        // Hide everyone else
+			        0
+			    )
+			```
+		formatString: 0
+		lineageTag: 325a5e4e-4184-4dea-8675-5aaf70c54862
+
+	measure 'Captured US (Filtered)' =
+			
+			VAR SelectedThreshold = SELECTEDVALUE('Mosaic Exam Count Table'[Value], 0)
+			VAR CapturedCount = [Captured US]
+			RETURN
+			    IF(
+			        CapturedCount >= SelectedThreshold,
+			        CapturedCount,
+			        BLANK()
+			    )
+		formatString: 0
+		lineageTag: edf16004-55d9-4e67-9218-9ad282acc168
+
+	measure '% Practice IR in Mosaic (Last 2w)' = ```
+			
+			VAR Last2WeeksStart = TODAY() - 14
+			
+			VAR PracticeIRTotal = 
+			    CALCULATE(
+			        COUNTROWS('Daily_Extract'),
+			        'Daily_Extract'[Modality] = "IR",
+			        'Daily_Extract'[Final_DateTime - Date] >= Last2WeeksStart,
+			        'Daily_Extract'[Final_DateTime - Date] <= TODAY()
+			    )
+			
+			VAR PracticeIRInMosaic = 
+			    CALCULATE(
+			        COUNTROWS('Daily_Extract'),
+			        'Daily_Extract'[Modality] = "IR",
+			        'Daily_Extract'[Mosaic Exam Flag] = 1,
+			        'Daily_Extract'[Final_DateTime - Date] >= Last2WeeksStart,
+			        'Daily_Extract'[Final_DateTime - Date] <= TODAY()
+			    )
+			
+			RETURN
+			    DIVIDE(PracticeIRInMosaic, PracticeIRTotal, 0)
+			```
+		formatString: 0%;-0%;0%
+		lineageTag: 28ea3e21-6929-440f-9dcd-cc3b76b6bced
+
+	measure 'Total IR Cases (Last 2w)' =
+			
+			VAR Last2WeeksStart = TODAY() - 14
+			
+			RETURN
+			    CALCULATE(
+			        COUNTROWS('Daily_Extract'),
+			        'Daily_Extract'[Modality] = "IR",
+			        'Daily_Extract'[Final_DateTime - Date] >= Last2WeeksStart,
+			        'Daily_Extract'[Final_DateTime - Date] <= TODAY()
+			    )
+		formatString: 0
+		lineageTag: 68c62a9e-08cd-4790-86d2-75239802b893
+
+	measure 'Total IR in Mosaic (Last 2w)' =
+			
+			VAR Last2WeeksStart = TODAY() - 14
+			
+			RETURN
+			    CALCULATE(
+			        COUNTROWS('Daily_Extract'),
+			        'Daily_Extract'[Modality] = "IR",
+			        'Daily_Extract'[Mosaic Exam Flag] = 1,
+			        'Daily_Extract'[Final_DateTime - Date] >= Last2WeeksStart,
+			        'Daily_Extract'[Final_DateTime - Date] <= TODAY()
+			    )
+		formatString: 0
+		lineageTag: 524111aa-dd9e-41d4-b84d-5b046a324f13
+
+	measure '% IR in Mosaic (Last 2w)' =
+			
+			DIVIDE(
+			    [Total IR in Mosaic (Last 2w)],
+			    [Total IR Cases (Last 2w)],
+			    0
+			)
+		formatString: 0%;-0%;0%
+		lineageTag: 294b9fb6-33b9-4111-9f29-2cbe4eb2ec0b
+
+	measure 'Total US Capture Read' =
+			
+			CALCULATE(
+			    COUNTROWS('Daily_Extract'),
+			    'Daily_Extract'[Modality] = "US",
+			    'Daily_Extract'[mosaic_draft_flag] = 1,
+			    'Daily_Extract'[Mosaic Exam Flag] = 1,
+			    NOT(ISBLANK('Daily_Extract'[Mexproc]))
+			)
+		formatString: 0
+		lineageTag: 516a5252-fbee-4bda-8995-27df5ae98c54
+
+	measure 'Capture Eligible USs per Month (Last 3m)' = ```
+			
+			VAR ThreeMonthsAgo = EDATE(TODAY(), -3)
+			
+			VAR CaptureEligibleUS = 
+			    CALCULATE(
+			        COUNTROWS('Daily_Extract'),
+			        'Daily_Extract'[Modality] = "US",
+			        'Daily_Extract'[Mosaic Exam Flag] = 1,
+			        NOT(ISBLANK('Daily_Extract'[Mexproc])),
+			        'Daily_Extract'[Final_DateTime - Date] >= ThreeMonthsAgo,
+			        'Daily_Extract'[Final_DateTime - Date] <= TODAY(),
+			        REMOVEFILTERS('Daily_Extract'[Date]),
+			        REMOVEFILTERS('Daily_Extract'[Month]),
+			        REMOVEFILTERS('Daily_Extract'[Final_DateTime - Date])
+			    )
+			
+			RETURN
+			    DIVIDE(CaptureEligibleUS, 3, 0)
+			```
+		lineageTag: 2d9c4f93-2910-44b0-9587-16dc0dcc7615
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	measure 'US Capture Eligible (Last 14d)' =
+			
+			VAR Last14DaysStart = TODAY() - 14
+			
+			RETURN
+			    CALCULATE(
+			        COUNTROWS('Daily_Extract'),
+			        'Daily_Extract'[Modality] = "US",
+			        'Daily_Extract'[Mosaic Exam Flag] = 1,
+			        NOT(ISBLANK('Daily_Extract'[Mexproc])),
+			        'Daily_Extract'[Final_DateTime - Date] >= Last14DaysStart,
+			        'Daily_Extract'[Final_DateTime - Date] <= TODAY(),
+			        REMOVEFILTERS('Daily_Extract'[Date]),
+			        REMOVEFILTERS('Daily_Extract'[Month]),
+			        REMOVEFILTERS('Daily_Extract'[Final_DateTime - Date])
+			    )
+		formatString: 0
+		lineageTag: d7df6d39-5aae-4273-ac5f-ab6619819b78
+
+	measure '% US Capture Read (Last 14d)' = ```
+			
+			VAR Last14DaysStart = TODAY() - 14
+			
+			VAR CaptureEligible = 
+			    CALCULATE(
+			        COUNTROWS('Daily_Extract'),
+			        'Daily_Extract'[Modality] = "US",
+			        'Daily_Extract'[Mosaic Exam Flag] = 1,
+			        NOT(ISBLANK('Daily_Extract'[Mexproc])),
+			        'Daily_Extract'[Final_DateTime - Date] >= Last14DaysStart,
+			        'Daily_Extract'[Final_DateTime - Date] <= TODAY(),
+			        REMOVEFILTERS('Daily_Extract'[Date]),
+			        REMOVEFILTERS('Daily_Extract'[Month]),
+			        REMOVEFILTERS('Daily_Extract'[Final_DateTime - Date])
+			    )
+			
+			VAR CaptureRead = 
+			    CALCULATE(
+			        COUNTROWS('Daily_Extract'),
+			        'Daily_Extract'[Modality] = "US",
+			        'Daily_Extract'[mosaic_draft_flag] = 1,
+			        'Daily_Extract'[Mosaic Exam Flag] = 1,
+			        NOT(ISBLANK('Daily_Extract'[Mexproc])),
+			        'Daily_Extract'[Final_DateTime - Date] >= Last14DaysStart,
+			        'Daily_Extract'[Final_DateTime - Date] <= TODAY(),
+			        REMOVEFILTERS('Daily_Extract'[Date]),
+			        REMOVEFILTERS('Daily_Extract'[Month]),
+			        REMOVEFILTERS('Daily_Extract'[Final_DateTime - Date])
+			    )
+			
+			RETURN
+			    DIVIDE(CaptureRead, CaptureEligible, 0)
+			```
+		formatString: 0%;-0%;0%
+		lineageTag: 26c8c54f-74fd-4e41-b9d2-ad9728c3939f
+
+	measure 'Fully Utilizing Capture (Rad)' =
+			
+			VAR PctCapture = [% US Capture Read (Last 14d)]
+			
+			RETURN
+			    IF(PctCapture >= 0.8, "Y", "N")
+		lineageTag: 2b4916f0-f7bb-46e3-ae7d-5224ea3d8384
+
+	measure 'Eligible Rads for Capture' =
+			
+			CALCULATE(
+			    DISTINCTCOUNT('Daily_Extract'[NPI]),
+			    'Daily_Extract'[Modality] = "US",
+			    'Daily_Extract'[Mosaic Exam Flag] = 1,
+			    NOT(ISBLANK('Daily_Extract'[Mexproc]))
+			)
+		formatString: 0
+		lineageTag: 39ea0805-7086-4f7e-ae41-16a44d55153e
+
+	measure 'Rads Utilizing Capture' = ```
+			
+			CALCULATE(
+			    DISTINCTCOUNT('Daily_Extract'[NPI]),
+			    FILTER(
+			        VALUES('Daily_Extract'[NPI]),
+			        VAR RadCapturedCount = 
+			            CALCULATE(
+			                COUNTROWS('Daily_Extract'),
+			                'Daily_Extract'[Modality] = "US",
+			                'Daily_Extract'[mosaic_draft_flag] = 1,
+			                'Daily_Extract'[Mosaic Exam Flag] = 1,
+			                NOT(ISBLANK('Daily_Extract'[Mexproc]))
+			            )
+			        RETURN RadCapturedCount >= 3
+			    )
+			)
+			```
+		formatString: 0
+		lineageTag: 3b1e5fb8-e3f3-41d4-93db-264679540f52
+
+	measure '% of Rads Utilizing Capture' =
+			
+			DIVIDE(
+			    [Rads Utilizing Capture],
+			    [Eligible Rads for Capture],
+			    0
+			)
+		formatString: 0%;-0%;0%
+		lineageTag: f2bded82-2ad1-4e15-bca1-4be6fca1d539
+
+	measure '% Capture Read Practice (Last 14d)' = ```
+			
+			VAR Last14DaysStart = TODAY() - 14
+			
+			VAR CaptureEligible = 
+			    CALCULATE(
+			        COUNTROWS('Daily_Extract'),
+			        'Daily_Extract'[Modality] = "US",
+			        'Daily_Extract'[Mosaic Exam Flag] = 1,
+			        NOT(ISBLANK('Daily_Extract'[Mexproc])),
+			        'Daily_Extract'[Final_DateTime - Date] >= Last14DaysStart,
+			        'Daily_Extract'[Final_DateTime - Date] <= TODAY(),
+			        REMOVEFILTERS('Daily_Extract'[Date]),
+			        REMOVEFILTERS('Daily_Extract'[Month]),
+			        REMOVEFILTERS('Daily_Extract'[Final_DateTime - Date])
+			    )
+			
+			VAR CaptureRead = 
+			    CALCULATE(
+			        COUNTROWS('Daily_Extract'),
+			        'Daily_Extract'[Modality] = "US",
+			        'Daily_Extract'[mosaic_draft_flag] = 1,
+			        'Daily_Extract'[Mosaic Exam Flag] = 1,
+			        NOT(ISBLANK('Daily_Extract'[Mexproc])),
+			        'Daily_Extract'[Final_DateTime - Date] >= Last14DaysStart,
+			        'Daily_Extract'[Final_DateTime - Date] <= TODAY(),
+			        REMOVEFILTERS('Daily_Extract'[Date]),
+			        REMOVEFILTERS('Daily_Extract'[Month]),
+			        REMOVEFILTERS('Daily_Extract'[Final_DateTime - Date])
+			    )
+			
+			RETURN
+			    DIVIDE(CaptureRead, CaptureEligible, 0)
+			```
+		formatString: 0%;-0%;0%
+		lineageTag: a9746ea7-901c-4bb8-8419-59d95b9fd52d
+
+	measure 'Fully Utilizing Capture (Practice)' =
+			
+			VAR PctCapture = [% Capture Read Practice (Last 14d)]
+			
+			RETURN
+			    IF(PctCapture >= 0.8, "Y", "N")
+		lineageTag: 4186fb71-7ff0-4281-a65e-62ff81901aff
+
+	measure 'Total US Capture Read Practice' =
+			
+			CALCULATE(
+			    COUNTROWS('Daily_Extract'),
+			    'Daily_Extract'[Modality] = "US",
+			    'Daily_Extract'[mosaic_draft_flag] = 1,
+			    'Daily_Extract'[Mosaic Exam Flag] = 1,
+			    NOT(ISBLANK('Daily_Extract'[Mexproc]))
+			)
+		formatString: 0
+		lineageTag: 1425c040-9453-4339-b59f-268263fb8e72
+
+	measure 'Capture Eligible USs per Month Practice (Last 3m)' = ```
+			
+			VAR ThreeMonthsAgo = EDATE(TODAY(), -3)
+			
+			VAR CaptureEligibleUS = 
+			    CALCULATE(
+			        COUNTROWS('Daily_Extract'),
+			        'Daily_Extract'[Modality] = "US",
+			        'Daily_Extract'[Mosaic Exam Flag] = 1,
+			        NOT(ISBLANK('Daily_Extract'[Mexproc])),
+			        'Daily_Extract'[Final_DateTime - Date] >= ThreeMonthsAgo,
+			        'Daily_Extract'[Final_DateTime - Date] <= TODAY(),
+			        REMOVEFILTERS('Daily_Extract'[Date]),
+			        REMOVEFILTERS('Daily_Extract'[Month]),
+			        REMOVEFILTERS('Daily_Extract'[Final_DateTime - Date])
+			    )
+			
+			RETURN
+			    DIVIDE(CaptureEligibleUS, 3, 0)
+			```
+		lineageTag: 1da2dca2-869d-4b33-9386-7b2730760c98
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	measure 'US Capture Eligible Practice (Last 14d)' =
+			
+			VAR Last14DaysStart = TODAY() - 14
+			
+			RETURN
+			    CALCULATE(
+			        COUNTROWS('Daily_Extract'),
+			        'Daily_Extract'[Modality] = "US",
+			        'Daily_Extract'[Mosaic Exam Flag] = 1,
+			        NOT(ISBLANK('Daily_Extract'[Mexproc])),
+			        'Daily_Extract'[Final_DateTime - Date] >= Last14DaysStart,
+			        'Daily_Extract'[Final_DateTime - Date] <= TODAY(),
+			        REMOVEFILTERS('Daily_Extract'[Date]),
+			        REMOVEFILTERS('Daily_Extract'[Month]),
+			        REMOVEFILTERS('Daily_Extract'[Final_DateTime - Date])
+			    )
+		formatString: 0
+		lineageTag: 266b1eb2-c4b8-4592-bf18-5ce9313374e3
+
+	measure 'Test 1 - Count Rows 4/11' =
+			
+			CALCULATE(
+			    COUNTROWS('Daily_Extract'),
+			    'Daily_Extract'[Local Practice] = "MBB",
+			    'Daily_Extract'[Date] = DATE(2026, 4, 11)
+			)
+		formatString: 0
+		lineageTag: aeab9c55-fe4d-48b4-9518-6d84c7bafcad
+
+	measure 'Test 2 - Sum Mosaic Flag 4/11' =
+			
+			CALCULATE(
+			    SUM('Daily_Extract'[Mosaic Exam Flag]),
+			    'Daily_Extract'[Local Practice] = "MBB",
+			    'Daily_Extract'[Date] = DATE(2026, 4, 11)
+			)
+		formatString: 0
+		lineageTag: da419371-c942-41f4-9354-d968788e037e
+
+	measure 'Test 3 - Distinct Accessions 4/11' =
+			
+			CALCULATE(
+			    DISTINCTCOUNT('Daily_Extract'[Accession_Number]),
+			    'Daily_Extract'[Local Practice] = "MBB",
+			    'Daily_Extract'[Date] = DATE(2026, 4, 11)
+			)
+		formatString: 0
+		lineageTag: cc5c5b0d-da6e-4057-bb53-f8ed08314bfd
+
+	measure MosaicCaptureCt = ```
+			
+			VAR OnlyInvalidModalities = 
+			    COUNTROWS(
+			        FILTER(
+			            VALUES('Daily_Extract'[Modality]),
+			            'Daily_Extract'[Modality] = "US" || 
+			            'Daily_Extract'[Modality] = "BD"
+			        )
+			    ) = 0
+			
+			RETURN
+			IF(
+			    OnlyInvalidModalities,
+			    BLANK(),
+			    CALCULATE(
+			        COUNTROWS('Daily_Extract'),
+			       
+			        'Daily_Extract'[mosaic_draft_flag] = 1,
+			        'Daily_Extract'[Mosaic Exam Flag] = 1,
+			        NOT(ISBLANK('Daily_Extract'[Mexproc]))
+			    )
+			)
+			```
+		formatString: 0
+		lineageTag: c1f83b4f-abe9-4b61-b6e7-201394fdef7c
+
+	measure rvu_mosaicapture = ```
+			
+			VAR OnlyInvalidModalities = 
+			    COUNTROWS(
+			        FILTER(
+			            VALUES('Daily_Extract'[Modality]),
+			            'Daily_Extract'[Modality] = "US" || 
+			            'Daily_Extract'[Modality] = "BD"
+			        )
+			    ) = 0
+			
+			RETURN
+			IF(
+			    OnlyInvalidModalities,
+			    BLANK(),
+			    CALCULATE(
+			        SUM('Daily_Extract'[RVU-decimal]),
+			        
+			        'Daily_Extract'[mosaic_draft_flag] = 1,
+			        NOT ISBLANK('Daily_Extract'[Mexproc])
+			    )
+			)
+			```
+		lineageTag: 4f50812b-b62e-4d95-af14-c1309f0120af
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	measure DynamicMosaicCasescapture = ```
+			
+			SWITCH(
+			TRUE(),
+			[SelectedMeasure] = "Exam Count", [MosaicCaptureCt],
+			
+			[SelectedMeasure] = "RVUs", [rvu_mosaicapture] 
+			
+			)
+			```
+		lineageTag: ffc31ae6-af37-4e1e-a8a4-7bbdee284f60
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	measure clinicalofmosaiccapture = DIVIDE([DynamicMosaicCasescapture], [DynamicClinicalcases], 0)
+		formatString: 0.0%;-0.0%;0.0%
+		lineageTag: 75748ecd-4e7b-4989-8bfe-a1d35fca526e
+
+	measure '% of RPCE_capture' = ```
+			
+			VAR OnlyInvalidModalities = 
+			    COUNTROWS(
+			        FILTER(
+			            VALUES('Daily_Extract'[Modality]),
+			            'Daily_Extract'[Modality] = "US" || 
+			            'Daily_Extract'[Modality] = "BD"
+			        )
+			    ) = 0
+			RETURN
+			IF(
+			    OnlyInvalidModalities,
+			    BLANK(),
+			    DIVIDE([DynamicMosaicCasescapture], [DynamicRPCECases], 0) + 0.02
+			)
+			```
+		formatString: 0.0%;-0.0%;0.0%
+		lineageTag: 792ad4c4-a208-4082-90bd-42ad4def30a1
+
+	measure 'Capture Live' = ```
+			
+			VAR OnlyInvalidModalities = 
+			    COUNTROWS(
+			        FILTER(
+			            VALUES('Daily_Extract'[Modality]),
+			            'Daily_Extract'[Modality] = "US" || 
+			            'Daily_Extract'[Modality] = "BD"
+			        )
+			    ) = 0
+			
+			RETURN
+			IF(
+			    OnlyInvalidModalities,
+			    BLANK(),
+			    CALCULATE(
+			        DISTINCTCOUNT('Daily_Extract'[NPI]),
+			        'Daily_Extract'[mosaic_draft_flag] = 1,
+			        NOT ISBLANK('Daily_Extract'[Mexproc])
+			    )
+			)
+			```
+		formatString: 0
+		lineageTag: ce8653d3-f5df-4db6-ad69-074abeba90d3
+
+	measure 'Count Fully Utilizing Capture' = ```
+			
+			VAR OnlyInvalidModalities = 
+			    COUNTROWS(
+			        FILTER(
+			            VALUES('Daily_Extract'[Modality]),
+			            'Daily_Extract'[Modality] = "US" || 
+			            'Daily_Extract'[Modality] = "BD"
+			        )
+			    ) = 0
+			
+			RETURN
+			IF(
+			    OnlyInvalidModalities,
+			    BLANK(),
+			    VAR RadsWithFullCapture = 
+			        FILTER(
+			            VALUES('Daily_Extract'[NPI]),
+			            [% Capture Read (Last 14d)] >= 0.8
+			        )
+			    RETURN
+			        COUNTROWS(RadsWithFullCapture)
+			)
+			```
+		formatString: 0
+		lineageTag: 98206474-0aae-42e3-aeb5-54969361d2bd
+
+	measure '% Fully Utilizing Capture' = DIVIDE( [Count Fully Utilizing Capture] , [Capture Live], 0)
+		formatString: 0%;-0%;0%
+		lineageTag: 4260b239-9d56-47db-ba92-0bc4fd7a42ad
+
+	measure 'Fully Utilizing Drafting (Rad)' =
+			
+			VAR PctDrafting = [%Draftinglast 14days]
+			RETURN
+			    IF(PctDrafting >= 0.8, "Y", "N")
+		lineageTag: 333238fb-41be-4c57-a2fc-d07dbbf39db4
+
+	measure 'Count Fully Utilizing Drafting' = ```
+			
+			COUNTROWS(
+			    FILTER(
+			        VALUES('Daily_Extract'[NPI]),
+			        VAR HasEligibleProcs = 
+			            CALCULATE(
+			                SUM('Daily_Extract'[Mosaicdraftingeligible])
+			            ) > 0
+			        VAR PctDrafting = [%Draftinglast 14days]
+			        RETURN
+			            HasEligibleProcs && PctDrafting >= 0.8
+			    )
+			)
+			```
+		formatString: 0
+		lineageTag: 07919e43-4f87-4d51-9439-45b3db5759ac
+
+	measure '% Fully Utilizing draftinmg' = divide ([Count Fully Utilizing Drafting] , [distinctradsdraftingdynamics], 0 )
+		formatString: 0%;-0%;0%
+		lineageTag: f80fd64b-746d-47c0-a4a7-a15409999af5
+
+	measure 'Total DEXA Capture Read' =
+			
+			CALCULATE(
+			    COUNTROWS('Daily_Extract'),
+			    'Daily_Extract'[Modality] = "BD",
+			    'Daily_Extract'[mosaic_draft_flag] = 1,
+			    'Daily_Extract'[Mosaic Exam Flag] = 1,
+			    NOT(ISBLANK('Daily_Extract'[Mexproc]))
+			)
+		formatString: 0
+		lineageTag: f53de756-dc92-4a3c-ba30-e5fe851d5c6f
+
+	measure '% BD Capture Read (Last 14d)' = ```
+			
+			VAR Last14DaysStart = TODAY() - 14
+			
+			VAR CaptureEligible = 
+			    CALCULATE(
+			        COUNTROWS('Daily_Extract'),
+			        'Daily_Extract'[Modality] = "BD",
+			        'Daily_Extract'[Mosaic Exam Flag] = 1,
+			        NOT(ISBLANK('Daily_Extract'[Mexproc])),
+			        'Daily_Extract'[Final_DateTime - Date] >= Last14DaysStart,
+			        'Daily_Extract'[Final_DateTime - Date] <= TODAY(),
+			        REMOVEFILTERS('Daily_Extract'[Date]),
+			        REMOVEFILTERS('Daily_Extract'[Month]),
+			        REMOVEFILTERS('Daily_Extract'[Final_DateTime - Date])
+			    )
+			
+			VAR CaptureRead = 
+			    CALCULATE(
+			        COUNTROWS('Daily_Extract'),
+			        'Daily_Extract'[Modality] = "BD",
+			        'Daily_Extract'[mosaic_draft_flag] = 1,
+			        'Daily_Extract'[Mosaic Exam Flag] = 1,
+			        NOT(ISBLANK('Daily_Extract'[Mexproc])),
+			        'Daily_Extract'[Final_DateTime - Date] >= Last14DaysStart,
+			        'Daily_Extract'[Final_DateTime - Date] <= TODAY(),
+			        REMOVEFILTERS('Daily_Extract'[Date]),
+			        REMOVEFILTERS('Daily_Extract'[Month]),
+			        REMOVEFILTERS('Daily_Extract'[Final_DateTime - Date])
+			    )
+			
+			RETURN
+			    DIVIDE(CaptureRead, CaptureEligible, 0)
+			```
+		formatString: 0%;-0%;0%
+		lineageTag: eee9dd0d-8008-42b7-8a03-defcb81255a8
+
+	measure 'BD Capture Eligible (Last 14d)' =
+			
+			VAR Last14DaysStart = TODAY() - 14
+			
+			RETURN
+			    CALCULATE(
+			        COUNTROWS('Daily_Extract'),
+			        'Daily_Extract'[Modality] = "BD",
+			        'Daily_Extract'[Mosaic Exam Flag] = 1,
+			        NOT(ISBLANK('Daily_Extract'[Mexproc])),
+			        'Daily_Extract'[Final_DateTime - Date] >= Last14DaysStart,
+			        'Daily_Extract'[Final_DateTime - Date] <= TODAY(),
+			        REMOVEFILTERS('Daily_Extract'[Date]),
+			        REMOVEFILTERS('Daily_Extract'[Month]),
+			        REMOVEFILTERS('Daily_Extract'[Final_DateTime - Date])
+			    )
+		formatString: 0
+		lineageTag: b65b9e57-1f8b-43c2-b07d-84f7f041c893
+
+	measure 'BD Capture Eligible (Last 3mo)' =
+			
+			VAR ThreeMonthsAgo = EDATE(TODAY(), -3)
+			
+			RETURN
+			    CALCULATE(
+			        COUNTROWS('Daily_Extract'),
+			        'Daily_Extract'[Modality] = "BD",
+			        'Daily_Extract'[Mosaic Exam Flag] = 1,
+			        NOT(ISBLANK('Daily_Extract'[Mexproc])),
+			        'Daily_Extract'[Final_DateTime - Date] >= ThreeMonthsAgo,
+			        'Daily_Extract'[Final_DateTime - Date] <= TODAY(),
+			        REMOVEFILTERS('Daily_Extract'[Date]),
+			        REMOVEFILTERS('Daily_Extract'[Month]),
+			        REMOVEFILTERS('Daily_Extract'[Final_DateTime - Date])
+			    )
+		formatString: 0
+		lineageTag: d9b68e6a-6b08-4d5d-bbd3-5d262cbdf797
+
+	measure 'Fully Utilizing Capture BD (Rad)' =
+			
+			VAR PctCapture = [% BD Capture Read (Last 14d)]
+			
+			RETURN
+			    IF(PctCapture >= 0.8, "Y", "N")
+		lineageTag: 2ba30af5-f50a-4133-a82d-0e9d3f673ac1
+
+	measure '% BD Capture Read Practice (Last 14d)' = ```
+			
+			VAR Last14DaysStart = TODAY() - 14
+			
+			VAR CaptureEligible = 
+			    CALCULATE(
+			        COUNTROWS('Daily_Extract'),
+			        'Daily_Extract'[Modality] = "BD",
+			        'Daily_Extract'[Mosaic Exam Flag] = 1,
+			        NOT(ISBLANK('Daily_Extract'[Mexproc])),
+			        'Daily_Extract'[Final_DateTime - Date] >= Last14DaysStart,
+			        'Daily_Extract'[Final_DateTime - Date] <= TODAY(),
+			        REMOVEFILTERS('Daily_Extract'[Date]),
+			        REMOVEFILTERS('Daily_Extract'[Month]),
+			        REMOVEFILTERS('Daily_Extract'[Final_DateTime - Date])
+			    )
+			
+			VAR CaptureRead = 
+			    CALCULATE(
+			        COUNTROWS('Daily_Extract'),
+			        'Daily_Extract'[Modality] = "BD",
+			        'Daily_Extract'[mosaic_draft_flag] = 1,
+			        'Daily_Extract'[Mosaic Exam Flag] = 1,
+			        NOT(ISBLANK('Daily_Extract'[Mexproc])),
+			        'Daily_Extract'[Final_DateTime - Date] >= Last14DaysStart,
+			        'Daily_Extract'[Final_DateTime - Date] <= TODAY(),
+			        REMOVEFILTERS('Daily_Extract'[Date]),
+			        REMOVEFILTERS('Daily_Extract'[Month]),
+			        REMOVEFILTERS('Daily_Extract'[Final_DateTime - Date])
+			    )
+			
+			RETURN
+			    DIVIDE(CaptureRead, CaptureEligible, 0)
+			```
+		formatString: 0%;-0%;0%
+		lineageTag: 02f85fb7-dc61-4e30-b2d3-3f506cc40421
+
+	measure 'BD Capture Eligible Practice (Last 14d)' =
+			
+			VAR Last14DaysStart = TODAY() - 14
+			
+			RETURN
+			    CALCULATE(
+			        COUNTROWS('Daily_Extract'),
+			        'Daily_Extract'[Modality] = "BD",
+			        'Daily_Extract'[Mosaic Exam Flag] = 1,
+			        NOT(ISBLANK('Daily_Extract'[Mexproc])),
+			        'Daily_Extract'[Final_DateTime - Date] >= Last14DaysStart,
+			        'Daily_Extract'[Final_DateTime - Date] <= TODAY(),
+			        REMOVEFILTERS('Daily_Extract'[Date]),
+			        REMOVEFILTERS('Daily_Extract'[Month]),
+			        REMOVEFILTERS('Daily_Extract'[Final_DateTime - Date])
+			    )
+		formatString: 0
+		lineageTag: 4bd3eb02-ebef-4384-bfbd-c2f02ae1e72b
+
+	measure 'BD Capture Eligible Practice (Last 3mo)' =
+			
+			VAR ThreeMonthsAgo = EDATE(TODAY(), -3)
+			
+			RETURN
+			    CALCULATE(
+			        COUNTROWS('Daily_Extract'),
+			        'Daily_Extract'[Modality] = "BD",
+			        'Daily_Extract'[Mosaic Exam Flag] = 1,
+			        NOT(ISBLANK('Daily_Extract'[Mexproc])),
+			        'Daily_Extract'[Final_DateTime - Date] >= ThreeMonthsAgo,
+			        'Daily_Extract'[Final_DateTime - Date] <= TODAY(),
+			        REMOVEFILTERS('Daily_Extract'[Date]),
+			        REMOVEFILTERS('Daily_Extract'[Month]),
+			        REMOVEFILTERS('Daily_Extract'[Final_DateTime - Date])
+			    )
+		formatString: 0
+		lineageTag: 9d8d4e79-1ae4-4221-b209-5d5e1b85b0fb
+
+	measure 'Fully Utilizing BD Capture (Practice)' =
+			
+			VAR PctCapture = [% BD Capture Read Practice (Last 14d)]
+			
+			RETURN
+			    IF(PctCapture >= 0.8, "Y", "N")
+		lineageTag: c1afb086-6ae2-4fdc-94df-30d45c570626
+
+	measure 'Rads Utilizing Capture BD' = ```
+			
+			CALCULATE(
+			    DISTINCTCOUNT('Daily_Extract'[NPI]),
+			    FILTER(
+			        VALUES('Daily_Extract'[NPI]),
+			        VAR RadCapturedCount = 
+			            CALCULATE(
+			                COUNTROWS('Daily_Extract'),
+			                'Daily_Extract'[Modality] = "BD",
+			                'Daily_Extract'[mosaic_draft_flag] = 1,
+			                'Daily_Extract'[Mosaic Exam Flag] = 1,
+			                NOT(ISBLANK('Daily_Extract'[Mexproc]))
+			            )
+			        RETURN RadCapturedCount >= 3
+			    )
+			)
+			```
+		formatString: 0
+		lineageTag: 4ec4c740-32b2-4024-83e7-6ddb4bef735d
+
+	measure 'Eligible Rads for Capture BD' =
+			
+			CALCULATE(
+			    DISTINCTCOUNT('Daily_Extract'[NPI]),
+			    'Daily_Extract'[Modality] = "BD",
+			    'Daily_Extract'[Mosaic Exam Flag] = 1,
+			    NOT(ISBLANK('Daily_Extract'[Mexproc]))
+			)
+		formatString: 0
+		lineageTag: eadca6df-231c-4ef2-8d2d-94ae4b838a21
+
+	measure '% of Rads Utilizing Capture BD' =
+			
+			DIVIDE(
+			    [Rads Utilizing Capture BD],
+			    [Eligible Rads for Capture BD],
+			    0
+			)
+		formatString: 0%;-0%;0%
+		lineageTag: be72653e-42db-4de8-bb17-97eb00360f53
+
+	measure 'Draftable CT Abd/Pel per Month (Last 3m)' = ```
+			
+			VAR ThreeMonthsAgo = EDATE(TODAY(), -3)
+			
+			VAR EligibleCodes = {
+			    "CT3PHLIV", "RPID152-3D", "RPID1060-3D", "RPID1449", "RPID279",
+			    "RPID140", "RAD2508", "RPID152", "RPID1060", "RPID1459",
+			    "CTAPRENALMA", "RPID1643D", "RPID164", "RAD2260", "RAD2262",
+			    "RAD2261", "RPID145", "RPID145-RC", "RPID144", "RPID144RC",
+			    "RPID144-RC", "RPID198", "RPID198-IVP3D", "RPID198-RC", "RPID5",
+			    "RPID3", "RPID4", "RAD2345", "RAD2346", "RAD2011", "RPID48-B",
+			    "RPID46-B", "RAD2266", "RAD2012", "RAD2013", "RAD2014", "RPID64",
+			    "RPID48", "RPID48MR", "RPID68-MIP", "RPID48-RC", "RPID46",
+			    "RPID47", "RPID47MR", "RPID47-RC", "CT4PHLIV", "RAD2852",
+			    "RAD2853", "RPID46-RC", "RAD2854", "RAD2986", "RAD2987"
+			}
+			
+			VAR DraftableCTCount = 
+			    CALCULATE(
+			        COUNTROWS('Daily_Extract'),
+			        'Daily_Extract'[Modality] = "CT",
+			        'Daily_Extract'[Drafteligiblecode] IN EligibleCodes,
+			        'Daily_Extract'[Final_DateTime - Date] >= ThreeMonthsAgo,
+			        'Daily_Extract'[Final_DateTime - Date] <= TODAY()
+			    )
+			
+			RETURN
+			    DIVIDE(DraftableCTCount, 3, 0)
+			```
+		lineageTag: decceb78-8a7b-4bb9-8ed7-c873d5825b59
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	measure 'Drafted CT Abd/Pel per Month (Last 3m)' = ```
+			
+			VAR ThreeMonthsAgo = EDATE(TODAY(), -3)
+			
+			VAR EligibleCodes = {
+			    "CT3PHLIV", "RPID152-3D", "RPID1060-3D", "RPID1449", "RPID279",
+			    "RPID140", "RAD2508", "RPID152", "RPID1060", "RPID1459",
+			    "CTAPRENALMA", "RPID1643D", "RPID164", "RAD2260", "RAD2262",
+			    "RAD2261", "RPID145", "RPID145-RC", "RPID144", "RPID144RC",
+			    "RPID144-RC", "RPID198", "RPID198-IVP3D", "RPID198-RC", "RPID5",
+			    "RPID3", "RPID4", "RAD2345", "RAD2346", "RAD2011", "RPID48-B",
+			    "RPID46-B", "RAD2266", "RAD2012", "RAD2013", "RAD2014", "RPID64",
+			    "RPID48", "RPID48MR", "RPID68-MIP", "RPID48-RC", "RPID46",
+			    "RPID47", "RPID47MR", "RPID47-RC", "CT4PHLIV", "RAD2852",
+			    "RAD2853", "RPID46-RC", "RAD2854", "RAD2986", "RAD2987"
+			}
+			
+			VAR DraftedCTCount = 
+			    CALCULATE(
+			        COUNTROWS('Daily_Extract'),
+			        'Daily_Extract'[Modality] = "CT",
+			        'Daily_Extract'[Drafteligiblecode] IN EligibleCodes,
+			        'Daily_Extract'[Mosaic Exam Flag] = 1, 
+			        'Daily_Extract'[mosaic_draft_flag] = 1,    // ✅ Only difference
+			        'Daily_Extract'[Final_DateTime - Date] >= ThreeMonthsAgo,
+			        'Daily_Extract'[Final_DateTime - Date] <= TODAY()
+			    )
+			
+			RETURN
+			    DIVIDE(DraftedCTCount, 3, 0)
+			```
+		lineageTag: 6a30a51f-a3e8-4fc7-98e6-2245fdf475bc
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	measure Measure
+		lineageTag: f590c3a3-10b1-46b7-93c7-2aae7f97ba0e
+
+		annotation 43dbc3e8-3a1c-4b6f-9923-b49ff7d6691c = True
+
+	measure '% Drafted CT Abd/Pel read in Mosaic (last 3m)' = DIVIDE( [Drafted CT Abd/Pel per Month (Last 3m)] , [Draftable CT Abd/Pel per Month (Last 3m)],0)
+		formatString: 0%;-0%;0%
+		lineageTag: 862ad474-f529-4ac6-8430-d73e674e2712
+
+	measure '% Capture Read (Last 14d)' = ```
+			
+			VAR Last14DaysStart = TODAY() - 14
+			
+			VAR CaptureEligible = 
+			    CALCULATE(
+			        COUNTROWS('Daily_Extract'),
+			        
+			        'Daily_Extract'[Mosaic Exam Flag] = 1,
+			        NOT(ISBLANK('Daily_Extract'[Mexproc])),
+			        'Daily_Extract'[Final_DateTime - Date] >= Last14DaysStart,
+			        'Daily_Extract'[Final_DateTime - Date] <= TODAY(),
+			        REMOVEFILTERS('Daily_Extract'[Date]),
+			        REMOVEFILTERS('Daily_Extract'[Month]),
+			        REMOVEFILTERS('Daily_Extract'[Final_DateTime - Date])
+			    )
+			
+			VAR CaptureRead = 
+			    CALCULATE(
+			        COUNTROWS('Daily_Extract'),
+			     
+			        'Daily_Extract'[mosaic_draft_flag] = 1,
+			        'Daily_Extract'[Mosaic Exam Flag] = 1,
+			        NOT(ISBLANK('Daily_Extract'[Mexproc])),
+			        'Daily_Extract'[Final_DateTime - Date] >= Last14DaysStart,
+			        'Daily_Extract'[Final_DateTime - Date] <= TODAY(),
+			        REMOVEFILTERS('Daily_Extract'[Date]),
+			        REMOVEFILTERS('Daily_Extract'[Month]),
+			        REMOVEFILTERS('Daily_Extract'[Final_DateTime - Date])
+			    )
+			
+			RETURN
+			    DIVIDE(CaptureRead, CaptureEligible, 0)
+			```
+		lineageTag: 1e2133ab-0b0b-41c9-9dc3-ccda9a82fcc6
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	measure 'Drafted CT AbdPel' =
+			
+			VAR EligibleCodes = {
+			    "CT3PHLIV", "RPID152-3D", "RPID1060-3D", "RPID1449", "RPID279",
+			    "RPID140", "RAD2508", "RPID152", "RPID1060", "RPID1459",
+			    "CTAPRENALMA", "RPID1643D", "RPID164", "RAD2260", "RAD2262",
+			    "RAD2261", "RPID145", "RPID145-RC", "RPID144", "RPID144RC",
+			    "RPID144-RC", "RPID198", "RPID198-IVP3D", "RPID198-RC", "RPID5",
+			    "RPID3", "RPID4", "RAD2345", "RAD2346", "RAD2011", "RPID48-B",
+			    "RPID46-B", "RAD2266", "RAD2012", "RAD2013", "RAD2014", "RPID64",
+			    "RPID48", "RPID48MR", "RPID68-MIP", "RPID48-RC", "RPID46",
+			    "RPID47", "RPID47MR", "RPID47-RC", "CT4PHLIV", "RAD2852",
+			    "RAD2853", "RPID46-RC", "RAD2854", "RAD2986", "RAD2987"
+			}
+			
+			RETURN
+			    CALCULATE(
+			        COUNTROWS('Daily_Extract'),
+			        'Daily_Extract'[Modality] = "CT",
+			        'Daily_Extract'[Drafteligiblecode] IN EligibleCodes,
+			        'Daily_Extract'[mosaic_draft_flag] = 1
+			    )
+		formatString: 0
+		lineageTag: 07032d3e-fdc5-40ba-a0ef-8f263f3745ba
+
+	measure 'Draftable CT AbdPel' =
+			
+			VAR EligibleCodes = {
+			    "CT3PHLIV", "RPID152-3D", "RPID1060-3D", "RPID1449", "RPID279",
+			    "RPID140", "RAD2508", "RPID152", "RPID1060", "RPID1459",
+			    "CTAPRENALMA", "RPID1643D", "RPID164", "RAD2260", "RAD2262",
+			    "RAD2261", "RPID145", "RPID145-RC", "RPID144", "RPID144RC",
+			    "RPID144-RC", "RPID198", "RPID198-IVP3D", "RPID198-RC", "RPID5",
+			    "RPID3", "RPID4", "RAD2345", "RAD2346", "RAD2011", "RPID48-B",
+			    "RPID46-B", "RAD2266", "RAD2012", "RAD2013", "RAD2014", "RPID64",
+			    "RPID48", "RPID48MR", "RPID68-MIP", "RPID48-RC", "RPID46",
+			    "RPID47", "RPID47MR", "RPID47-RC", "CT4PHLIV", "RAD2852",
+			    "RAD2853", "RPID46-RC", "RAD2854", "RAD2986", "RAD2987"
+			}
+			
+			RETURN
+			    CALCULATE(
+			        COUNTROWS('Daily_Extract'),
+			        'Daily_Extract'[Modality] = "CT",
+			        'Daily_Extract'[Drafteligiblecode] IN EligibleCodes
+			    )
+		formatString: 0
+		lineageTag: 8dfa2a70-3d1a-4d31-a584-d297954435e6
+
+	measure '%Drafted Abdpel' = ```
+			DIVIDE( [Drafted CT AbdPel], [Draftable CT AbdPel] , 0 ) 
+			```
+		formatString: 0%;-0%;0%
+		lineageTag: dbff892f-e2fa-49f4-854a-571f919b524d
+
+	measure 'Drafting Group Filter' = ```
+			
+			VAR SelectedGroups = VALUES('Drafting Groups'[Drafting Group])
+			VAR Selected = COUNTROWS(SelectedGroups) = 6
+			
+			VAR ShowXR =         COUNTROWS(FILTER(SelectedGroups, [Drafting Group] = "Rads on XR Drafting")) > 0
+			VAR ShowCTHead =     COUNTROWS(FILTER(SelectedGroups, [Drafting Group] = "Rads on CT Head Drafting")) > 0
+			VAR ShowCTAbd =      COUNTROWS(FILTER(SelectedGroups, [Drafting Group] = "Rads on CT Abd/Pel Drafting")) > 0
+			VAR ShowNotOnDraft = COUNTROWS(FILTER(SelectedGroups, [Drafting Group] = "Rads Not on Drafting")) > 0
+			var showctchest = COUNTROWS(FILTER(SelectedGroups, [Drafting Group] = "Rads on CT Chest Drafting")) > 0
+			VAR ShowPrevious =     COUNTROWS(FILTER(SelectedGroups, [Drafting Group] = "Previously on Drafting")) > 0
+			
+			VAR IsXR =     MAX('Daily_Extract'[Is On XR Drafting]) = 1
+			VAR IsCTHead = MAX('Daily_Extract'[Is On CT Head Drafting]) = 1
+			VAR IsCTAbd =  MAX('Daily_Extract'[Is On CT Abd/Pel Drafting]) = 1
+			var isCTChest = MAX('Daily_Extract'[Is On CT Chest Drafting]) = 1 
+			VAR NotInAnyGroup = 
+			    NOT(IsXR) && NOT(IsCTHead) && NOT(IsCTAbd) && NOT(IsCTChest)
+			
+			-- Has any drafted cases (historical)
+			VAR HasDraftedCases = 
+			    CALCULATE(SUM('Daily_Extract'[mosaic_draft_flag])) > 0
+			
+			-- Previously on drafting: not in any group now BUT has drafted cases
+			VAR IsPrevious = NotInAnyGroup && HasDraftedCases
+			
+			-- Truly not on drafting: not in any group AND no drafted cases ever
+			VAR IsNone = NotInAnyGroup && NOT(HasDraftedCases)
+			
+			RETURN
+			IF(
+			    Selected,
+			    1,
+			    IF(
+			        (ShowXR && IsXR) ||
+			        (ShowCTHead && IsCTHead) ||
+			        (ShowCTAbd && IsCTAbd) ||
+			        (ShowCTChest && IsCTChest) ||
+			        (ShowPrevious && IsPrevious) ||   -- ✅ Previously on drafting
+			        (ShowNotOnDraft && IsNone),        -- ✅ Truly never drafted
+			        1, 0
+			    )
+			)
+			```
+		formatString: 0
+		lineageTag: 5a7748f4-a0a4-4510-a464-e107249dd6a4
+
+	measure 'Total Mammo Reads by Rad (Last 14d)' =
+			
+			VAR Last14DaysStart = TODAY() - 14
+			
+			RETURN
+			CALCULATE(
+			    COUNTROWS('Daily_Extract'),
+			    'Daily_Extract'[Modality] = "MG",
+			    'Daily_Extract'[Final_DateTime - Date] >= Last14DaysStart,
+			    'Daily_Extract'[Final_DateTime - Date] <= TODAY(),
+			    REMOVEFILTERS('Daily_Extract'[Date]),
+			    REMOVEFILTERS('Daily_Extract'[Month]),
+			    REMOVEFILTERS('Daily_Extract'[Final_DateTime - Date])
+			)
+		formatString: 0
+		lineageTag: 5dc5e5be-5f53-4114-8154-be9720b44fa0
+
+	measure 'Total Mammo Reads in Mosaic (Last 14d)' =
+			
+			VAR Last14DaysStart = TODAY() - 14
+			
+			RETURN
+			CALCULATE(
+			    COUNTROWS('Daily_Extract'),
+			    'Daily_Extract'[Modality] = "MG",
+			    'Daily_Extract'[Mosaic Exam Flag] = 1,
+			    'Daily_Extract'[Final_DateTime - Date] >= Last14DaysStart,
+			    'Daily_Extract'[Final_DateTime - Date] <= TODAY(),
+			    REMOVEFILTERS('Daily_Extract'[Date]),
+			    REMOVEFILTERS('Daily_Extract'[Month]),
+			    REMOVEFILTERS('Daily_Extract'[Final_DateTime - Date])
+			)
+		formatString: 0
+		lineageTag: 5aab8f61-82cc-4a03-9cc7-c9d33c064f2f
+
+	measure '% Mammo Reads in Mosaic (Last 14d)' =
+			
+			DIVIDE(
+			    [Total Mammo Reads in Mosaic (Last 14d)],
+			    [Total Mammo Reads by Rad (Last 14d)],
+			    0
+			)
+		formatString: 0%;-0%;0%
+		lineageTag: a7a99d14-c7b8-48c9-a167-19361e040496
+
+	measure 'Total CA Lung Screener Reads by Rad (Last 14d)' =
+			
+			VAR Last14DaysStart = TODAY() - 14
+			
+			RETURN
+			CALCULATE(
+			    COUNTROWS('Daily_Extract'),
+			    'Daily_Extract'[Modality] = "CT",
+			    'Daily_Extract'[Clinical_Procedure_Code] IN {
+			        "RPID6891",
+			        "RPID6891-FU",
+			        "RAD2282",
+			        "RPID6891-WC"
+			    },
+			    'Daily_Extract'[Final_DateTime - Date] >= Last14DaysStart,
+			    'Daily_Extract'[Final_DateTime - Date] <= TODAY(),
+			    REMOVEFILTERS('Daily_Extract'[Date]),
+			    REMOVEFILTERS('Daily_Extract'[Month]),
+			    REMOVEFILTERS('Daily_Extract'[Final_DateTime - Date])
+			)
+		formatString: 0
+		lineageTag: ce1c3bb4-c2df-4100-afbd-17b477c65470
+
+	measure 'Total CA Lung Screener Reads in Mosaic (Last 14d)' =
+			
+			VAR Last14DaysStart = TODAY() - 14
+			
+			RETURN
+			CALCULATE(
+			    COUNTROWS('Daily_Extract'),
+			    'Daily_Extract'[Modality] = "CT",
+			    'Daily_Extract'[Clinical_Procedure_Code] IN {
+			        "RPID6891",
+			        "RPID6891-FU",
+			        "RAD2282",
+			        "RPID6891-WC"
+			    },
+			    'Daily_Extract'[Mosaic Exam Flag] = 1,
+			    'Daily_Extract'[Final_DateTime - Date] >= Last14DaysStart,
+			    'Daily_Extract'[Final_DateTime - Date] <= TODAY(),
+			    REMOVEFILTERS('Daily_Extract'[Date]),
+			    REMOVEFILTERS('Daily_Extract'[Month]),
+			    REMOVEFILTERS('Daily_Extract'[Final_DateTime - Date])
+			)
+		formatString: 0
+		lineageTag: e67b73ab-c004-45e7-a465-ce457a3d41f7
+
+	measure 'CA Lung Screener % Reads in Mosaic (last 14d)' = DIVIDE( [Total CA Lung Screener Reads in Mosaic (Last 14d)], [Total CA Lung Screener Reads by Rad (Last 14d)], 0 )
+		formatString: 0%;-0%;0%
+		lineageTag: 1e7d69c3-5d2f-4c46-b3dd-e341afdc1a77
+
+	measure RefreshDate = ```
+			
+			"Report Refreshed: " & 
+			FORMAT(
+			    CALCULATE(
+			        MAX('Daily_Extract'[Refresh_Date]),
+			        REMOVEFILTERS('Daily_Extract')
+			    ), 
+			    "MM/DD/YYYY hh:mm AM/PM"
+			) & 
+			" | Refresh Schedule: Daily | Data Source(s): Clinical"
+			```
+		lineageTag: 5a7d4eee-1d18-4d68-a0d3-0afe9611da4b
+
+	measure 'Draftable CT Chest (Last 14d)' =
+			
+			VAR Last14DaysStart = TODAY() - 14
+			VAR EligibleCodes = {
+			    "RPID249", "RPID249T", "RPID357", "RPID357T",
+			    "RPID250", "RPID251", "RPID356", "RPID252",
+			    "RPID250-CAPWWO", "RPID252-CAWWO", "RPID250-CAPWOW",
+			    "RPID18", "RPID18I-BP", "RPID18-SD",
+			    "RPID16", "RPID16-IBP", "RPID16-LD", "RPID16-PNHR",
+			    "RPID16-PNLR", "RPID16-SP", "RPID16-SD", "RPID16T",
+			    "RPID16-ZP", "RPID17", "RPID16-QRS", "RAD2942"
+			}
+			
+			RETURN
+			CALCULATE(
+			    COUNTROWS('Daily_Extract'),
+			    'Daily_Extract'[Modality] = "CT",
+			    'Daily_Extract'[Drafteligiblecode] IN EligibleCodes,
+			    'Daily_Extract'[Final_DateTime - Date] >= Last14DaysStart,
+			    'Daily_Extract'[Final_DateTime - Date] <= TODAY(),
+			    REMOVEFILTERS('Daily_Extract'[Date]),
+			    REMOVEFILTERS('Daily_Extract'[Month]),
+			    REMOVEFILTERS('Daily_Extract'[Final_DateTime - Date])
+			)
+		formatString: 0
+		lineageTag: 16d34586-1ca7-48d6-85bd-1164e87791c3
+
+	measure 'Drafted CT Chest (Last 14d)' =
+			
+			VAR Last14DaysStart = TODAY() - 14
+			VAR EligibleCodes = {
+			    "RPID249", "RPID249T", "RPID357", "RPID357T",
+			    "RPID250", "RPID251", "RPID356", "RPID252",
+			    "RPID250-CAPWWO", "RPID252-CAWWO", "RPID250-CAPWOW",
+			    "RPID18", "RPID18I-BP", "RPID18-SD",
+			    "RPID16", "RPID16-IBP", "RPID16-LD", "RPID16-PNHR",
+			    "RPID16-PNLR", "RPID16-SP", "RPID16-SD", "RPID16T",
+			    "RPID16-ZP", "RPID17", "RPID16-QRS", "RAD2942"
+			}
+			
+			RETURN
+			CALCULATE(
+			    COUNTROWS('Daily_Extract'),
+			    'Daily_Extract'[Modality] = "CT",
+			    'Daily_Extract'[Drafteligiblecode] IN EligibleCodes,
+			    'Daily_Extract'[mosaic_draft_flag] = 1,
+			    'Daily_Extract'[Final_DateTime - Date] >= Last14DaysStart,
+			    'Daily_Extract'[Final_DateTime - Date] <= TODAY(),
+			    REMOVEFILTERS('Daily_Extract'[Date]),
+			    REMOVEFILTERS('Daily_Extract'[Month]),
+			    REMOVEFILTERS('Daily_Extract'[Final_DateTime - Date])
+			)
+		formatString: 0
+		lineageTag: dc544046-d4b2-41f1-b2e2-cf93652e5be4
+
+	measure '% Drafted CT Chest (Last 14d)' =
+			
+			DIVIDE(
+			    [Drafted CT Chest (Last 14d)],
+			    [Draftable CT Chest (Last 14d)],
+			    0
+			)
+		formatString: 0%;-0%;0%
+		lineageTag: ed7a5123-8458-4dda-ab34-c10f66571054
+
+	measure '% Mammo' = ```
+			
+			VAR MosaicFlagSelected = SELECTEDVALUE('Daily_Extract'[Mosaic Exam Flag])
+			
+			VAR Numerator = 
+			    CALCULATE(
+			        SUM('Daily_Extract'[Exam Ct]),
+			        'Daily_Extract'[Modality] = "MG"
+			    )
+			
+			VAR Denominator = 
+			    IF(
+			        MosaicFlagSelected = 1,
+			        CALCULATE(
+			            [Total Exam Ct],
+			            REMOVEFILTERS('Daily_Extract'[Modality]),  -- ✅ Ignore modality slicer
+			            'Daily_Extract'[Mosaic Exam Flag] = 1
+			        ),
+			        CALCULATE(
+			            [Total Exam Ct],
+			            REMOVEFILTERS('Daily_Extract'[Modality]),  -- ✅ Ignore modality slicer
+			            REMOVEFILTERS('Daily_Extract'[Mosaic Exam Flag])
+			        )
+			    )
+			
+			RETURN
+			DIVIDE(Numerator, Denominator, 0)
+			```
+		formatString: 0%;-0%;0%
+		lineageTag: e749f06e-10c2-44d9-a91d-b5a819aa8521
+
+	measure 'Threshold Filter' = ```
+			
+			VAR SelectedThreshold = 
+			    COALESCE(
+			        CALCULATE(
+			            MAX('ThresholdSlicer'[Threshold]),
+			            ALLSELECTED('ThresholdSlicer')
+			        ),
+			        0
+			    )
+			
+			VAR TotalExams = 
+			    CALCULATE(SUM('Daily_Extract'[Exam Ct]))
+			
+			RETURN
+			IF(TotalExams >= SelectedThreshold, 1, 0)
+			```
+		formatString: 0
+		lineageTag: 1917ac58-8ef1-4569-bcc1-bab2ad93ace4
+
+	measure 'Draftable CT Chest' =
+			
+			VAR EligibleCodes = {
+			      "RPID249", "RPID249T", "RPID357", "RPID357T",
+			
+			    "RPID250", "RPID251", "RPID356", "RPID252",
+			
+			    "RPID250-CAPWWO", "RPID252-CAWWO", "RPID250-CAPWOW",
+			
+			    "RPID18", "RPID18I-BP", "RPID18-SD",
+			
+			    "RPID16", "RPID16-IBP", "RPID16-LD", "RPID16-PNHR",
+			
+			    "RPID16-PNLR", "RPID16-SP", "RPID16-SD", "RPID16T",
+			
+			    "RPID16-ZP", "RPID17", "RPID16-QRS", "RAD2942"
+			}
+			
+			RETURN
+			    CALCULATE(
+			        COUNTROWS('Daily_Extract'),
+			        'Daily_Extract'[Modality] = "CT",
+			        'Daily_Extract'[Drafteligiblecode] IN EligibleCodes
+			    )
+		formatString: 0
+		lineageTag: de13b21b-30c7-4c6b-8e31-6ab07d6c3cf4
+
+	measure 'Drafted CTChest' =
+			
+			VAR EligibleCodes = {
+			      "RPID249", "RPID249T", "RPID357", "RPID357T",
+			
+			    "RPID250", "RPID251", "RPID356", "RPID252",
+			
+			    "RPID250-CAPWWO", "RPID252-CAWWO", "RPID250-CAPWOW",
+			
+			    "RPID18", "RPID18I-BP", "RPID18-SD",
+			
+			    "RPID16", "RPID16-IBP", "RPID16-LD", "RPID16-PNHR",
+			
+			    "RPID16-PNLR", "RPID16-SP", "RPID16-SD", "RPID16T",
+			
+			    "RPID16-ZP", "RPID17", "RPID16-QRS", "RAD2942"
+			}
+			
+			RETURN
+			    CALCULATE(
+			        COUNTROWS('Daily_Extract'),
+			        'Daily_Extract'[Modality] = "CT",
+			        'Daily_Extract'[Drafteligiblecode] IN EligibleCodes,
+			        'Daily_Extract'[mosaic_draft_flag] = 1
+			    )
+		formatString: 0
+		lineageTag: d32346aa-caea-4541-96de-6f60c6dbbadc
+
+	measure '% Drafted CT Chest' = DIVIDE('Daily_Extract'[Drafted CTChest], 'Daily_Extract'[Draftable CT Chest], 0 )
+		formatString: 0%;-0%;0%
+		lineageTag: 338ca472-f84b-40d3-b009-8eb6b1224f43
+
+	measure 'Draftable CT Spine' =
+			
+			VAR EligibleCodes = {
+			  "RPID20",
+			"RPID21",
+			"RPID19",
+			"92025-6",
+			"82690-9",
+			"93603-9",
+			"CTHFCSPWO",
+			"RPID21T",
+			"RPID20-MR",
+			"RPID21-MR",
+			"RPID21-PD",
+			"RPID19-MR",
+			"RAD2770",
+			"RAD2771",
+			"RAD2772",
+			"RPID1004",
+			"RPID1005",
+			"RPID416",
+			"RPID417",
+			"RPID418",
+			"RPID379",
+			"RPID11",
+			"RPID39",
+			"RPID37",
+			"RPID38",
+			"CTPRTHDW",
+			"CTHWOCTAHDNKW",
+			"CTHWOCTANKW",
+			"RPID1004PERF",
+			"RPID1004S",
+			"RPID1005S",
+			"RPID379S",
+			"RPID1005-3D",
+			"RPID3793D",
+			"RPID39ST",
+			"RPID37ST",
+			"RPID38ST",
+			"RPID38-4D",
+			"RAD2323",
+			"RAD2324",
+			"RAD2325",
+			"RPID1005PERF",
+			"RAD2980",
+			"RAD2981",
+			"RAD2982",
+			"CTHWOCTAHDNKWWO"
+			
+			}
+			
+			RETURN
+			    CALCULATE(
+			        COUNTROWS('Daily_Extract'),
+			        'Daily_Extract'[Modality] = "CT",
+			        'Daily_Extract'[Drafteligiblecode] IN EligibleCodes
+			    )
+		formatString: 0
+		lineageTag: c7e7eb13-c293-46b1-a704-557e2f0af9e5
+
+	measure 'Drafted CTSpine' =
+			
+			VAR EligibleCodes = {
+			"RPID20",
+			"RPID21",
+			"RPID19",
+			"92025-6",
+			"82690-9",
+			"93603-9",
+			"CTHFCSPWO",
+			"RPID21T",
+			"RPID20-MR",
+			"RPID21-MR",
+			"RPID21-PD",
+			"RPID19-MR",
+			"RAD2770",
+			"RAD2771",
+			"RAD2772",
+			"RPID1004",
+			"RPID1005",
+			"RPID416",
+			"RPID417",
+			"RPID418",
+			"RPID379",
+			"RPID11",
+			"RPID39",
+			"RPID37",
+			"RPID38",
+			"CTPRTHDW",
+			"CTHWOCTAHDNKW",
+			"CTHWOCTANKW",
+			"RPID1004PERF",
+			"RPID1004S",
+			"RPID1005S",
+			"RPID379S",
+			"RPID1005-3D",
+			"RPID3793D",
+			"RPID39ST",
+			"RPID37ST",
+			"RPID38ST",
+			"RPID38-4D",
+			"RAD2323",
+			"RAD2324",
+			"RAD2325",
+			"RPID1005PERF",
+			"RAD2980",
+			"RAD2981",
+			"RAD2982",
+			"CTHWOCTAHDNKWWO"
+			
+			}
+			
+			RETURN
+			    CALCULATE(
+			        COUNTROWS('Daily_Extract'),
+			        'Daily_Extract'[Modality] = "CT",
+			        'Daily_Extract'[Drafteligiblecode] IN EligibleCodes,
+			        'Daily_Extract'[mosaic_draft_flag] = 1
+			    )
+		formatString: 0
+		lineageTag: 191d225b-a5b0-4233-ba02-bc1719e61b5b
+
+	measure '% Drafted CT Spine' = DIVIDE( 'Daily_Extract'[Drafted CTSpine], 'Daily_Extract'[Draftable CT Spine], 0 )
+		formatString: 0%;-0%;0%
+		lineageTag: b1dbf50b-e41f-4dbc-acd7-72773e7432e3
+
+	measure ct_reporting = ```
+			CALCULATE(COUNTROWS('Daily_Extract'), 
+			'Daily_Extract'[Modality] = "CT", 
+			'Daily_Extract'[Mosaic Exam Flag] = 1 
+			)
+			```
+		formatString: 0
+		lineageTag: c1fc8bc2-3308-4e06-9b67-27a64a8935bb
+
+	measure Total_ct = ```
+			
+			CALCULATE(COUNTROWS('Daily_Extract'), 
+			'Daily_Extract'[Modality] = "CT"
+			)
+			```
+		formatString: 0
+		lineageTag: dee59492-212f-4230-aeb5-d001a2b47feb
+
+	measure '% CT' =
+			
+			SWITCH(
+			    TRUE(),
+			    [SelectedMeasure] = "Exam Count", DIVIDE([ct_reporting], [Total_ct], 0),
+			    [SelectedMeasure] = "RVUs", DIVIDE(
+			        CALCULATE(SUM(Daily_Extract[RVU-decimal]), Daily_Extract[Modality] = "CT", Daily_Extract[Mosaic Exam Flag] = 1),
+			        CALCULATE(SUM(Daily_Extract[RVU-decimal]), Daily_Extract[Modality] = "CT"),
+			        0
+			    ),
+			    DIVIDE([ct_reporting], [Total_ct], 0)
+			)
+		formatString: 0.0%;-0.0%;0.0%
+		lineageTag: 1c1b388e-a08c-4237-b2c3-e6bc66bac95c
+
+	measure CT_Drafting = ```
+			CALCULATE(COUNTROWS('Daily_Extract'), 
+			'Daily_Extract'[Modality] = "CT", 
+			'Daily_Extract'[mosaic_draft_flag] = 1 
+			)
+			```
+		formatString: 0
+		lineageTag: eea799ef-912f-433a-b2cd-1c6221622a90
+
+	measure '% CT Drafting' =
+			
+			SWITCH(
+			    TRUE(),
+			    [SelectedMeasure] = "Exam Count", DIVIDE([CT_Drafting], [Total_ct], 0),
+			    [SelectedMeasure] = "RVUs", DIVIDE(
+			        CALCULATE(SUM(Daily_Extract[RVU-decimal]), Daily_Extract[Modality] = "CT", Daily_Extract[mosaic_draft_flag] = 1),
+			        CALCULATE(SUM(Daily_Extract[RVU-decimal]), Daily_Extract[Modality] = "CT"),
+			        0
+			    ),
+			    DIVIDE([CT_Drafting], [Total_ct], 0)
+			)
+		formatString: 0.0%;-0.0%;0.0%
+		lineageTag: aaf4e1fa-c58e-4365-aea4-0f029d993653
+
+	measure Pct_ct_rpce = DIVIDE(SUM('Daily_Extract'[RPCE_CT_FLAG]), [Total_ct], 0)
+		formatString: 0.00%;-0.00%;0.00%
+		lineageTag: 8486137b-3019-423d-83fb-5f13ef2e00e1
+
+	measure 'Test - Not On Drafting But Has Drafted Exams' = ```
+			
+			FILTER(
+			    VALUES('Daily_Extract'[NPI]),
+			    VAR CurrentNPI = 'Daily_Extract'[NPI]
+			    VAR IsXR = CALCULATE(MAX('Daily_Extract'[Is On XR Drafting]), 'Daily_Extract'[NPI] = CurrentNPI) = 1
+			    VAR IsCTHead = CALCULATE(MAX('Daily_Extract'[Is On CT Head Drafting]), 'Daily_Extract'[NPI] = CurrentNPI) = 1
+			    VAR IsCTAbd = CALCULATE(MAX('Daily_Extract'[Is On CT Abd/Pel Drafting]), 'Daily_Extract'[NPI] = CurrentNPI) = 1
+			    VAR IsCTChest = CALCULATE(MAX('Daily_Extract'[Is On CT Chest Drafting]), 'Daily_Extract'[NPI] = CurrentNPI) = 1
+			    VAR IsNotOnDrafting = NOT(IsXR) && NOT(IsCTHead) && NOT(IsCTAbd) && NOT(IsCTChest)
+			    VAR HasDraftedExams = 
+			        CALCULATE(
+			            SUM('Daily_Extract'[mosaic_draft_flag]),
+			            'Daily_Extract'[NPI] = CurrentNPI
+			        ) > 0
+			    RETURN IsNotOnDrafting && HasDraftedExams
+			)
+			```
+		lineageTag: f8af037e-8cdf-465c-88bc-718b25ee31c0
+
+	measure 'Rads Not On Drafting With Drafted Exams' = ```
+			
+			VAR Last7Days = TODAY() - 7
+			
+			RETURN
+			COUNTROWS(
+			    FILTER(
+			        VALUES('Daily_Extract'[NPI]),
+			        VAR CurrentNPI = 'Daily_Extract'[NPI]
+			        VAR IsNotOnDrafting = 
+			            CALCULATE(MAX('Daily_Extract'[Is On XR Drafting]), 'Daily_Extract'[NPI] = CurrentNPI) = 0 &&
+			            CALCULATE(MAX('Daily_Extract'[Is On CT Head Drafting]), 'Daily_Extract'[NPI] = CurrentNPI) = 0 &&
+			            CALCULATE(MAX('Daily_Extract'[Is On CT Abd/Pel Drafting]), 'Daily_Extract'[NPI] = CurrentNPI) = 0 &&
+			            CALCULATE(MAX('Daily_Extract'[Is On CT Chest Drafting]), 'Daily_Extract'[NPI] = CurrentNPI) = 0
+			        VAR HasRecentDraftedExams = 
+			            CALCULATE(
+			                SUM('Daily_Extract'[mosaic_draft_flag]),
+			                'Daily_Extract'[NPI] = CurrentNPI,
+			                'Daily_Extract'[Date] >= Last7Days
+			            ) > 0
+			        RETURN IsNotOnDrafting && HasRecentDraftedExams
+			    )
+			)
+			```
+		formatString: 0
+		lineageTag: 00488bae-dc2f-4cbf-a0fb-774b0d787470
+
+	measure 'AD Group XR Date' =
+			
+			CALCULATE(
+			    MAX(vrarp_radpipeline[Added to AD Group (CXR/ABD/MSK)]),
+			    FILTER(vrarp_radpipeline, vrarp_radpipeline[NPI] = MAX('Daily_Extract'[Provider_NPI]))
+			)
+		formatString: General Date
+		lineageTag: 4686db3e-326c-4f6b-95c3-ddd989636a7d
+
+	measure 'AD Group CT Head Date' =
+			
+			CALCULATE(
+			    MAX(vrarp_radpipeline[Added to AD Group (CT Head)]),
+			    FILTER(vrarp_radpipeline, vrarp_radpipeline[NPI] = MAX('Daily_Extract'[Provider_NPI]))
+			)
+		formatString: General Date
+		lineageTag: 2e739e31-4c32-4ef2-a226-bbf514e6fcdf
+
+	measure 'AD Group CT AbdPel Date' =
+			
+			CALCULATE(
+			    MAX(vrarp_radpipeline[Added to AD Group (CT Abd/Pelvis)]),
+			    FILTER(vrarp_radpipeline, vrarp_radpipeline[NPI] = MAX('Daily_Extract'[Provider_NPI]))
+			)
+		formatString: General Date
+		lineageTag: 1ac7fe87-6bcb-42f1-88be-4d2e46169340
+
+	measure 'AD Group CT Chest Date' =
+			
+			CALCULATE(
+			    MAX(vrarp_radpipeline[Added to AD Group (CT Chest)]),
+			    FILTER(vrarp_radpipeline, vrarp_radpipeline[NPI] = MAX('Daily_Extract'[Provider_NPI]))
+			)
+		formatString: General Date
+		lineageTag: 3e206357-5e24-4b5e-a302-4d8179721d2e
+
+	measure 'Last Drafted Exam Date' =
+			
+			CALCULATE(
+			    MAX('Daily_Extract'[Date]),
+			    'Daily_Extract'[mosaic_draft_flag] = 1
+			)
+		formatString: General Date
+		lineageTag: c27c39eb-7814-4a4d-a779-1536b839eeb7
+
+	measure 'Has Drafted But Not On Drafting' = ```
+			
+			VAR Last7Days = TODAY() - 7
+			VAR CurrentNPI = MAX('Daily_Extract'[Provider_NPI])
+			
+			VAR IsNotOnDrafting = 
+			    CALCULATE(MAX('Daily_Extract'[Is On XR Drafting]), 'Daily_Extract'[Provider_NPI] = CurrentNPI) = 0 &&
+			    CALCULATE(MAX('Daily_Extract'[Is On CT Head Drafting]), 'Daily_Extract'[Provider_NPI] = CurrentNPI) = 0 &&
+			    CALCULATE(MAX('Daily_Extract'[Is On CT Abd/Pel Drafting]), 'Daily_Extract'[Provider_NPI] = CurrentNPI) = 0 &&
+			    CALCULATE(MAX('Daily_Extract'[Is On CT Chest Drafting]), 'Daily_Extract'[Provider_NPI] = CurrentNPI) = 0
+			
+			VAR HasRecentDraftedExams = 
+			    CALCULATE(
+			        SUM('Daily_Extract'[mosaic_draft_flag]),
+			        'Daily_Extract'[Provider_NPI] = CurrentNPI,
+			        'Daily_Extract'[Date] >= Last7Days
+			    ) > 0
+			
+			RETURN IF(IsNotOnDrafting && HasRecentDraftedExams, 1, 0)
+			```
+		formatString: 0
+		lineageTag: 22ba898f-22e9-4344-9df4-5a5a9836f7f2
+
+	measure 'In Pipeline Table' =
+			
+			IF(
+			    ISBLANK(
+			        LOOKUPVALUE(
+			            'vrarp_radpipeline'[NPI],
+			            'vrarp_radpipeline'[NPI],
+			            MAX('Daily_Extract'[Provider_NPI])
+			        )
+			    ),
+			    "NOT in Pipeline",
+			    "In Pipeline"
+			)
+		lineageTag: 6361c216-911a-455f-b2a6-28bf9d457c57
+
+	measure 'NPI Check' = MAX('Daily_Extract'[Provider_NPI])
+		lineageTag: 3afbd941-b0ce-4c6d-933b-0ac682bfbeaf
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column Provider_NPI
+		dataType: double
+		formatString: 0
+		lineageTag: bcbaf924-66fa-4d80-a59d-0bf779fba0a2
+		summarizeBy: none
+		sourceColumn: Provider_NPI
+
+		changedProperty = IsHidden
+
+		annotation SummarizationSetBy = Automatic
+
+	column Provider
+		dataType: string
+		lineageTag: b1313566-a412-4bd0-a99b-180509a5dcf6
+		summarizeBy: none
+		sourceColumn: Provider
+
+		changedProperty = IsHidden
+
+		annotation SummarizationSetBy = Automatic
+
+	column Rad_Type
+		dataType: string
+		lineageTag: 41f403cd-18dc-48ee-ba88-016ec68a45b4
+		summarizeBy: none
+		sourceColumn: Rad_Type
+
+		changedProperty = IsHidden
+
+		annotation SummarizationSetBy = Automatic
+
+	column NPI
+		dataType: string
+		lineageTag: 1b08e1b6-a68c-45b2-a624-6eb2484e8650
+		summarizeBy: none
+		sourceColumn: NPI
+
+		changedProperty = DataType
+
+		changedProperty = IsHidden
+
+		annotation SummarizationSetBy = Automatic
+
+	column Practice_Code
+		dataType: string
+		lineageTag: 9bd4404e-0f45-47b9-ae70-2610d74fd8d5
+		summarizeBy: none
+		sourceColumn: Practice_Code
+
+		changedProperty = IsHidden
+
+		annotation SummarizationSetBy = Automatic
+
+	column Sub_Practice_Code
+		dataType: string
+		lineageTag: 631327f1-f452-4123-8cd5-8d09738e6b95
+		summarizeBy: none
+		sourceColumn: Sub_Practice_Code
+
+		changedProperty = IsHidden
+
+		annotation SummarizationSetBy = Automatic
+
+	column Practice
+		dataType: string
+		lineageTag: 9fe2a064-24cd-44ae-95e2-17ce8c0329a2
+		summarizeBy: none
+		sourceColumn: Practice
+
+		changedProperty = IsHidden
+
+		annotation SummarizationSetBy = Automatic
+
+	column Sub-Practice
+		dataType: string
+		lineageTag: 47d480c3-85af-40a6-ab07-170257409456
+		summarizeBy: none
+		sourceColumn: Sub-Practice
+
+		changedProperty = IsHidden
+
+		annotation SummarizationSetBy = Automatic
+
+	column Site
+		dataType: string
+		lineageTag: e590bec0-6282-4184-a47a-5028c0148728
+		summarizeBy: none
+		sourceColumn: Site
+
+		changedProperty = IsHidden
+
+		annotation SummarizationSetBy = Automatic
+
+	column Department_Name
+		dataType: string
+		lineageTag: ad53f64a-a1ad-4079-bdf3-fedd4a8d6771
+		summarizeBy: none
+		sourceColumn: Department_Name
+
+		changedProperty = IsHidden
+
+		annotation SummarizationSetBy = Automatic
+
+	column Priority_Description
+		dataType: string
+		lineageTag: 674ea348-c4bb-43b0-b276-5c6ad9aa5263
+		summarizeBy: none
+		sourceColumn: Priority_Description
+
+		changedProperty = IsHidden
+
+		annotation SummarizationSetBy = Automatic
+
+	column Accession_Number
+		dataType: string
+		lineageTag: e08880b5-2ed2-45ac-834b-b8b242539d2a
+		summarizeBy: none
+		sourceColumn: Accession_Number
+
+		changedProperty = IsHidden
+
+		annotation SummarizationSetBy = Automatic
+
+	column Source_Procedure_Description
+		dataType: string
+		lineageTag: dbebfeaa-e22c-46f0-930f-299ded4d6c59
+		summarizeBy: none
+		sourceColumn: Source_Procedure_Description
+
+		changedProperty = IsHidden
+
+		annotation SummarizationSetBy = Automatic
+
+	column Final_DateTime
+		dataType: dateTime
+		formatString: General Date
+		lineageTag: 0abf2bc1-4897-4321-b338-8d9fcdeac22e
+		summarizeBy: none
+		sourceColumn: Final_DateTime
+
+		changedProperty = IsHidden
+
+		annotation SummarizationSetBy = Automatic
+
+	column 'Available To MD'
+		dataType: dateTime
+		formatString: General Date
+		lineageTag: 0c874247-948e-4c69-a81b-2836d7ce595e
+		summarizeBy: none
+		sourceColumn: Available To MD
+
+		changedProperty = IsHidden
+
+		annotation SummarizationSetBy = Automatic
+
+	column Study_Status_Description
+		dataType: string
+		lineageTag: 6c062245-44c5-4ed2-a5f4-11cf081e79f4
+		summarizeBy: none
+		sourceColumn: Study_Status_Description
+
+		changedProperty = IsHidden
+
+		annotation SummarizationSetBy = Automatic
+
+	column 'Place Of Service'
+		dataType: string
+		lineageTag: e4719674-3e91-4464-ae8a-bf22d7d935df
+		summarizeBy: none
+		sourceColumn: Place Of Service
+
+		changedProperty = IsHidden
+
+		annotation SummarizationSetBy = Automatic
+
+	column Month
+		dataType: dateTime
+		formatString: MMM YYY
+		lineageTag: 39d5b3bc-f357-4792-845d-2eb54d9428ca
+		summarizeBy: none
+		sourceColumn: Month
+		sortByColumn: Month_Rank2
+
+		changedProperty = IsHidden
+
+		changedProperty = SortByColumn
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation UnderlyingDateTimeDataType = Date
+
+		annotation PBI_FormatHint = {"isCustom":true}
+
+	column RP_IOWA_Reader_Flag
+		dataType: int64
+		formatString: 0
+		lineageTag: 86a21abe-b6fc-44ff-ae9c-dd274d87e2b9
+		summarizeBy: sum
+		sourceColumn: RP_IOWA_Reader_Flag
+
+		changedProperty = IsHidden
+
+		annotation SummarizationSetBy = Automatic
+
+	column RVU
+		dataType: double
+		formatString: #,0
+		lineageTag: ffde08e5-2710-4c1e-bf93-bf8ec640e944
+		summarizeBy: sum
+		sourceColumn: RVU
+
+		changedProperty = IsHidden
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isDecimal":true}
+
+	column TBWU
+		dataType: double
+		lineageTag: 59978381-183d-4ba3-9ca9-73420b23e7ff
+		summarizeBy: sum
+		sourceColumn: TBWU
+
+		changedProperty = IsHidden
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column Clinical_Procedure_Short_Description
+		dataType: string
+		lineageTag: b7458e49-8a73-4336-8f0f-5b48a12663b5
+		summarizeBy: none
+		sourceColumn: Clinical_Procedure_Short_Description
+
+		changedProperty = IsHidden
+
+		annotation SummarizationSetBy = Automatic
+
+	column Clinical_CPT_Code
+		dataType: string
+		lineageTag: 20a44ede-2577-4f09-a6f7-ed34a8c5516a
+		summarizeBy: none
+		sourceColumn: Clinical_CPT_Code
+
+		changedProperty = IsHidden
+
+		annotation SummarizationSetBy = Automatic
+
+	column Clinical_Procedure_Description
+		dataType: string
+		lineageTag: a86eb349-e4dc-4892-92f5-614635d321fd
+		summarizeBy: none
+		sourceColumn: Clinical_Procedure_Description
+
+		changedProperty = IsHidden
+
+		annotation SummarizationSetBy = Automatic
+
+	column Primary_Subspecialty
+		dataType: string
+		lineageTag: 14217e18-1bc9-45ab-81a0-43d57ccb6bb3
+		summarizeBy: none
+		sourceColumn: Primary_Subspecialty
+
+		changedProperty = IsHidden
+
+		annotation SummarizationSetBy = Automatic
+
+	column Secondary_Subspecialty
+		dataType: string
+		lineageTag: 985e0fe0-dc62-48b1-a92e-faf96e35c9f1
+		summarizeBy: none
+		sourceColumn: Secondary_Subspecialty
+
+		changedProperty = IsHidden
+
+		annotation SummarizationSetBy = Automatic
+
+	column Locum
+		dataType: int64
+		formatString: 0
+		lineageTag: e2f9d836-4da8-44ee-aad3-85cc600d0ead
+		summarizeBy: sum
+		sourceColumn: Locum
+
+		changedProperty = IsHidden
+
+		annotation SummarizationSetBy = Automatic
+
+	column Week_Number
+		dataType: int64
+		formatString: 0
+		lineageTag: 8663fda6-f753-4a68-b8aa-c34425b897a0
+		summarizeBy: sum
+		sourceColumn: Week_Number
+
+		changedProperty = IsHidden
+
+		annotation SummarizationSetBy = Automatic
+
+	column Crossreads =
+			IF(and(Daily_Extract[Practice]="Access", Left(Daily_Extract[Team],6)="Access"),0,
+			IF(and(Daily_Extract[Practice]="Baylor Radiologists",Left(Daily_Extract[Team],6)= "Baylor"),0,
+			IF(and(Daily_Extract[Practice]="Desert",Left(Daily_Extract[Team],6)= "Desert"),0,
+			IF(and(Daily_Extract[Practice]="ESR",Daily_Extract[Team]= "Empire State"),0,
+			IF(and(Daily_Extract[Practice]="Greensboro",Daily_Extract[Team]= "Greensboro Radiology"),0,
+			IF(and(Daily_Extract[Practice]="IAM",Daily_Extract[Team]= "IA Michigan"),0,
+			IF(and(Daily_Extract[Practice]="IAMSE",Daily_Extract[Team]= "IA Michigan Southeast"),0,
+			IF(and(Daily_Extract[Practice]="Mountain",Daily_Extract[Team]= "Mountain Radiology"),0,
+			IF(and(Daily_Extract[Practice]="MXC",Daily_Extract[Team]= "MXC Imaging Specialists"),0,
+			IF(and(Daily_Extract[Practice]="NEOH",Daily_Extract[Team]= "Northeast Ohio"),0,
+			IF(and(Daily_Extract[Practice]="RACSW",Daily_Extract[Team]= "RAC SW"),0,
+			IF(and(Daily_Extract[Practice]="RAF",Left(Daily_Extract[Team],3)= "RAF"),0,
+			IF(and(Daily_Extract[Practice]="RASF",Left(Daily_Extract[Team],4)= "RASF"),0,
+			IF(and(Daily_Extract[Practice]="RP Indiana",RIGHT(Daily_Extract[Team],7)= "Indiana"),0,
+			IF(and(Daily_Extract[Practice]="SVDI",Daily_Extract[Team]= "Silicon Valley Diagnostic Imaging"),0,
+			IF(and(Daily_Extract[Practice]="WGR",Daily_Extract[Team]= "West Georgia Radiology"),0,
+			IF(Daily_Extract[Sub-Practice]=Daily_Extract[Team],0,1)))))))))))))))))
+		formatString: 0
+		lineageTag: e3c37fac-1760-4ee3-a59f-085595e5c993
+		summarizeBy: sum
+
+		changedProperty = IsHidden
+
+		annotation SummarizationSetBy = Automatic
+
+	column 'Date Range Shown' = IF (Daily_Extract[7 day flag]=0,"Excluding Last 7 Days","Last 7 Days")
+		lineageTag: abb3fcbb-5b10-4ba4-8971-d1e96dc93bce
+		summarizeBy: none
+
+		changedProperty = IsHidden
+
+		annotation SummarizationSetBy = Automatic
+
+	column client_name
+		dataType: string
+		lineageTag: 924a62f4-7f85-4c03-bba3-fe5408b3df47
+		summarizeBy: none
+		sourceColumn: client_name
+
+		changedProperty = IsHidden
+
+		annotation SummarizationSetBy = Automatic
+
+	column Modality
+		dataType: string
+		lineageTag: d1b23570-44b0-4315-8852-42e76c3dbca1
+		summarizeBy: none
+		sourceColumn: Modality
+
+		changedProperty = IsHidden
+
+		annotation SummarizationSetBy = Automatic
+
+	column Clinical_Procedure_Code
+		dataType: string
+		lineageTag: ac4126d7-24a0-4727-b7b5-68b6e43e6032
+		summarizeBy: none
+		sourceColumn: Clinical_Procedure_Code
+
+		changedProperty = IsHidden
+
+		annotation SummarizationSetBy = Automatic
+
+	column 'Exam Ct'
+		dataType: int64
+		formatString: #,0
+		lineageTag: 8667aee3-0a92-47a7-b883-e0ca86e4bdc6
+		summarizeBy: sum
+		sourceColumn: Exam Ct
+
+		changedProperty = IsHidden
+
+		annotation SummarizationSetBy = Automatic
+
+	column 'Final Time' = Daily_Extract[Final_DateTime]
+		formatString: Short Time
+		lineageTag: 065acc71-dbaa-40e7-8495-47854be501ea
+		summarizeBy: none
+
+		changedProperty = DataType
+
+		changedProperty = IsHidden
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation UnderlyingDateTimeDataType = Time
+
+	column 'Available To MD - Date'
+		dataType: dateTime
+		formatString: Short Date
+		lineageTag: cb21ce05-1c7e-45fe-aa98-3cb50f751916
+		summarizeBy: none
+		sourceColumn: Available To MD - Date
+
+		changedProperty = IsHidden
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation UnderlyingDateTimeDataType = Date
+
+	column 'Available  Time'
+		dataType: dateTime
+		formatString: Long Time
+		lineageTag: 74c7889f-9fd1-4b1f-b1ff-6b2d3c75924d
+		summarizeBy: none
+		sourceColumn: Available  Time
+
+		changedProperty = IsHidden
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation UnderlyingDateTimeDataType = Time
+
+	column 'Final_DateTime - Date'
+		dataType: dateTime
+		formatString: Short Date
+		lineageTag: 435614dd-1884-4c9d-8491-d09ef0a5e847
+		summarizeBy: none
+		sourceColumn: Final_DateTime - Date
+
+		changedProperty = IsHidden
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation UnderlyingDateTimeDataType = Date
+
+	column 'Final- Time'
+		dataType: dateTime
+		formatString: Long Time
+		lineageTag: 169d4ba3-9765-4e15-ae02-c970d80491d4
+		summarizeBy: none
+		sourceColumn: Final- Time
+
+		changedProperty = IsHidden
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation UnderlyingDateTimeDataType = Time
+
+	column 'Avail time group' = FORMAT(Daily_Extract[Available  Time],"HH:00")
+		lineageTag: afb43a97-dfcb-4c37-a98a-3cc69ee5b54c
+		summarizeBy: none
+
+		changedProperty = IsHidden
+
+		annotation SummarizationSetBy = Automatic
+
+	column 'Final time group' = FORMAT(Daily_Extract[Final- Time],"HH:00")
+		lineageTag: 62857786-43dc-46a5-bd7e-ff451a555711
+		summarizeBy: none
+
+		changedProperty = IsHidden
+
+		annotation SummarizationSetBy = Automatic
+
+	column RVU-decimal = Daily_Extract[RVU]
+		lineageTag: 2b888dda-bd4d-47e6-bfc0-d63fe5f423a4
+		summarizeBy: sum
+
+		changedProperty = IsHidden
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column best_rvu
+		dataType: double
+		lineageTag: 69276f8b-4868-4c50-8634-f7f0b9c87ffc
+		summarizeBy: sum
+		sourceColumn: best_rvu
+
+		changedProperty = IsHidden
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column 'Linked Charge Flag'
+		dataType: int64
+		formatString: 0
+		lineageTag: 1e31970f-5391-435c-96f1-04d428de6e62
+		summarizeBy: sum
+		sourceColumn: Linked Charge Flag
+
+		changedProperty = IsHidden
+
+		annotation SummarizationSetBy = Automatic
+
+	column Allocated_RVU
+		dataType: double
+		lineageTag: f66e3465-83f1-4cf2-9186-ec4eaf0382fc
+		summarizeBy: sum
+		sourceColumn: Allocated_RVU
+
+		changedProperty = IsHidden
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column Allocated_WU
+		dataType: double
+		lineageTag: 089c4a09-caf4-4e86-883e-646997e9f195
+		summarizeBy: sum
+		sourceColumn: Allocated_WU
+
+		changedProperty = IsHidden
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column Adjusted_Best_RVU
+		dataType: double
+		lineageTag: 409e9ab9-8ebb-40c6-8323-3e8d08f285fa
+		summarizeBy: sum
+		sourceColumn: Adjusted_Best_RVU
+
+		changedProperty = IsHidden
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column Refresh_Date
+		dataType: dateTime
+		formatString: General Date
+		lineageTag: 22221445-0d6d-46f8-8372-6e96dcb72d20
+		summarizeBy: none
+		sourceColumn: Refresh_Date
+
+		changedProperty = IsHidden
+
+		annotation SummarizationSetBy = Automatic
+
+	column Source_Reason_For_Exam
+		dataType: string
+		lineageTag: ba9eef93-dd75-4d15-a6a1-e69c68ef9a45
+		summarizeBy: none
+		sourceColumn: Source_Reason_For_Exam
+
+		changedProperty = IsHidden
+
+		annotation SummarizationSetBy = Automatic
+
+	column billled_rvu
+		dataType: double
+		lineageTag: 610df2b4-ded0-4ab8-b96a-a9db898017e8
+		summarizeBy: sum
+		sourceColumn: billled_rvu
+
+		changedProperty = IsHidden
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column 'Local Practice'
+		dataType: string
+		lineageTag: e7bcce04-ddf7-4b01-8ada-74778547ad17
+		summarizeBy: none
+		sourceColumn: Local Practice
+
+		changedProperty = IsHidden
+
+		annotation SummarizationSetBy = Automatic
+
+	column division_short_name
+		dataType: string
+		lineageTag: aa86969c-8736-4f72-8233-1bff121630ae
+		summarizeBy: none
+		sourceColumn: division_short_name
+
+		changedProperty = IsHidden
+
+		annotation SummarizationSetBy = Automatic
+
+	column 'Local Practice Division'
+		dataType: string
+		lineageTag: 0cba17e8-5c24-4626-86db-b687a23b0d42
+		summarizeBy: none
+		sourceColumn: Local Practice Division
+
+		changedProperty = IsHidden
+
+		annotation SummarizationSetBy = Automatic
+
+	column Footer = "Report Refreshed: "& Daily_Extract[Refresh_Date] & " | Refresh Schedule: Daily | Data Sources(s): Clinical"
+		lineageTag: 1d737954-df49-477c-b76c-aff1292ae7a4
+		summarizeBy: none
+
+		changedProperty = IsHidden
+
+		annotation SummarizationSetBy = Automatic
+
+	column 'Mosaic Exam Flag'
+		dataType: int64
+		formatString: #,0
+		lineageTag: 641c9a24-de74-4e2d-b9b0-4ff3d305e54a
+		summarizeBy: sum
+		sourceColumn: Mosaic Exam Flag
+
+		changedProperty = IsHidden
+
+		annotation SummarizationSetBy = Automatic
+
+	column 'Mosaic 7 Day Flag' = IF( AND(Daily_Extract[Mosaic Exam Flag] = 1, Daily_Extract[7 day flag] = 1),1,0)
+		formatString: 0
+		lineageTag: 21a14eb0-0dd4-4b8a-9fa1-fb868a2e3acd
+		summarizeBy: sum
+
+		annotation SummarizationSetBy = Automatic
+
+	column Exam_ID
+		dataType: int64
+		formatString: 0
+		lineageTag: b3c2010f-d6ef-4807-bf25-11a07575cee7
+		summarizeBy: count
+		sourceColumn: Exam_ID
+
+		annotation SummarizationSetBy = Automatic
+
+	column Wet_Read_DateTime
+		dataType: dateTime
+		formatString: General Date
+		lineageTag: 04415c10-534e-4963-8c0b-b4e5990ec282
+		summarizeBy: none
+		sourceColumn: Wet_Read_DateTime
+
+		annotation SummarizationSetBy = Automatic
+
+	column Dictation_Start_DateTime
+		dataType: dateTime
+		formatString: General Date
+		lineageTag: eddd3985-2076-4368-9f7c-be51c75b4aa0
+		summarizeBy: none
+		sourceColumn: Dictation_Start_DateTime
+
+		annotation SummarizationSetBy = Automatic
+
+	column Dictation_End_DateTime
+		dataType: dateTime
+		formatString: General Date
+		lineageTag: c7e8970f-bb27-44db-a185-0d71a2412ecb
+		summarizeBy: none
+		sourceColumn: Dictation_End_DateTime
+
+		annotation SummarizationSetBy = Automatic
+
+	column Source_System_Code
+		dataType: string
+		lineageTag: f216aa58-fcdb-4e13-a9a3-4a0d24164ac5
+		summarizeBy: none
+		sourceColumn: Source_System_Code
+
+		annotation SummarizationSetBy = Automatic
+
+	column 'RPCE Exam Flag' = IF(OR(Daily_Extract[Source_System_Code] = "rpceMidwest",Daily_Extract[Source_System_Code]="rpceSouthwest"),1,0)
+		formatString: #,0
+		lineageTag: a535d2f4-700a-42e3-84e7-b67a4137c828
+		summarizeBy: sum
+
+		annotation SummarizationSetBy = Automatic
+
+	column 'Mosaic XR Flag' = IF( AND(Daily_Extract[Mosaic Exam Flag] = 1, Daily_Extract[XR Flag] = 1),1,0)
+		formatString: 0
+		lineageTag: b229db82-0383-4f2f-82be-b33df3551d77
+		summarizeBy: sum
+
+		annotation SummarizationSetBy = Automatic
+
+	column 'XR Flag' = IF( OR(Daily_Extract[Modality] = "CR", Daily_Extract[Modality] = "XR"),1,0)
+		formatString: 0
+		lineageTag: e6171c9e-7e34-444f-868d-9382e043dc03
+		summarizeBy: sum
+
+		annotation SummarizationSetBy = Automatic
+
+	column 'RPCE XR Flag' = IF( AND(Daily_Extract[RPCE Exam Flag] = 1, Daily_Extract[XR Flag] = 1),1,0)
+		formatString: 0
+		lineageTag: 3d1e12e5-40d5-4093-81de-df121be2de88
+		summarizeBy: sum
+
+		annotation SummarizationSetBy = Automatic
+
+	column '7 day flag'
+		dataType: int64
+		formatString: 0
+		lineageTag: d5240abe-5ef3-4c02-a17a-68d76ed5f80e
+		summarizeBy: sum
+		sourceColumn: 7 day flag
+
+		annotation SummarizationSetBy = Automatic
+
+	column mosaic_draft_flag
+		dataType: int64
+		formatString: 0
+		lineageTag: d4bba23e-dcfd-4372-b4cf-8db82be59d1c
+		summarizeBy: sum
+		sourceColumn: mosaic_draft_flag
+
+		annotation SummarizationSetBy = Automatic
+
+	column Day_Of_Week_Name
+		dataType: string
+		lineageTag: 6d6ae69a-e5b2-45ee-a893-6b9afa5d6885
+		summarizeBy: none
+		sourceColumn: Day_Of_Week_Name
+
+		annotation SummarizationSetBy = Automatic
+
+	column DAY = LEFT(Daily_Extract[Day_Of_Week_Name],3)
+		lineageTag: 0ecf4087-6124-44cd-a0e3-da82cfa080a9
+		summarizeBy: none
+
+		annotation SummarizationSetBy = Automatic
+
+	column 'Mosaicdraft XR Flag' = IF( AND(Daily_Extract[mosaic_draft_flag] = 1, Daily_Extract[XR Flag] = 1),1,0)
+		formatString: 0
+		lineageTag: 1e7357ee-7524-488c-a604-223c862a4221
+		summarizeBy: sum
+
+		annotation SummarizationSetBy = Automatic
+
+	column Startofmonth
+		dataType: dateTime
+		formatString: Short Date
+		lineageTag: 26b29cb9-8998-4270-be66-ec25cc458bd4
+		summarizeBy: none
+		sourceColumn: Startofmonth
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation UnderlyingDateTimeDataType = Date
+
+	column Weekstart
+		dataType: dateTime
+		formatString: Short Date
+		lineageTag: 04cae95e-24e3-42dd-a81a-efbedaca767e
+		summarizeBy: none
+		sourceColumn: Weekstart
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation UnderlyingDateTimeDataType = Date
+
+	column Week_Of
+		dataType: dateTime
+		formatString: Short Date
+		lineageTag: 4d447b08-2302-404a-9906-d25d77724e0b
+		summarizeBy: none
+		sourceColumn: Week_Of
+		sortByColumn: Week_Rank2
+
+		changedProperty = SortByColumn
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation UnderlyingDateTimeDataType = Date
+
+	column RANK
+		dataType: string
+		lineageTag: 48170e24-d666-4230-95c1-18e539e39d8d
+		summarizeBy: none
+		sourceColumn: RANK
+
+		annotation SummarizationSetBy = Automatic
+
+	column Date
+		dataType: dateTime
+		formatString: Short Date
+		lineageTag: 12bf9c42-4b72-4182-ab19-6950747f8eba
+		summarizeBy: none
+		sourceColumn: Date
+		sortByColumn: DRSO
+
+		changedProperty = SortByColumn
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation UnderlyingDateTimeDataType = Date
+
+	column Week_Rank2 = ```
+			
+			VAR q1 = FORMAT('Daily_Extract'[Weekstart], "YYYYMMDD")
+			VAR q2 = FORMAT(TODAY(), "YYYYMMDD")
+			VAR MaxRank = MAXX(ALL('Daily_Extract'), FORMAT('Daily_Extract'[Weekstart], "YYYYMMDD"))
+			RETURN 
+			    IF(
+			        q1 - q2 < 0,
+			        ABS(q1 - q2) + MaxRank,
+			        q1 - q2
+			    )
+			```
+		lineageTag: f3a1fd97-ef03-42d3-b8fd-700044784888
+		summarizeBy: sum
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column Month_Rank2 = ```
+			
+			VAR q1 = FORMAT('Daily_Extract'[Startofmonth], "YYYYMMDD")
+			VAR q2 = FORMAT(TODAY(), "YYYYMMDD")
+			VAR MaxRank = MAXX(ALL('Daily_Extract'), FORMAT('Daily_Extract'[Startofmonth], "YYYYMMDD"))
+			RETURN 
+			    IF(
+			        q1 - q2 < 0,
+			        ABS(q1 - q2) + MaxRank,
+			        q1 - q2
+			    )
+			```
+		lineageTag: 1898943b-d36a-4031-a7ad-d8c48d652005
+		summarizeBy: sum
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column DRSO = ```
+			
+			VAR CurrentDay = TODAY()
+			VAR ThisDay = 'Daily_Extract'[Final_DateTime - Date]
+			VAR MaxDay = CALCULATE(MAX('Daily_Extract'[Final_DateTime - Date]), ALL('Daily_Extract'))
+			RETURN
+			    IF(
+			        ThisDay > CurrentDay,
+			        DATEDIFF(CurrentDay, ThisDay, DAY),
+			        DATEDIFF(ThisDay, CurrentDay, DAY) + DATEDIFF(CurrentDay, MaxDay, DAY)
+			    )
+			
+			```
+		lineageTag: d2556f64-81f9-43fe-8b50-06dcb99fc3e5
+		summarizeBy: sum
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column RPCE_CT_HEAD_FLAG = IF('Daily_Extract'[RPCE Exam Flag] =1 && 'Daily_Extract'[Clinical_Procedure_Code] = "RPID22",1,0)
+		formatString: 0
+		lineageTag: 0cc3cf3d-b3ef-4b3d-9b58-5964cbf018ba
+		summarizeBy: sum
+
+		annotation SummarizationSetBy = Automatic
+
+	column Unread_DateTime
+		dataType: dateTime
+		formatString: General Date
+		lineageTag: 0479dde6-e258-49c4-b6f7-6e8cc773a1b1
+		summarizeBy: none
+		sourceColumn: Unread_DateTime
+
+		annotation SummarizationSetBy = Automatic
+
+	column daytype = ```
+			
+			
+			IF(WEEKDAY('Daily_Extract'[Date],2) <=5,
+			"Weekday", 
+			"Weekend"
+			)
+			```
+		lineageTag: e468f64f-6957-492d-8b64-0c4c7da64988
+		summarizeBy: none
+
+		annotation SummarizationSetBy = Automatic
+
+	column Interventional_Flag
+		dataType: int64
+		formatString: 0
+		lineageTag: d9757140-9fc9-4c0d-800d-25d6ab1d5210
+		summarizeBy: sum
+		sourceColumn: Interventional_Flag
+
+		annotation SummarizationSetBy = Automatic
+
+	column assisted_flag
+		dataType: int64
+		formatString: 0
+		lineageTag: 4b549e91-8917-4845-9153-c904527f3007
+		summarizeBy: sum
+		sourceColumn: assisted_flag
+
+		annotation SummarizationSetBy = Automatic
+
+	column working_subspecialty
+		dataType: string
+		lineageTag: f90ffd7b-2f19-47ba-ad70-52fe1f9fad88
+		summarizeBy: none
+		sourceColumn: working_subspecialty
+
+		annotation SummarizationSetBy = Automatic
+
+	column Drafteligiblecode
+		dataType: string
+		lineageTag: 640c3c6a-4157-44fd-816f-94f246fe2184
+		summarizeBy: none
+		sourceColumn: Drafteligiblecode
+
+		annotation SummarizationSetBy = Automatic
+
+	column drafteligibleproc
+		dataType: string
+		lineageTag: 4d1e7690-39dd-4bfd-8ab7-a867d2639dbc
+		summarizeBy: none
+		sourceColumn: drafteligibleproc
+
+		annotation SummarizationSetBy = Automatic
+
+	column VRAname
+		dataType: string
+		lineageTag: 240c2fe9-c70e-4652-84b7-e80971630065
+		summarizeBy: none
+		sourceColumn: VRAname
+
+		annotation SummarizationSetBy = Automatic
+
+	column Commnotetimestamp
+		dataType: string
+		lineageTag: d2b43a87-6d82-4b27-a3ef-8f334a892737
+		summarizeBy: none
+		sourceColumn: Commnotetimestamp
+
+		annotation SummarizationSetBy = Automatic
+
+	column Mosaicdraftingeligible = ```
+			
+			IF(NOT(ISBLANK(RELATED('vrarp_radpipeline'[Added to AD Group (CXR/ABD/MSK)]))) &&
+			NOT(ISBLANK('Daily_Extract'[drafteligibleproc])), 
+			1, 
+			0)
+			```
+		formatString: 0
+		lineageTag: d6cede3f-1b84-453b-acf6-2bd04097f388
+		summarizeBy: sum
+
+		annotation SummarizationSetBy = Automatic
+
+	column USMERPID
+		dataType: string
+		lineageTag: 6da67a11-f312-4c1c-acb8-0af9ffe20d20
+		summarizeBy: none
+		sourceColumn: USMERPID
+
+		annotation SummarizationSetBy = Automatic
+
+	column USMEProc
+		dataType: string
+		lineageTag: 0f6895b1-16f9-489b-97c0-6a21f5887e19
+		summarizeBy: none
+		sourceColumn: USMEProc
+
+		annotation SummarizationSetBy = Automatic
+
+	column USMEEligible
+		dataType: int64
+		formatString: 0
+		lineageTag: da800922-da53-4229-90ec-146c5967ccc5
+		summarizeBy: sum
+		sourceColumn: USMEEligible
+
+		annotation SummarizationSetBy = Automatic
+
+	column 'USME Eligible exam' = ```
+			
+			VAR PracticeGoLiveDate = 
+			    LOOKUPVALUE(
+			        'vrarp_launchmodel'[Model Go-Live Date],
+			        'vrarp_launchmodel'[Practice], 'Daily_Extract'[Local Practice]  // Adjust field names
+			    )
+			VAR ExamDate = 'Daily_Extract'[Date]
+			VAR HasUSMERPID = NOT(ISBLANK('Daily_Extract'[USMERPID]))
+			VAR IsAfterGoLive = IF(NOT(ISBLANK(PracticeGoLiveDate)), ExamDate >= PracticeGoLiveDate, FALSE)
+			RETURN
+			    IF(
+			        HasUSMERPID && IsAfterGoLive,
+			        1,
+			        0
+			    )
+			```
+		formatString: 0
+		lineageTag: d69cce82-4652-4761-a5e9-9d4a7449d7f0
+		summarizeBy: sum
+
+		annotation SummarizationSetBy = Automatic
+
+	column 'Drafting Enabled' = ```
+			
+			VAR HasCXR = NOT(ISBLANK(RELATED(VRARP_radpipeline[Added to AD Group (CXR/ABD/MSK)])))
+			VAR HasCT = NOT(ISBLANK(RELATED(VRARP_radpipeline[Added to AD Group (CT Head)])))
+			var Hasctabd = NOT(ISBLANK(RELATED(vrarp_radpipeline[Added to AD Group (CT Abd/Pelvis)])))
+			RETURN
+			    SWITCH(
+			        TRUE(),
+			       
+			        HasCXR, "Rads on XR Drafting",
+			        HasCT, "Rads on CT Head Drafting",
+			        Hasctabd , "Rads on CT Abd/Pel Drafting", 
+			        "Rads Not on Drafting"
+			    )
+			```
+		lineageTag: 0dc398d8-4a2d-4248-a440-15d17bf2383e
+		summarizeBy: none
+
+		annotation SummarizationSetBy = Automatic
+
+	column Procedure = Daily_Extract[Clinical_Procedure_Description] & " - " & Daily_Extract[Clinical_Procedure_Code]
+		lineageTag: d0e5c5e5-ebbb-4bf5-aab5-8985d8f82419
+		summarizeBy: none
+
+		annotation SummarizationSetBy = Automatic
+
+	column 'Week of First Mosaic Case' = ```
+			
+			VAR CurrentProvider = 'Daily_Extract'[Provider]
+			VAR FirstMosaicDate = 
+			    CALCULATE(
+			        MIN('Daily_Extract'[Final_DateTime - Date]),
+			        ALL('Daily_Extract'),
+			        'Daily_Extract'[Provider] = CurrentProvider,
+			        'Daily_Extract'[Mosaic Exam Flag] = 1
+			    )
+			VAR WeekStart = 
+			    IF(
+			        NOT(ISBLANK(FirstMosaicDate)),
+			        FirstMosaicDate - WEEKDAY(FirstMosaicDate, 2) + 1,
+			        BLANK()
+			    )
+			RETURN
+			    WeekStart
+			```
+		formatString: Short Date
+		lineageTag: bf19e8b4-fe66-487a-a92b-808af8db614c
+		summarizeBy: none
+
+		changedProperty = DataType
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation UnderlyingDateTimeDataType = Date
+
+	column Mexproc
+		dataType: string
+		lineageTag: 1ffa57c6-e684-41aa-9f2c-8c582e71798d
+		summarizeBy: none
+		sourceColumn: Mexproc
+
+		annotation SummarizationSetBy = Automatic
+
+	column mexname
+		dataType: string
+		lineageTag: 76d98232-bbd9-4a80-9125-d8249e49f4ab
+		summarizeBy: none
+		sourceColumn: mexname
+
+		annotation SummarizationSetBy = Automatic
+
+	column Team_Name
+		dataType: string
+		lineageTag: 4249b604-60c4-491c-9bad-7e22360abcae
+		summarizeBy: none
+		sourceColumn: Team_Name
+
+		annotation SummarizationSetBy = Automatic
+
+	column 'Is Eligible' = ```
+			
+			IF(
+			    NOT(Daily_Extract[Modality] IN {"BD", "MG"}) &&
+			    NOT(Daily_Extract[Site] IN { 
+			        "Tampa General Hospital North Brooksville", 
+			        "Tampa General Hospital North Spring Hill",
+			        "TGHI Bayonet Point", "TGHI Bloomingale", "TGHI Bruce B Downs", 
+			        "TGHI Carrollwood", "TGHI Habana", "TGHI New Port Richey", 
+			        "TGHI New Tampa", "TGHI North Dale Mabry", "TGHI Northcliff", 
+			        "TGHI Oldsmar", "TGHI Palm Beach Gardens", "TGHI Parsons", 
+			        "TGHI Riverview", "TGHI South Tampa", "TGHI Sun City", 
+			        "TGHI Sunlake", "TGHI Trinity", "TGHI Wesley Chapel"
+			    }) &&
+			    NOT(Daily_Extract[Clinical_Procedure_Description] IN {
+			        "CT LUNG SCREENING", 
+			        "CT LUNG SCREENING FOLLOW UP WITH IV CONTRAST", 
+			        "CT LUNG SCREENING FOLLOW UP WITHOUT IV CONTRAST", 
+			        "CT LUNG SCREENING WITHOUT CONTRAST", 
+			        "CT Lung WO Screening (LDCT) Initial | 71271", 
+			        "CT LUNG WO Screening (LDCT) Initial, CT Lung WO Screening (LDCT) Initial"
+			    }),
+			    "Eligible Exams",
+			    "All Exams"
+			)
+			```
+		lineageTag: 7c8a1882-9201-4654-a512-b6ad07191acc
+		summarizeBy: none
+
+		annotation SummarizationSetBy = Automatic
+
+	column Team
+		dataType: string
+		lineageTag: 2272729b-3f04-4053-8895-c07336cbc3df
+		summarizeBy: none
+		sourceColumn: Team
+
+		annotation SummarizationSetBy = Automatic
+
+	column Vradautocommflag
+		dataType: int64
+		formatString: 0
+		lineageTag: ec4f9aba-aa95-4b10-b123-71c3ce421fe2
+		summarizeBy: sum
+		sourceColumn: Vradautocommflag
+
+		annotation SummarizationSetBy = Automatic
+
+	column Local =
+			
+			SWITCH(
+			    TRUE(),
+			    Daily_Extract[Team] IN {"ESR", "LFI", "Jefferson", "GLI", "RAI", "RP Cascade", "RP Crossroads","JR","DRSRP","RP East Florida","RP North Florida", "RP Palm Beach","RP Florida West","PRA","ESRMH Garnet","ESRMH Hackensack","ESRMH Legacy","ESR Long Island","ESR Metro Hudson","SEAL Team", "SEAL Legacy","vRad","Spec Ops Reserve"}, "Special Operations",
+			    Daily_Extract[Team]  IN {"ADI", "ADR", "CRC Central", "CRC NW", "CRC SW", "Midstate", "NEOH", "Rad Alliance", "RP Kentucky", "RP Bluegrass","RAC","RACSW","RPKY","RPBG","RA","ADR Legacy","CRC","Rad Alliance Legacy", "Rad Alliance NorthCrest","RP Bluegrass Legacy"}, "Apex",
+			    Daily_Extract[Team]   IN {"Coastal", "Greensboro", "MBB", "Northside", "Greensboro Canopy", "RAF", "RP Florida", "RP Sandhills", "RP South Carolina", "SOAR","BOCA","GR","NRA","RASF","MBB Legacy","MBB Phoebe Putney","Northside Radiology","RAF East Coast", "RAF Panhandle", "RAF Sarasota", "RAF Tampa", "RAF Tele","RASF Miami", "RASF Naples","RP Florida Legacy", "RP Florida West"}, "Genesis",
+			     Daily_Extract[Team]   IN {"Advanced Radiology", "Alaska", "CIR", "Desert", "GIMA", "RP SoCal", "IAM", "IAMSE", "MIA", "Mountain", "NIR", "RAA", "MXC", "Red Rock", "RIMA", "RP Sol", "RP Sun City", "RP Chicago", "RP Forest City", "Saline Valley", "RP Valley Radiologists", "SVDI", "Western Colorado","WIR","RP IOWA","GSIA","SVL","MR","DR","NWIR","ARSC","DR Legacy","DR DRS","IAMSE Hurley", "IAM Marquette", "IAM Midlands","Lakefront Imaging","Mountain Legacy", "Mountain Yampa","RP NWIR", "RP SMIL", "RP SoCal Lakewood", "RP SoCal Legacy", "RP SoCal Palmdale", "RP Valley","SVDI Legacy", "SVDI San Ramon","SMI","RIMA", "RIMA California"}, "Maverick",
+			    Daily_Extract[Team]  IN {"Access Alexandria", "ARA", "BR Academic", "BR Community", "CIRPA", "Community", "RP Eagle", "EBI", "GIA", "Lake Charles", "RP Borderlands", "RP Brazosport", "RP Corpus Christi", "RP Dallas", "RP El Paso", "RP Gulf Coast", "RP Houston", "RP Laredo", "RP Victoria","BR","Slidell","ACC","RPNM","EAG","RPEP","RPGC","RPH","Other","EXTHMC" ,"RP Singleton Academic" ,"RP Singleton Community", "RP Singleton","Rose","RP North Houston","Synergy", "Access Lake Charles","Community Laredo", "Community Legacy", "Community Victoria","Elite","RP Borderlands Legacy", "RP Borderlands Lovelace","RP Helios"}, "Trailblazer",
+			    "Matrix"
+			)
+		lineageTag: c33a1770-cb44-445e-beb7-bacf22017c8b
+		summarizeBy: none
+
+		annotation SummarizationSetBy = Automatic
+
+	column TBWU26
+		dataType: double
+		lineageTag: c1aeee6f-894c-4d8c-a77b-038e7d06d42d
+		summarizeBy: sum
+		sourceColumn: TBWU26
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column 'Team Rolled up' = ```
+			
+			VAR ProvPracticeTeam = 
+			    LOOKUPVALUE(
+			        'provpractice_vw'[Team],
+			        'provpractice_vw'[NPI],
+			        'Daily_Extract'[Provider_NPI]
+			    )
+			VAR FallbackTeam = 
+			    LOOKUPVALUE(
+			        'team_rollups'[Team Roll Up (KS)],
+			        'team_rollups'[Team],
+			        TRIM('Daily_Extract'[Team])
+			    )
+			VAR ManualOverride = 
+			SWITCH(
+			    'Daily_Extract'[Provider_NPI],  1174510937, "RP North Florida",
+			     
+			        1417539156, "RASF",
+			        1891950150, "RASF",
+			        1306157078, "RASF",
+			        1639600588, "RASF",
+			        1326001280, "RASF",
+			        1396948659, "SMI",
+			        1275912552, "ARA", 
+			     1063299410 , "RASF", 
+			     1205624632 , "RASF" , 
+			     1497322457, "RASF", 
+			     1548794332, "RASF", 
+			     1811976459, "RASF",
+			     
+			     1558379024, "SMI",
+			     
+			     
+			     
+			     
+			     
+			     BLANK())
+			RETURN
+			    IF(
+			        NOT(ISBLANK(ManualOverride)), 
+			        ManualOverride,
+			        IF(
+			            NOT(ISBLANK(ProvPracticeTeam)), 
+			            ProvPracticeTeam,
+			            IF(
+			                NOT(ISBLANK(FallbackTeam)),
+			                FallbackTeam,
+			                'Daily_Extract'[Team]  -- ✅ Final fallback to original Team column
+			            )
+			        )
+			    )
+			
+			```
+		lineageTag: ca63910d-7dc3-4572-97c4-5b57d8f53da9
+		summarizeBy: none
+
+		annotation SummarizationSetBy = Automatic
+
+	column Site_Accession_Number
+		dataType: string
+		lineageTag: f24914ed-5cdf-4fab-89c3-4a6531e1667c
+		summarizeBy: none
+		sourceColumn: Site_Accession_Number
+
+		annotation SummarizationSetBy = Automatic
+
+	column Total_Adjusted_Read_Time_Sec
+		dataType: int64
+		formatString: 0
+		lineageTag: d9fd61aa-9e61-47f0-af75-67f1d5af1f7c
+		summarizeBy: sum
+		sourceColumn: Total_Adjusted_Read_Time_Sec
+
+		annotation SummarizationSetBy = Automatic
+
+	column Draft_Adjusted_Read_Time_Sec
+		dataType: int64
+		formatString: 0
+		lineageTag: b8368057-8b09-4110-9456-ab186bdc0516
+		summarizeBy: sum
+		sourceColumn: Draft_Adjusted_Read_Time_Sec
+
+		annotation SummarizationSetBy = Automatic
+
+	column NonDraft_Adjusted_Read_Time_Sec
+		dataType: int64
+		formatString: 0
+		lineageTag: c35caf1b-6c60-4006-ada9-18ebf6667a19
+		summarizeBy: sum
+		sourceColumn: NonDraft_Adjusted_Read_Time_Sec
+
+		annotation SummarizationSetBy = Automatic
+
+	column 'Is On XR Drafting' =
+			
+			IF(
+			    NOT(ISBLANK(RELATED(VRARP_radpipeline[Added to AD Group (CXR/ABD/MSK)]))) &&
+			    RELATED(VRARP_radpipeline[Added to AD Group (CXR/ABD/MSK)]) <> DATE(1900, 1, 1),
+			    1, 0
+			)
+		formatString: 0
+		lineageTag: da18e629-e002-467f-9a9a-7392a76e6ac0
+		summarizeBy: sum
+
+		annotation SummarizationSetBy = Automatic
+
+	column 'Is On CT Head Drafting' =
+			
+			IF(
+			    NOT(ISBLANK(RELATED(VRARP_radpipeline[Added to AD Group (CT Head)]))) &&
+			    RELATED(VRARP_radpipeline[Added to AD Group (CT Head)]) <> DATE(1900, 1, 1),
+			    1, 0
+			)
+		formatString: 0
+		lineageTag: bfc43bb3-35fa-492b-97b5-990c1c3ce4f4
+		summarizeBy: sum
+
+		annotation SummarizationSetBy = Automatic
+
+	column 'Is On CT Abd/Pel Drafting' =
+			
+			IF(
+			    NOT(ISBLANK(RELATED(vrarp_radpipeline[Added to AD Group (CT Abd/Pelvis)]))) &&
+			    RELATED(vrarp_radpipeline[Added to AD Group (CT Abd/Pelvis)]) <> DATE(1900, 1, 1),
+			    1, 0
+			)
+		formatString: 0
+		lineageTag: dcc831e5-99b8-4186-807e-651339da7fad
+		summarizeBy: sum
+
+		annotation SummarizationSetBy = Automatic
+
+	column auto_next_flag
+		dataType: int64
+		formatString: 0
+		lineageTag: 87ef8b51-263e-4931-84c0-9e92d702daac
+		summarizeBy: sum
+		sourceColumn: auto_next_flag
+
+		annotation SummarizationSetBy = Automatic
+
+	column physician_type
+		dataType: string
+		lineageTag: 8fe2ed69-65ec-42bd-940c-0a26cd415aa0
+		summarizeBy: none
+		sourceColumn: physician_type
+
+		annotation SummarizationSetBy = Automatic
+
+	column RPCE_CT_FLAG = IF('Daily_Extract'[RPCE Exam Flag] =1 && 'Daily_Extract'[Modality] = "CT",1,0)
+		formatString: 0
+		lineageTag: af9c337b-d0e5-445e-86b3-17531bfdbeae
+		summarizeBy: sum
+
+		annotation SummarizationSetBy = Automatic
+
+	column 'Is On CT Chest Drafting' =
+			
+			IF(
+			    NOT(ISBLANK(RELATED(vrarp_radpipeline[Added to AD Group (CT Chest)]))) &&
+			    RELATED(vrarp_radpipeline[Added to AD Group (CT Chest)]) <> DATE(1900, 1, 1),
+			    1, 0
+			)
+		formatString: 0
+		lineageTag: 275c21b2-06ed-4d62-8f49-7cb7307c7fe5
+		summarizeBy: sum
+
+		annotation SummarizationSetBy = Automatic
+
+	partition Daily_Extract-65ed23c8-8383-4fa9-b976-ec8060326d9a = m
+		mode: import
+		source = ```
+				let
+				    // Step 1: Create dynamic SQL filter clause
+				    FilterClause = if LoadFullData then 
+				        // Production mode - use RangeStart and RangeEnd for incremental refresh
+				        " WHERE Calendar_Date >= DATE('" & Date.ToText(DateTime.Date(RangeStart), "yyyy-MM-dd") & "') " &
+				        " AND Calendar_Date < DATE('" & Date.ToText(DateTime.Date(RangeEnd), "yyyy-MM-dd") & "')"
+				    else 
+				        // Desktop mode - load last 10 days only
+				        " WHERE Calendar_Date >= CURRENT_DATE - INTERVAL 10 DAYS",
+				
+				    // Step 2: Load CLEAN data from Databricks (now deduplicated at source)
+				    // NOTE: Deduplication now happens in the view itself via ROW_NUMBER
+				    Source = Value.NativeQuery(
+				        Databricks.Catalogs("adb-7306149455716415.15.azuredatabricks.net", "/sql/1.0/warehouses/fe0ad987563c672a", 
+				        [Catalog="edw_dev", Database=null, EnableAutomaticProxyDiscovery=null]){[Name="edw_dev",Kind="Database"]}[Data],
+				        "SELECT * FROM edw_dev.bipa_analytics.presentation_mosaicdailyvolume_vw" & FilterClause,
+				        null,
+				        [EnableFolding=true]
+				    ),
+				
+				    // Step 3: Continue with your transformations (NO deduplication needed)
+				    #"Renamed Columns" = Table.RenameColumns(Source,{{"Case_Count", "Exam Ct"}, {"modality_code", "Modality"}, {"Available_To_MD_Date", "Available To MD"}, {"Radiologist", "Provider"}}),
+				    #"Duplicated Column" = Table.DuplicateColumn(#"Renamed Columns", "Available To MD", "Available To MD - Copy"),
+				    #"Split Column by Delimiter" = Table.SplitColumn(Table.TransformColumnTypes(#"Duplicated Column", {{"Available To MD - Copy", type text}}, "en-US"), "Available To MD - Copy", Splitter.SplitTextByEachDelimiter({" "}, QuoteStyle.Csv, false), {"Available To MD - Copy.1", "Available To MD - Copy.2"}),
+				    #"Changed Type" = Table.TransformColumnTypes(#"Split Column by Delimiter",{{"Available To MD - Copy.1", type date}, {"Available To MD - Copy.2", type time}}),
+				    #"Duplicated Column1" = Table.DuplicateColumn(#"Changed Type", "Final_DateTime", "Final_DateTime - Copy"),
+				    #"Renamed Columns1" = Table.RenameColumns(#"Duplicated Column1",{{"Available To MD - Copy.1", "Available To MD - Date"}, {"Available To MD - Copy.2", "Available To MD - Time"}}),
+				    #"Split Column by Delimiter1" = Table.SplitColumn(Table.TransformColumnTypes(#"Renamed Columns1", {{"Final_DateTime - Copy", type text}}, "en-US"), "Final_DateTime - Copy", Splitter.SplitTextByEachDelimiter({" "}, QuoteStyle.Csv, false), {"Final_DateTime - Copy.1", "Final_DateTime - Copy.2"}),
+				    #"Changed Type1" = Table.TransformColumnTypes(#"Split Column by Delimiter1",{{"Final_DateTime - Copy.1", type date}, {"Final_DateTime - Copy.2", type time}}),
+				    #"Renamed Columns2" = Table.RenameColumns(#"Changed Type1",{{"Final_DateTime - Copy.1", "Final_DateTime - Date"}, {"Final_DateTime - Copy.2", "Final- Time"}, {"Available To MD - Time", "Available  Time"}, {"Practice_Short_Name", "Practice"}, {"Sub_Practice_Short_Name", "Sub-Practice"}, {"Location_Name", "Site"}, {"Calendar_Date", "Date"}, {"Month_Num", "Month"}}),
+				    #"Renamed Columns3" = Table.RenameColumns(#"Renamed Columns2",{{"local_practice_short_name", "Local Practice"}, {"local_practice_division", "Local Practice Division"}, {"Mosaic_flag", "Mosaic Exam Flag"}, {"Linked_Charge_Flag", "Linked Charge Flag"}, {"Place_Of_Service_Name", "Place Of Service"}}),
+				    #"Removed Columns" = Table.RemoveColumns(#"Renamed Columns3",{"Yesterday", "Tertiary_Subspecialty", "Termination", "Suffix", "Home_Phone", "Work_Phone", "Cell_Phone", "Provider_name_format1", "Useage", "Middle_Name", "First_Name", "Last_Name", "FTE % (other than 100%)", "Missing_RAD_Flag", "physician_day", "Resident/Fellow", "hour", "Employment_Status_Change_Date", "Day_Of_Week_Number", "Hire_Date", "Week_End_Date", "Time_Hour", "Client_System", "30_min_flag", "Emergency_Room",  "Credential", "Ind_Contractor", "Patient_MRN", "UKG_ID", "Associate_ID"}),
+				    #"Changed Type2" = Table.TransformColumnTypes(#"Removed Columns",{{"Date", type date}}),
+				    #"Added Custom" = Table.AddColumn(#"Changed Type2", "Startofmonth", each Date.StartOfMonth([Date])),
+				    #"Changed Type3" = Table.TransformColumnTypes(#"Added Custom",{{"Startofmonth", type date}}),
+				    #"Added Custom1" = Table.AddColumn(#"Changed Type3", "Weekstart", each Date.AddDays([Date],1 - Date.DayOfWeek([Date], Day.Sunday))),
+				    #"Changed Type4" = Table.TransformColumnTypes(#"Added Custom1",{{"Weekstart", type date}}),
+				    #"Added Custom2" = Table.AddColumn(#"Changed Type4", "Week_Of", each Date.AddDays([Date] ,1-Date.DayOfWeek([Date]))),
+				    #"Changed Type5" = Table.TransformColumnTypes(#"Added Custom2",{{"Week_Of", type date}}),
+				    #"Added Custom3" = Table.AddColumn(#"Changed Type5", "RANK", each Duration.Days([#"Final_DateTime - Date"] - DateTime.Date(DateTime.LocalNow()))),
+				    #"Duplicated Column2" = Table.DuplicateColumn(#"Added Custom3", "Final_DateTime - Date", "Final_DateTime - Date - Copy"),
+				    #"Removed Columns1" = Table.RemoveColumns(#"Duplicated Column2",{"Date"}),
+				    #"Renamed Columns4" = Table.RenameColumns(#"Removed Columns1",{{"Final_DateTime - Date - Copy", "Date"}}),
+				    #"Changed Type6" = Table.TransformColumnTypes(#"Renamed Columns4",{{"Date", type date}}),
+				    #"Removed Columns2" = Table.RemoveColumns(#"Changed Type6",{"Physician_Partner_Status", "TAT_Filter", "TAT_Minutes", "Team"}),
+				    #"Renamed Columns5" = Table.RenameColumns(#"Removed Columns2",{{"teamro", "Team"}})
+				in
+				    #"Renamed Columns5"
+				```
+
+	annotation PBI_ResultType = Exception
+
+	annotation PBI_NavigationStepName = Navigation
+

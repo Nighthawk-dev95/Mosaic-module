@@ -2,6 +2,13 @@
 // '0. Cur'[Local], which buckets each Team into one of 6 named regions via a fixed
 // SWITCH(TRUE(), Team IN {...}, "X", ...) list. Kept as a plain lookup table here since
 // there's no equivalent physical column upstream - Team is the only shared key.
+//
+// MVP Area Detail calls this with tbl_mvp_rad_onboarding.practice (a Dataverse CRM field,
+// independent of tbl_exam_inventory's own Team/Practice columns). Confirmed live (2026-10-23):
+// 220 of ~2600 MVP radiologists' practice strings didn't case-sensitively match any set below,
+// silently landing in the "Matrix" catch-all. 205 of those 220 are real, confirmed fixes added
+// below (see backend/app/data/local_region.py's matching docstring for the full investigation);
+// the remaining 15 (Bethesda/RP Atlantic Coast/RP West Georgia) are flagged there, not guessed.
 const SPECIAL_OPERATIONS = new Set([
   "ESR", "LFI", "Jefferson", "GLI", "RAI", "RP Cascade", "RP Crossroads", "JR", "DRSRP",
   "RP East Florida", "RP North Florida", "RP Palm Beach", "RP Florida West", "PRA",
@@ -17,7 +24,7 @@ const APEX = new Set([
 
 const GENESIS = new Set([
   "Coastal", "Greensboro", "MBB", "Northside", "Greensboro Canopy", "RAF", "RP Florida",
-  "RP Sandhills", "RP South Carolina", "SOAR", "BOCA", "GR", "NRA", "RASF", "MBB Legacy",
+  "RP Sandhills", "RP South Carolina", "SOAR", "BOCA", "Boca", "GR", "NRA", "RASF", "MBB Legacy",
   "MBB Phoebe Putney", "Northside Radiology", "RAF East Coast", "RAF Panhandle",
   "RAF Sarasota", "RAF Tampa", "RAF Tele", "RASF Miami", "RASF Naples", "RP Florida Legacy",
   "RP Florida West",
@@ -27,10 +34,13 @@ const MAVERICK = new Set([
   "Advanced Radiology", "Alaska", "CIR", "Desert", "GIMA", "RP SoCal", "IAM", "IAMSE", "MIA",
   "Mountain", "NIR", "RAA", "MXC", "Red Rock", "RIMA", "RP Sol", "RP Sun City", "RP Chicago",
   "RP Forest City", "Saline Valley", "RP Valley Radiologists", "SVDI", "Western Colorado",
-  "WIR", "RP IOWA", "GSIA", "SVL", "MR", "DR", "NWIR", "ARSC", "DR Legacy", "DR DRS",
+  "WIR", "RP IOWA", "RP Iowa", "GSIA", "SVL", "MR", "DR", "NWIR", "ARSC", "DR Legacy", "DR DRS",
   "IAMSE Hurley", "IAM Marquette", "IAM Midlands", "Lakefront Imaging", "Mountain Legacy",
   "Mountain Yampa", "RP NWIR", "RP SMIL", "RP SoCal Lakewood", "RP SoCal Legacy",
   "RP SoCal Palmdale", "RP Valley", "SVDI Legacy", "SVDI San Ramon", "SMI", "RIMA California",
+  // RP Phoenix - no original PBI/DAX entry; confirmed live via tbl_exam_inventory's own Team
+  // breakdown to be dominated by already-Maverick teams (RP Valley/RP Sol/RP Sun City/RP SMIL).
+  "RP Phoenix",
 ]);
 
 const TRAILBLAZER = new Set([
@@ -41,7 +51,7 @@ const TRAILBLAZER = new Set([
   "RP Singleton Academic", "RP Singleton Community", "RP Singleton", "Rose",
   "RP North Houston", "Synergy", "Access Lake Charles", "Community Laredo",
   "Community Legacy", "Community Victoria", "Elite", "RP Borderlands Legacy",
-  "RP Borderlands Lovelace", "RP Helios",
+  "RP Borderlands Lovelace", "RP Helios", "Helios",
 ]);
 
 export const LOCAL_REGIONS = ["Special Operations", "Apex", "Genesis", "Maverick", "Trailblazer", "Matrix"] as const;

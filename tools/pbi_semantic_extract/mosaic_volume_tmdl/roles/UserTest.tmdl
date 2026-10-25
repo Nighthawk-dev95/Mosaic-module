@@ -1,0 +1,7 @@
+role UserTest
+	modelPermission: read
+
+	tablePermission 'MODEL POWERBI_USER_FILTERS' = [EMAIL] == "michelle.megquier@radpartners.com"
+
+	annotation PBI_Id = 5feef6f9455b47d38b6e18271d5e76b6
+

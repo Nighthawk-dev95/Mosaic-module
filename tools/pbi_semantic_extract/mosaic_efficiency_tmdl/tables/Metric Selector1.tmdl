@@ -1,0 +1,348 @@
+table 'Metric Selector1'
+	lineageTag: 149f042a-9fc3-4006-9cdc-0e29a9175d61
+
+	measure 'Baseline Metric Formateff' = ```
+			
+			VAR selectedmetric = SELECTEDVALUE('Metric Selector1'[Metric])
+			RETURN
+			SWITCH(
+			    TRUE(), 
+			    selectedmetric IN { "Mean Dictation(sec)", "Median Dictation(sec)" }, "0", 
+			    selectedmetric IN { "Mean RVU/min", "Mean TBWU/min" }, "0.000", 
+			    "0.00"
+			)
+			```
+		lineageTag: 5d49dcff-70c1-4bb9-9bf4-a4d4f820c9e2
+
+	measure 'Mosaic Metric Formateff' = ```
+			
+			VAR selectedmetric = SELECTEDVALUE('Metric Selector1'[Metric])
+			RETURN
+			SWITCH(
+			    TRUE(), 
+			    selectedmetric IN { "Mean Dictation(sec)", "Median Dictation(sec)" }, "0", 
+			    selectedmetric IN { "Mean RVU/min", "Mean TBWU/min" }, "0.000", 
+			    "0.00"
+			)
+			```
+		lineageTag: c8f3858f-abba-4bce-8050-7f23640b0b3a
+
+	measure 'Read Time Savings Formateff' = ```
+			
+			VAR selectedmetric = SELECTEDVALUE('Metric Selector1'[Metric])
+			RETURN
+			SWITCH(
+			    TRUE(), 
+			    selectedmetric IN { "Mean Dictation(sec)", "Median Dictation(sec)" }, "0", 
+			    selectedmetric IN { "Mean RVU/min", "Mean TBWU/min" }, "0.000", 
+			    "0.00"
+			)
+			```
+		lineageTag: c724ae82-d2da-447b-837c-c66f8b73c26a
+
+	measure '% Change Coloreff' = ```
+			
+			VAR val = [Pct_Change_Exam_Page_Opt]
+			
+			RETURN
+			SWITCH(
+			    TRUE(), 
+			    ISBLANK(val), "#FFFFFF",
+			    val > 0, "#B9DDA4",  // Positive = Green (improvement)
+			    val < 0, "#C6767D",  // Negative = Red (worse)
+			    "#FFFFFF"
+			)
+			```
+		lineageTag: ec629b30-100f-4af6-a219-88e6b61f4e5b
+
+	measure 'Implied RTS % Change Coloreff' = ```
+			
+			VAR val = [Implied_RTS_Exam_Page_Opt]
+			
+			RETURN
+			SWITCH(
+			    TRUE(), 
+			    ISBLANK(val), "#FFFFFF",
+			    val < 0, "#B9DDA4",  // Positive = Green (time saved)
+			    val > 0, "#C6767D",  // Negative = Red (slower)
+			    "#FFFFFF"
+			)
+			```
+		lineageTag: 9f4867a9-0be9-404f-a976-0bdb7ac7730f
+
+	measure Base_Time_Baseline =
+			
+			VAR _outlierView = SELECTEDVALUE('Outlier Selector'[Outlier View], "Excluded")
+			VAR _mosaicMode = SELECTEDVALUE('Mosaic Mode Selector'[Mode], "Full Mosaic")
+			
+			RETURN
+			CALCULATE(
+			    SUM(radiologist_metrics[TotalTime]),
+			    radiologist_metrics[Period_Type] = "Baseline",
+			    FILTER(
+			        ALL(radiologist_metrics[Outliers]),
+			        _outlierView = "Included" || radiologist_metrics[Outliers] = "Excluded"
+			    ),
+			    FILTER(
+			        ALL(radiologist_metrics[Modality_Code]),
+			        _mosaicMode <> "Capture Only" || radiologist_metrics[Modality_Code] IN {"US", "BD"}
+			    )
+			)
+		formatString: 0
+		lineageTag: acd80445-9d65-40cb-8005-ddb2377c43f8
+
+	measure Base_Time_Mosaic =
+			
+			VAR _outlierView = SELECTEDVALUE('Outlier Selector'[Outlier View], "Excluded")
+			VAR _mosaicMode = SELECTEDVALUE('Mosaic Mode Selector'[Mode], "Full Mosaic")
+			
+			RETURN
+			CALCULATE(
+			    SUM(radiologist_metrics[TotalTime]),
+			    radiologist_metrics[Exam_Date] IN VALUES('Mosaic_Calendar'[Date]),
+			    FILTER(
+			        ALL(radiologist_metrics[Period_Type]),
+			        (_mosaicMode = "Drafting Only" && radiologist_metrics[Period_Type] = "Drafting") ||
+			        (_mosaicMode = "Reporting Only" && radiologist_metrics[Period_Type] = "Reporting") ||
+			        (_mosaicMode = "Full Mosaic" && radiologist_metrics[Period_Type] IN {"Drafting", "Reporting"}) ||
+			        (_mosaicMode = "Capture Only" && radiologist_metrics[Period_Type] = "Drafting")
+			    ),
+			    FILTER(
+			        ALL(radiologist_metrics[Outliers]),
+			        _outlierView = "Included" || radiologist_metrics[Outliers] = "Excluded"
+			    ),
+			    FILTER(
+			        ALL(radiologist_metrics[Modality_Code]),
+			        _mosaicMode <> "Capture Only" || radiologist_metrics[Modality_Code] IN {"US", "BD"}
+			    )
+			)
+		formatString: 0
+		lineageTag: e6c66d98-9045-415c-9a07-715822ba4443
+
+	measure Base_TBWU_Baseline =
+			
+			VAR _outlierView = SELECTEDVALUE('Outlier Selector'[Outlier View], "Excluded")
+			VAR _mosaicMode = SELECTEDVALUE('Mosaic Mode Selector'[Mode], "Full Mosaic")
+			
+			RETURN
+			CALCULATE(
+			    SUM(radiologist_metrics[TotalTBWU]),
+			    radiologist_metrics[Period_Type] = "Baseline",
+			    FILTER(
+			        ALL(radiologist_metrics[Outliers]),
+			        _outlierView = "Included" || radiologist_metrics[Outliers] = "Excluded"
+			    ),
+			    FILTER(
+			        ALL(radiologist_metrics[Modality_Code]),
+			        _mosaicMode <> "Capture Only" || radiologist_metrics[Modality_Code] IN {"US", "BD"}
+			    )
+			)
+		lineageTag: aa81ad49-8140-4df1-b931-f4ad9129267f
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	measure Base_RVU_Mosaic =
+			
+			VAR _outlierView = SELECTEDVALUE('Outlier Selector'[Outlier View], "Excluded")
+			VAR _vraMosaic = SELECTEDVALUE('Mosaic VRA Slicer'[VRA_Mosaic])
+			VAR _mosaicMode = SELECTEDVALUE('Mosaic Mode Selector'[Mode])
+			
+			RETURN
+			CALCULATE(
+			    SUM('radiologist_metrics'[TotalRVU]),
+			    'radiologist_metrics'[Exam_Date] IN VALUES('Mosaic_Calendar'[Date]),
+			    FILTER(
+			        ALL('radiologist_metrics'[Period_Type]),
+			        (_mosaicMode = "Drafting Only" && 'radiologist_metrics'[Period_Type] = "Drafting") ||
+			        (_mosaicMode = "Reporting Only" && 'radiologist_metrics'[Period_Type] = "Reporting") ||
+			        (_mosaicMode = "Full Mosaic" && 'radiologist_metrics'[Period_Type] IN {"Drafting", "Reporting"}) ||
+			        (ISBLANK(_mosaicMode) && 'radiologist_metrics'[Period_Type] IN {"Drafting", "Reporting"})
+			    ),
+			    FILTER(
+			        ALL('radiologist_metrics'[Outliers]),
+			        _outlierView = "Included" || 'radiologist_metrics'[Outliers] = "Excluded"
+			    ),
+			    FILTER(
+			        ALL('radiologist_metrics'[vra_assisted_flag]),
+			        ISBLANK(_vraMosaic) || 'radiologist_metrics'[vra_assisted_flag] = _vraMosaic
+			    )
+			)
+		lineageTag: f0272e2e-9160-4b30-a647-27e7cd077881
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	measure Base_TBWU_Mosaic =
+			
+			VAR _outlierView = SELECTEDVALUE('Outlier Selector'[Outlier View], "Excluded")
+			VAR _mosaicMode = SELECTEDVALUE('Mosaic Mode Selector'[Mode], "Full Mosaic")
+			
+			RETURN
+			CALCULATE(
+			    SUM(radiologist_metrics[TotalTBWU]),
+			    radiologist_metrics[Exam_Date] IN VALUES('Mosaic_Calendar'[Date]),
+			    FILTER(
+			        ALL(radiologist_metrics[Period_Type]),
+			        (_mosaicMode = "Drafting Only" && radiologist_metrics[Period_Type] = "Drafting") ||
+			        (_mosaicMode = "Reporting Only" && radiologist_metrics[Period_Type] = "Reporting") ||
+			        (_mosaicMode = "Full Mosaic" && radiologist_metrics[Period_Type] IN {"Drafting", "Reporting"}) ||
+			        (_mosaicMode = "Capture Only" && radiologist_metrics[Period_Type] = "Drafting")
+			    ),
+			    FILTER(
+			        ALL(radiologist_metrics[Outliers]),
+			        _outlierView = "Included" || radiologist_metrics[Outliers] = "Excluded"
+			    ),
+			    FILTER(
+			        ALL(radiologist_metrics[Modality_Code]),
+			        _mosaicMode <> "Capture Only" || radiologist_metrics[Modality_Code] IN {"US", "BD"}
+			    )
+			)
+		lineageTag: 3f5a19f7-6a4c-48a1-9dc8-f49c28b66bf0
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	measure Base_Exams_Mosaic =
+			
+			VAR _outlierView = SELECTEDVALUE('Outlier Selector'[Outlier View], "Excluded")
+			VAR _mosaicMode = SELECTEDVALUE('Mosaic Mode Selector'[Mode], "Full Mosaic")
+			
+			RETURN
+			CALCULATE(
+			    SUM(radiologist_metrics[ExamCount]),
+			    radiologist_metrics[Exam_Date] IN VALUES('Mosaic_Calendar'[Date]),
+			    FILTER(
+			        ALL(radiologist_metrics[Period_Type]),
+			        (_mosaicMode = "Drafting Only" && radiologist_metrics[Period_Type] = "Drafting") ||
+			        (_mosaicMode = "Reporting Only" && radiologist_metrics[Period_Type] = "Reporting") ||
+			        (_mosaicMode = "Full Mosaic" && radiologist_metrics[Period_Type] IN {"Drafting", "Reporting"})
+			    ),
+			    FILTER(
+			        ALL(radiologist_metrics[Outliers]),
+			        _outlierView = "Included" || radiologist_metrics[Outliers] = "Excluded"
+			    )
+			)
+		formatString: 0
+		lineageTag: db1f3e64-c7e1-48fb-8beb-bc74fc55953c
+
+	measure Base_Mosaic_Efficiency =
+			
+			VAR _selectedMetric = SELECTEDVALUE('Metric Selector1'[Metric])
+			RETURN
+			SWITCH(_selectedMetric,
+			    "Mean RVU/min", DIVIDE([Base_RVU_Mosaic], [Base_Time_Mosaic] / 60),
+			    "Mean TBWU/min", DIVIDE([Base_TBWU_Mosaic], [Base_Time_Mosaic] / 60),
+			    BLANK()
+			)
+		lineageTag: 8b97460c-540c-45c9-bd56-f79affbbefa9
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	measure Base_Exams_Baseline =
+			
+			VAR _outlierView = SELECTEDVALUE('Outlier Selector'[Outlier View], "Excluded")
+			
+			RETURN
+			CALCULATE(
+			    SUM(radiologist_metrics[ExamCount]),
+			    radiologist_metrics[Period_Type] = "Baseline",
+			    FILTER(
+			        ALL(radiologist_metrics[Outliers]),
+			        _outlierView = "Included" || radiologist_metrics[Outliers] = "Excluded"
+			    )
+			)
+		formatString: 0
+		lineageTag: 93af56f6-23bc-4aad-9af6-413ddb49d52b
+
+	measure Base_Dictation_Baseline =
+			
+			DIVIDE([Base_Time_Baseline], [Base_Exams_Baseline])
+		lineageTag: c7b9c037-af13-4a9b-876c-c2b781e59dcd
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	measure Base_Dictation_Mosaic =
+			
+			DIVIDE([Base_Time_Mosaic], [Base_Exams_Mosaic])
+		lineageTag: 75c3a31b-5e16-4756-ac23-aead772c7621
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	measure '% Change Coloreffexp' = ```
+			
+			VAR val = [Pct_Change_Exam_Page_Opt]
+			
+			RETURN
+			SWITCH(
+			    TRUE(), 
+			    ISBLANK(val), "#FFFFFF",
+			    val > 0, "#B9DDA4",  // Positive = Green (improvement)
+			    val < 0, "#C6767D",  // Negative = Red (worse)
+			    "#FFFFFF"
+			)
+			```
+		lineageTag: 3ca35c16-572c-4dec-a4de-3ec1782e11bd
+
+	measure '% Change ColoreffexpT' = ```
+			
+			VAR val = [Pct_Change_Metric_Opt]
+			
+			RETURN
+			SWITCH(
+			    TRUE(), 
+			    ISBLANK(val), "#FFFFFF",
+			    val > 0, "#B9DDA4",  // Positive = Green (improvement)
+			    val < 0, "#C6767D",  // Negative = Red (worse)
+			    "#FFFFFF"
+			)
+			```
+		lineageTag: 898ec673-7eed-45d5-af6e-9dd6c0481e21
+
+	measure 'Implied RTS % Change ColoreffT' = ```
+			
+			VAR val = [Implied_RTS_Opt]
+			
+			RETURN
+			SWITCH(
+			    TRUE(), 
+			    ISBLANK(val), "#FFFFFF",
+			    val < 0, "#B9DDA4",  // Positive = Green (time saved)
+			    val > 0, "#C6767D",  // Negative = Red (slower)
+			    "#FFFFFF"
+			)
+			```
+		lineageTag: e0d6aeb3-aa29-421e-8b41-8a45791e07d8
+
+	column Metric
+		lineageTag: ddbd7909-c623-4197-832e-3df909aa452b
+		summarizeBy: none
+		isNameInferred
+		sourceColumn: [Metric]
+		sortByColumn: SortOrder
+
+		annotation SummarizationSetBy = Automatic
+
+	column SortOrder
+		formatString: 0
+		lineageTag: 0c24206d-c4cb-4dd2-8dc7-6f5c56212b25
+		summarizeBy: sum
+		isNameInferred
+		sourceColumn: [SortOrder]
+
+		annotation SummarizationSetBy = Automatic
+
+	partition 'Metric Selector1' = calculated
+		mode: import
+		source = ```
+				
+				DATATABLE(
+				    "Metric", STRING, 
+				    "SortOrder", INTEGER,
+				    {
+				        
+				        {"Mean TBWU/min" , 1 }, 
+				        {"Mean RVU/min", 2 }
+				    }
+				)
+				```
+
+	annotation PBI_Id = 4bf1aeb9a9584ec58e129caa7a3f2b9d
+

@@ -1,0 +1,49 @@
+table Metricselector
+	lineageTag: 5b251886-8af5-48e3-a820-8263234d0f96
+
+	column Metricselector
+		lineageTag: cfe1b97c-be6a-4e37-9059-0648d1ad8646
+		summarizeBy: none
+		sourceColumn: [Value1]
+		sortByColumn: 'Metricselector Order'
+
+		relatedColumnDetails
+			groupByColumn: 'Metricselector Fields'
+
+		annotation SummarizationSetBy = Automatic
+
+	column 'Metricselector Fields'
+		isHidden
+		lineageTag: d3d2ea58-e0b2-4d20-a7d9-2b5fbd6618d6
+		summarizeBy: none
+		sourceColumn: [Value2]
+		sortByColumn: 'Metricselector Order'
+
+		extendedProperty ParameterMetadata = {"version":3,"kind":2}
+
+		annotation SummarizationSetBy = Automatic
+
+	column 'Metricselector Order'
+		isHidden
+		formatString: 0
+		lineageTag: df9fcd26-85bd-4647-9eb8-1e086ae50c21
+		summarizeBy: sum
+		sourceColumn: [Value3]
+
+		annotation SummarizationSetBy = Automatic
+
+	partition Metricselector = calculated
+		mode: import
+		source = ```
+				{
+				    ("% VRA Prepped of Total Exams", NAMEOF('Daily_Extract'[% VRA Prepped of Total Exams]), 4),
+				    ("% VRA Prepped of Mosaic Exams", NAMEOF('Daily_Extract'[% VRA Prepped Mosaic Exams]), 5),
+				    ("Total Exams", NAMEOF('Daily_Extract'[Total Exam Ct]), 0),
+				    ("VRA Prepped Exams", NAMEOF('Daily_Extract'[VRA Prepped Exams]), 2),
+				    ("Mosaic Exams", NAMEOF('Daily_Extract'[Mosaic Exam Ct]), 1), 
+				    ("VRA Prepped Mosaic Exams" , NAMEOF('Daily_Extract'[VRA Prepped Mosaic Exams]), 3)
+				}
+				```
+
+	annotation PBI_Id = e7c707f9450a495bb4d984edcba456b7
+

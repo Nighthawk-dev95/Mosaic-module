@@ -1,0 +1,535 @@
+table team_rollups
+	lineageTag: 5b22a053-5a54-4e6e-b1d8-ead5e2942ce5
+
+	measure 'Mosaic Time All Time' =
+			
+			CALCULATE(
+			    SUM(radiologist_metrics[TotalTime]),
+			    radiologist_metrics[Period_Type] IN {"Drafting", "Reporting"},
+			    radiologist_metrics[Outliers] = "Excluded"
+			) / 60
+		lineageTag: 8c4790cc-a4ae-4822-8bab-2d55cc85924c
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	measure 'Captured US' = ```
+			
+			VAR _minCaptured = SELECTEDVALUE('Min Captured Exams'[Value], 0)
+			
+			VAR IsSiteLevel = ISINSCOPE(radiologist_metrics[Location_Name])
+			VAR IsRadiologistLevel = ISINSCOPE(radiologist_metrics[Radiologist]) && NOT IsSiteLevel
+			VAR IsPracticeLevel = ISINSCOPE(radiologist_metrics[Practice]) && NOT IsRadiologistLevel && NOT IsSiteLevel
+			VAR PracticeCount = COUNTROWS(VALUES(radiologist_metrics[Practice]))
+			VAR IsActualTotalLevel = NOT IsSiteLevel && NOT IsRadiologistLevel && NOT IsPracticeLevel && PracticeCount > 1
+			
+			VAR _captured = 
+			    CALCULATE(
+			        SUM(radiologist_metrics[ExamCount]),
+			        radiologist_metrics[Period_Type] = "Drafting",
+			        radiologist_metrics[Modality_Code] = "US",
+			        radiologist_metrics[Outliers] = "Excluded"
+			    )
+			
+			// Get Practice total for threshold check
+			VAR _practiceCaptured = 
+			    CALCULATE(
+			        SUM(radiologist_metrics[ExamCount]),
+			        REMOVEFILTERS(radiologist_metrics[Location_Name]),
+			        REMOVEFILTERS(radiologist_metrics[Radiologist]),
+			        radiologist_metrics[Period_Type] = "Drafting",
+			        radiologist_metrics[Modality_Code] = "US",
+			        radiologist_metrics[Outliers] = "Excluded"
+			    )
+			
+			// At Total level: sum only qualifying practices
+			VAR _qualifiedPractices = 
+			    FILTER(
+			        VALUES(radiologist_metrics[Practice]),
+			        CALCULATE(
+			            SUM(radiologist_metrics[ExamCount]),
+			            radiologist_metrics[Period_Type] = "Drafting",
+			            radiologist_metrics[Modality_Code] = "US",
+			            radiologist_metrics[Outliers] = "Excluded"
+			        ) >= _minCaptured
+			    )
+			
+			VAR _totalAcrossQualified = 
+			    SUMX(
+			        _qualifiedPractices,
+			        CALCULATE(
+			            SUM(radiologist_metrics[ExamCount]),
+			            radiologist_metrics[Period_Type] = "Drafting",
+			            radiologist_metrics[Modality_Code] = "US",
+			            radiologist_metrics[Outliers] = "Excluded"
+			        )
+			    )
+			
+			VAR _thresholdCheck = 
+			    IF(
+			        IsSiteLevel || IsRadiologistLevel,
+			        _practiceCaptured,
+			        _captured
+			    )
+			
+			VAR _result = 
+			    SWITCH(
+			        TRUE(),
+			        IsActualTotalLevel, _totalAcrossQualified,
+			        _captured
+			    )
+			
+			RETURN
+			IF(
+			    IsActualTotalLevel || _thresholdCheck >= _minCaptured,
+			    _result,
+			    BLANK()
+			)
+			```
+		formatString: 0
+		lineageTag: 1cadec14-816f-4b19-b4a6-416c5e37940d
+
+	measure 'Rad Total Mosaic Exams US Page' =
+			
+			VAR IsSingleRad = COUNTROWS(VALUES(radiologist_summary[Radiologist])) = 1
+			
+			VAR RadTotal = MAX(radiologist_summary[Rad_Total_FullMosaic_ExclOutliers])
+			VAR TotalAcrossRads = SUM(radiologist_summary[Rad_Total_FullMosaic_ExclOutliers])
+			
+			RETURN
+			IF(IsSingleRad, RadTotal, TotalAcrossRads)
+		formatString: 0
+		lineageTag: b1bf6256-4060-49a5-bd25-ab0e8873b3ec
+
+	measure 'Baseline Efficiency Base' = ```
+			
+			VAR _baseTime = 
+			    CALCULATE(
+			        SUM(radiologist_metrics[TotalTime]),
+			        radiologist_metrics[Period_Type] = "Baseline",
+			        radiologist_metrics[Outliers] = "Excluded",
+			        radiologist_metrics[Modality_Code] = "US"
+			    )
+			
+			VAR _baseTBWU = 
+			    CALCULATE(
+			        SUM(radiologist_metrics[TotalTBWU]),
+			        radiologist_metrics[Period_Type] = "Baseline",
+			        radiologist_metrics[Outliers] = "Excluded",
+			        radiologist_metrics[Modality_Code]= "US"
+			    )
+			
+			RETURN
+			DIVIDE(_baseTBWU, _baseTime / 60)
+			```
+		lineageTag: 3092655c-aed4-45d4-9eb2-434678b0d97f
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	measure 'Mosaic Efficiency Base' = ```
+			
+			VAR _mosTime = 
+			    CALCULATE(
+			        SUM(radiologist_metrics[TotalTime]),
+			        radiologist_metrics[Period_Type] IN {"Drafting", "Reporting"},
+			        radiologist_metrics[Outliers] = "Excluded",
+			        radiologist_metrics[Modality_Code] = "US"
+			    )
+			
+			VAR _mosTBWU = 
+			    CALCULATE(
+			        SUM(radiologist_metrics[TotalTBWU]),
+			        radiologist_metrics[Period_Type] IN {"Drafting", "Reporting"},
+			        radiologist_metrics[Outliers] = "Excluded",
+			        radiologist_metrics[Modality_Code] = "US"
+			    )
+			
+			RETURN
+			DIVIDE(_mosTBWU, _mosTime / 60)
+			```
+		lineageTag: a9f3452f-8ef8-4169-af42-7ca47a63f751
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	measure '% Change ColoreffUS' = ```
+			
+			VAR val = [Efficiency Change % US Page]
+			
+			RETURN
+			SWITCH(
+			    TRUE(), 
+			    ISBLANK(val), "#FFFFFF",
+			    val > 0, "#B9DDA4",  // Positive = Green (improvement)
+			    val < 0, "#C6767D",  // Negative = Red (worse)
+			    "#FFFFFF"
+			)
+			```
+		lineageTag: f9f446bc-3cdf-4de2-8c0f-cb11ac5d1a1c
+
+	measure 'Capturable US' = ```
+			
+			VAR _minCaptured = SELECTEDVALUE('Min Captured Exams'[Value], 0)
+			
+			VAR IsSiteLevel = ISINSCOPE(radiologist_metrics[Location_Name])
+			VAR IsRadiologistLevel = ISINSCOPE(radiologist_metrics[Radiologist]) && NOT IsSiteLevel
+			VAR IsPracticeLevel = ISINSCOPE(radiologist_metrics[Practice]) && NOT IsRadiologistLevel && NOT IsSiteLevel
+			VAR PracticeCount = COUNTROWS(VALUES(radiologist_metrics[Practice]))
+			VAR IsActualTotalLevel = NOT IsSiteLevel && NOT IsRadiologistLevel && NOT IsPracticeLevel && PracticeCount > 1
+			
+			VAR _capturable = 
+			    CALCULATE(
+			        SUM(radiologist_metrics[ExamCount]),
+			        radiologist_metrics[Period_Type] IN {"Drafting", "Reporting"},
+			        radiologist_metrics[Modality_Code] = "US",
+			        radiologist_metrics[Outliers] = "Excluded"
+			    )
+			
+			// Get CAPTURED (not capturable) for threshold check
+			VAR _captured = 
+			    CALCULATE(
+			        SUM(radiologist_metrics[ExamCount]),
+			        radiologist_metrics[Period_Type] = "Drafting",
+			        radiologist_metrics[Modality_Code] = "US",
+			        radiologist_metrics[Outliers] = "Excluded"
+			    )
+			
+			// Get Practice captured total for threshold check
+			VAR _practiceCaptured = 
+			    CALCULATE(
+			        SUM(radiologist_metrics[ExamCount]),
+			        REMOVEFILTERS(radiologist_metrics[Location_Name]),
+			        REMOVEFILTERS(radiologist_metrics[Radiologist]),
+			        radiologist_metrics[Period_Type] = "Drafting",
+			        radiologist_metrics[Modality_Code] = "US",
+			        radiologist_metrics[Outliers] = "Excluded"
+			    )
+			
+			// At Total level: sum only qualifying practices
+			VAR _qualifiedPractices = 
+			    FILTER(
+			        VALUES(radiologist_metrics[Practice]),
+			        CALCULATE(
+			            SUM(radiologist_metrics[ExamCount]),
+			            radiologist_metrics[Period_Type] = "Drafting",
+			            radiologist_metrics[Modality_Code] = "US",
+			            radiologist_metrics[Outliers] = "Excluded"
+			        ) >= _minCaptured
+			    )
+			
+			VAR _totalAcrossQualified = 
+			    SUMX(
+			        _qualifiedPractices,
+			        CALCULATE(
+			            SUM(radiologist_metrics[ExamCount]),
+			            radiologist_metrics[Period_Type] IN {"Drafting", "Reporting"},
+			            radiologist_metrics[Modality_Code] = "US",
+			            radiologist_metrics[Outliers] = "Excluded"
+			        )
+			    )
+			
+			// Threshold check always based on CAPTURED, not capturable
+			VAR _thresholdCheck = 
+			    IF(
+			        IsSiteLevel || IsRadiologistLevel,
+			        _practiceCaptured,
+			        _captured
+			    )
+			
+			VAR _result = 
+			    SWITCH(
+			        TRUE(),
+			        IsActualTotalLevel, _totalAcrossQualified,
+			        _capturable
+			    )
+			
+			RETURN
+			IF(
+			    IsActualTotalLevel || _thresholdCheck >= _minCaptured,
+			    _result,
+			    BLANK()
+			)
+			```
+		formatString: 0
+		lineageTag: e50d5116-ae24-49fc-b83f-271d85526738
+
+	measure '% Captured of Eligible' =
+			
+			VAR _captured = [Captured US]
+			VAR _capturable = [Capturable US]
+			
+			RETURN
+			DIVIDE(_captured, _capturable, BLANK())
+		formatString: 0%;-0%;0%
+		lineageTag: 327693a7-4101-4a57-9ccd-35dc6b2b8a8d
+
+	measure 'Efficiency Change % US Page' = ```
+			
+			VAR _minCaptured = SELECTEDVALUE('Min Captured Exams'[Value], 0)
+			
+			VAR IsSiteLevel = ISINSCOPE(radiologist_metrics[Location_Name])
+			VAR IsRadiologistLevel = ISINSCOPE(radiologist_metrics[Radiologist]) && NOT IsSiteLevel
+			VAR IsPracticeLevel = ISINSCOPE(radiologist_metrics[Practice]) && NOT IsRadiologistLevel && NOT IsSiteLevel
+			VAR PracticeCount = COUNTROWS(VALUES(radiologist_metrics[Practice]))
+			VAR IsActualTotalLevel = NOT IsSiteLevel && NOT IsRadiologistLevel && NOT IsPracticeLevel && PracticeCount > 1
+			
+			VAR _captured = [Captured US]
+			
+			// Get Practice (Team) total for threshold check
+			VAR _practiceCaptured = 
+			    CALCULATE(
+			        SUM(radiologist_metrics[ExamCount]),
+			        REMOVEFILTERS(radiologist_metrics[Location_Name]),
+			        REMOVEFILTERS(radiologist_metrics[Radiologist]),
+			        radiologist_metrics[Period_Type] = "Drafting",
+			        radiologist_metrics[Modality_Code] = "US",
+			        radiologist_metrics[Outliers] = "Excluded"
+			    )
+			
+			VAR _thresholdCheck = 
+			    IF(
+			        IsSiteLevel || IsRadiologistLevel,
+			        _practiceCaptured,
+			        _captured
+			    )
+			
+			// Baseline Efficiency - US modality only
+			VAR _baseTime = 
+			    CALCULATE(
+			        SUM(radiologist_metrics[TotalTime]),
+			        radiologist_metrics[Period_Type] = "Baseline",
+			        radiologist_metrics[Modality_Code] = "US",
+			        radiologist_metrics[Outliers] = "Excluded"
+			    )
+			
+			VAR _baseTBWU = 
+			    CALCULATE(
+			        SUM(radiologist_metrics[TotalTBWU]),
+			        radiologist_metrics[Period_Type] = "Baseline",
+			        radiologist_metrics[Modality_Code] = "US",
+			        radiologist_metrics[Outliers] = "Excluded"
+			    )
+			
+			VAR _baseEff = DIVIDE(_baseTBWU, _baseTime / 60)
+			
+			// Mosaic Efficiency - US modality, Drafting only
+			VAR _mosTime = 
+			    CALCULATE(
+			        SUM(radiologist_metrics[TotalTime]),
+			        radiologist_metrics[Period_Type] = "Drafting",
+			        radiologist_metrics[Modality_Code] = "US",
+			        radiologist_metrics[Outliers] = "Excluded"
+			    )
+			
+			VAR _mosTBWU = 
+			    CALCULATE(
+			        SUM(radiologist_metrics[TotalTBWU]),
+			        radiologist_metrics[Period_Type] = "Drafting",
+			        radiologist_metrics[Modality_Code] = "US",
+			        radiologist_metrics[Outliers] = "Excluded"
+			    )
+			
+			VAR _mosEff = DIVIDE(_mosTBWU, _mosTime / 60)
+			
+			VAR _directResult = DIVIDE(_mosEff - _baseEff, _baseEff)
+			
+			// Weighted calculation for aggregate levels
+			VAR _sitesWithCapture = 
+			    FILTER(
+			        VALUES(radiologist_metrics[Location_Name]),
+			        CALCULATE(
+			            SUM(radiologist_metrics[ExamCount]),
+			            radiologist_metrics[Period_Type] = "Drafting",
+			            radiologist_metrics[Modality_Code] = "US",
+			            radiologist_metrics[Outliers] = "Excluded"
+			        ) > 0
+			    )
+			
+			VAR _siteSummary = 
+			    ADDCOLUMNS(
+			        _sitesWithCapture,
+			        "@Site_BaseEff", 
+			            VAR _sBaseTime = 
+			                CALCULATE(
+			                    SUM(radiologist_metrics[TotalTime]),
+			                    radiologist_metrics[Period_Type] = "Baseline",
+			                    radiologist_metrics[Modality_Code] = "US",
+			                    radiologist_metrics[Outliers] = "Excluded"
+			                )
+			            VAR _sBaseTBWU = 
+			                CALCULATE(
+			                    SUM(radiologist_metrics[TotalTBWU]),
+			                    radiologist_metrics[Period_Type] = "Baseline",
+			                    radiologist_metrics[Modality_Code] = "US",
+			                    radiologist_metrics[Outliers] = "Excluded"
+			                )
+			            RETURN DIVIDE(_sBaseTBWU, _sBaseTime / 60),
+			        "@Site_MosEff", 
+			            VAR _sMosTime = 
+			                CALCULATE(
+			                    SUM(radiologist_metrics[TotalTime]),
+			                    radiologist_metrics[Period_Type] = "Drafting",
+			                    radiologist_metrics[Modality_Code] = "US",
+			                    radiologist_metrics[Outliers] = "Excluded"
+			                )
+			            VAR _sMosTBWU = 
+			                CALCULATE(
+			                    SUM(radiologist_metrics[TotalTBWU]),
+			                    radiologist_metrics[Period_Type] = "Drafting",
+			                    radiologist_metrics[Modality_Code] = "US",
+			                    radiologist_metrics[Outliers] = "Excluded"
+			                )
+			            RETURN DIVIDE(_sMosTBWU, _sMosTime / 60),
+			        "@Site_MosTime", 
+			            CALCULATE(
+			                SUM(radiologist_metrics[TotalTime]),
+			                radiologist_metrics[Period_Type] = "Drafting",
+			                radiologist_metrics[Modality_Code] = "US",
+			                radiologist_metrics[Outliers] = "Excluded"
+			            )
+			    )
+			
+			VAR _weightedBaseEff = 
+			    DIVIDE(
+			        SUMX(_siteSummary, [@Site_BaseEff] * [@Site_MosTime]),
+			        SUMX(_siteSummary, [@Site_MosTime])
+			    )
+			
+			VAR _weightedMosEff = 
+			    DIVIDE(
+			        SUMX(_siteSummary, [@Site_MosEff] * [@Site_MosTime]),
+			        SUMX(_siteSummary, [@Site_MosTime])
+			    )
+			
+			VAR _weightedResult = DIVIDE(_weightedMosEff - _weightedBaseEff, _weightedBaseEff)
+			
+			// At Total level: weighted avg across qualifying practices only
+			VAR _qualifiedPractices = 
+			    FILTER(
+			        VALUES(radiologist_metrics[Practice]),
+			        CALCULATE(
+			            SUM(radiologist_metrics[ExamCount]),
+			            radiologist_metrics[Period_Type] = "Drafting",
+			            radiologist_metrics[Modality_Code] = "US",
+			            radiologist_metrics[Outliers] = "Excluded"
+			        ) >= _minCaptured
+			    )
+			
+			VAR _practiceSummary = 
+			    ADDCOLUMNS(
+			        _qualifiedPractices,
+			        "@Prac_BaseEff", 
+			            VAR _pBaseTime = 
+			                CALCULATE(
+			                    SUM(radiologist_metrics[TotalTime]),
+			                    radiologist_metrics[Period_Type] = "Baseline",
+			                    radiologist_metrics[Modality_Code] = "US",
+			                    radiologist_metrics[Outliers] = "Excluded"
+			                )
+			            VAR _pBaseTBWU = 
+			                CALCULATE(
+			                    SUM(radiologist_metrics[TotalTBWU]),
+			                    radiologist_metrics[Period_Type] = "Baseline",
+			                    radiologist_metrics[Modality_Code] = "US",
+			                    radiologist_metrics[Outliers] = "Excluded"
+			                )
+			            RETURN DIVIDE(_pBaseTBWU, _pBaseTime / 60),
+			        "@Prac_MosEff", 
+			            VAR _pMosTime = 
+			                CALCULATE(
+			                    SUM(radiologist_metrics[TotalTime]),
+			                    radiologist_metrics[Period_Type] = "Drafting",
+			                    radiologist_metrics[Modality_Code] = "US",
+			                    radiologist_metrics[Outliers] = "Excluded"
+			                )
+			            VAR _pMosTBWU = 
+			                CALCULATE(
+			                    SUM(radiologist_metrics[TotalTBWU]),
+			                    radiologist_metrics[Period_Type] = "Drafting",
+			                    radiologist_metrics[Modality_Code] = "US",
+			                    radiologist_metrics[Outliers] = "Excluded"
+			                )
+			            RETURN DIVIDE(_pMosTBWU, _pMosTime / 60),
+			        "@Prac_MosTime", 
+			            CALCULATE(
+			                SUM(radiologist_metrics[TotalTime]),
+			                radiologist_metrics[Period_Type] = "Drafting",
+			                radiologist_metrics[Modality_Code] = "US",
+			                radiologist_metrics[Outliers] = "Excluded"
+			            )
+			    )
+			
+			VAR _weightedBaseEffTotal = 
+			    DIVIDE(
+			        SUMX(_practiceSummary, [@Prac_BaseEff] * [@Prac_MosTime]),
+			        SUMX(_practiceSummary, [@Prac_MosTime])
+			    )
+			
+			VAR _weightedMosEffTotal = 
+			    DIVIDE(
+			        SUMX(_practiceSummary, [@Prac_MosEff] * [@Prac_MosTime]),
+			        SUMX(_practiceSummary, [@Prac_MosTime])
+			    )
+			
+			VAR _weightedResultTotal = DIVIDE(_weightedMosEffTotal - _weightedBaseEffTotal, _weightedBaseEffTotal)
+			
+			VAR _result = 
+			    SWITCH(
+			        TRUE(),
+			        IsSiteLevel, _directResult,
+			        IsActualTotalLevel, _weightedResultTotal,
+			        _weightedResult
+			    )
+			
+			RETURN
+			IF(
+			    IsActualTotalLevel || _thresholdCheck >= _minCaptured,
+			    _result,
+			    BLANK()
+			)
+			```
+		formatString: 0%;-0%;0%
+		lineageTag: b9e771e2-9298-4807-8bdf-557313a18bc8
+
+	measure Is_Matched_Rad = ```
+			
+			IF(
+			    SELECTEDVALUE('radiologist_summary'[Radiologist]) 
+			        IN VALUES('Match_Table'[Rad_Name]),
+			    1, 0
+			)
+			```
+		formatString: 0
+		lineageTag: 446cf870-f0f5-44d3-8fa9-baf5dc5313cd
+
+	column Team
+		dataType: string
+		lineageTag: 341c864d-655f-4255-acf8-d03dfbdd8645
+		summarizeBy: none
+		sourceColumn: Team
+
+		annotation SummarizationSetBy = Automatic
+
+	column 'Team Roll Up (KS)'
+		dataType: string
+		lineageTag: 5581c1f6-f3f6-46c0-b75f-ff7df0dfef2b
+		summarizeBy: none
+		sourceColumn: Team Roll Up (KS)
+
+		annotation SummarizationSetBy = Automatic
+
+	partition team_rollups = m
+		mode: import
+		source =
+				let
+				    Source = Databricks.Catalogs(
+				    "adb-7306149455716415.15.azuredatabricks.net",
+				    "/sql/1.0/warehouses/fe0ad987563c672a", [Catalog=null, Database=null, EnableAutomaticProxyDiscovery=null, Implementation=null]),
+				    edw_dev_Database = Source{[Name="edw_dev",Kind="Database"]}[Data],
+				    bipa_analytics_Schema = edw_dev_Database{[Name="bipa_analytics",Kind="Schema"]}[Data],
+				    team_rollups_Table = bipa_analytics_Schema{[Name="team_rollups",Kind="Table"]}[Data]
+				in
+				    team_rollups_Table
+
+	annotation PBI_NavigationStepName = Navigation
+
+	annotation PBI_ResultType = Table
+

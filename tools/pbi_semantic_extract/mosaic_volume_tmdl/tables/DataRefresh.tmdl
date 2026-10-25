@@ -1,0 +1,137 @@
+table DataRefresh
+	lineageTag: 919d32d8-dcc9-4bc0-8a25-f62baf508379
+
+	measure MosaicReportingCountDynamic = ```
+			
+			var metricChoice = SELECTEDVALUE(Metrictypeselector[MetricType])
+			
+			return
+			switch(
+			    true(), 
+			    metricChoice = "Estimated RVU" , [wrvuest_reporting], 
+			    metricChoice = "TBWU" , [TBWU_reporting], 
+			    metricChoice = "Adj Estimated RVU" , [Adj_estrvureporting], 
+			    metricChoice = "Adj Best Available RVU", [Adj_Bestrvureporting], 
+			    metricChoice= "Adj Time Based Work Unit", [Adjwu_reporting], 
+			    metricChoice = "Best Available RVU", [Bestrvu_reporting], 
+			    metricchoice = "Exam Count" , [Mosaic Exam Ct],
+			    blank())
+			```
+		formatString: 0
+		lineageTag: 73c1eaa3-fbb0-46a6-9548-59569d5069e2
+
+		annotation PBI_FormatHint = {"isDecimal":true}
+
+	measure MosaicDRAFTINGCountDynamic = ```
+			
+			var metricChoice = SELECTEDVALUE(Metrictypeselector[MetricType])
+			
+			return
+			switch(
+			    true(), 
+			    metricChoice = "Estimated RVU" , [wrvuest_drafting], 
+			    metricChoice = "TBWU" , [TBWU_drafting], 
+			    metricChoice = "Adj Estimated RVU" , [Adj_estrvudrafting], 
+			    metricChoice = "Adj Best Available RVU", [Adj_Bestrvudrafting], 
+			    metricChoice= "Adj Time Based Work Unit", [Adjwu_drafting], 
+			    metricChoice = "Best Available RVU", [Bestrvu_drafting],
+			    metricchoice = "Exam Count" , [MosaicdraftCt],
+			    blank())
+			```
+		formatString: 0
+		lineageTag: 291dcffa-0835-49f9-827b-e054321ad23c
+
+		annotation PBI_FormatHint = {"isDecimal":true}
+
+	measure TotalExamsCountDynamic = ```
+			
+			var metricChoice = SELECTEDVALUE(Metrictypeselector[MetricType])
+			
+			return
+			switch(
+			    true(), 
+			    metricChoice = "Estimated RVU" , [wRVU est], 
+			    metricChoice = "TBWU" , [WU], 
+			    metricChoice = "Adj Estimated RVU" , [adj_wRVU est], 
+			    metricChoice = "Adj Best Available RVU", [Adj_Best], 
+			    metricChoice= "Adj Time Based Work Unit", [adj_WU], 
+			    metricChoice = "Best Available RVU", [Best],
+			    metricchoice ="Exam Count" , [Total Exam Ct],
+			    blank())
+			```
+		formatString: 0
+		lineageTag: f92bcb8c-1cce-4393-a748-38da49afb820
+
+		annotation PBI_FormatHint = {"isDecimal":true}
+
+	measure mosaicreporting%dynamic =
+			divide (
+			    [MosaicReportingCountDynamic], [TotalExamsCountDynamic] )
+		formatString: 0%;-0%;0%
+		lineageTag: 21c46307-0a04-41ef-896b-aacea3082598
+
+	measure MosaicdraftinG% =
+			divide (
+			    [MosaicDRAFTINGCountDynamic] , [TotalExamsCountDynamic])
+		formatString: 0%;-0%;0%
+		lineageTag: 336afd76-02a6-4dc4-8c46-b1d8cf8dd34c
+
+	column RefreshDateTime
+		dataType: string
+		lineageTag: 0363c95e-c830-4db3-8ff5-ba0fcff48ae3
+		summarizeBy: none
+		sourceColumn: RefreshDateTime
+
+		changedProperty = IsHidden
+
+		annotation SummarizationSetBy = Automatic
+
+	column Date
+		dataType: dateTime
+		formatString: mm/dd/yyyy
+		lineageTag: 9318445d-e592-493b-b6b6-c55a7a438434
+		summarizeBy: none
+		sourceColumn: Date
+
+		changedProperty = IsHidden
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation UnderlyingDateTimeDataType = Date
+
+		annotation PBI_FormatHint = {"isDateTimeCustom":true}
+
+	column Time
+		dataType: dateTime
+		formatString: Long Time
+		lineageTag: 17e19a1a-e037-4d7c-8e24-123cf8f2ab05
+		summarizeBy: none
+		sourceColumn: Time
+
+		changedProperty = IsHidden
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation UnderlyingDateTimeDataType = Time
+
+	partition DataRefresh-f1d34bb8-d760-4d78-ac47-435a82ff2cc4 = m
+		mode: import
+		source =
+				let
+				      Source = DateTime.LocalNow(),
+				    #"Converted to Table" = #table(1, {{Source}}),
+				    #"Renamed Columns" = Table.RenameColumns(#"Converted to Table",{{"Column1", "DateTime"}}),
+				    #"Duplicated Column" = Table.DuplicateColumn(#"Renamed Columns", "DateTime", "DateTime - Copy"),
+				    #"Renamed Columns1" = Table.RenameColumns(#"Duplicated Column",{{"DateTime - Copy", "Date"}}),
+				    #"Changed Type" = Table.TransformColumnTypes(#"Renamed Columns1",{{"Date", type date}}),
+				    #"Duplicated Column1" = Table.DuplicateColumn(#"Changed Type", "DateTime", "DateTime - Copy"),
+				    #"Renamed Columns2" = Table.RenameColumns(#"Duplicated Column1",{{"DateTime - Copy", "Time"}}),
+				    #"Changed Type1" = Table.TransformColumnTypes(#"Renamed Columns2",{{"Time", type time}}),
+				    #"Renamed Columns3" = Table.RenameColumns(#"Changed Type1",{{"DateTime", "RefreshDateTime"}})
+				in
+				    #"Renamed Columns3"
+
+	annotation PBI_ResultType = Table
+
+	annotation PBI_NavigationStepName = Navigation
+

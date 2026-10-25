@@ -1,15 +1,19 @@
 import type { ReactNode } from "react";
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { mosaicApi } from "../api/client";
 import { useFetch } from "../hooks/useFetch";
 import { DataTable, fmtPct } from "../components/DataTable";
 import type { DataTableColumn } from "../components/DataTable";
-import { TABLE_SECTION_STYLE, TABLE_SCROLL_STYLE } from "../styles/tableLayout";
+import { TABLE_SCROLL_STYLE } from "../styles/tableLayout";
 import { CARD_STYLE } from "../styles/glassCard";
 import { FilterBar } from "../components/FilterBar";
 import { Badge } from "../components/Badge";
+import { NotesButton } from "../components/NotesButton";
+import { AIHoverCard } from "../components/AIHoverCard";
+import { Drawer } from "../components/Drawer";
 import { useFilters, matchesPractice, matchesRadiologistSearch } from "../context/FilterContext";
 import { getLocalRegion } from "../utils/localRegion";
+import { MIN_READ_TIME_COVERAGE, readTimeCoverageBadge } from "../utils/coverage";
 import type {
   BaselineProxyDetail,
   CapacityBaselineScorecard,
@@ -19,6 +23,12 @@ import type {
 
 function fmtNum(value: number | null | undefined, digits = 1): string {
   return value === null || value === undefined ? "—" : value.toFixed(digits);
+}
+
+/** SHARED_COLUMNS serves both the practice and the radiologist table; each names its rows differently. */
+function rowLabel(r: CapacityPracticeRollup | CapacityRadiologistItem): string {
+  if ("radiologist_name" in r && r.radiologist_name) return r.radiologist_name;
+  return r.practice ?? "this row";
 }
 
 function fmtShiftNames(value: string | null | undefined): ReactNode {
@@ -37,8 +47,46 @@ const SHARED_COLUMNS = <T extends CapacityPracticeRollup | CapacityRadiologistIt
   { key: "total_hours", label: "Hours", render: (r) => fmtNum(r.total_hours) },
   { key: "capacity_rvu", label: "On-Shift Capacity (RVU)", render: (r) => fmtNum(r.capacity_rvu) },
   { key: "capacity_rvu_per_hour", label: "On-Shift Capacity (RVU/hr)", render: (r) => fmtNum(r.capacity_rvu_per_hour, 2) },
-  { key: "utilization_rvu_pct", label: "On-Shift Utilization", render: (r) => fmtPct(r.utilization_rvu_pct) },
+  {
+    key: "utilization_rvu_pct",
+    label: "On-Shift Utilization",
+    // A "-" here is a deliberate suppression by the backend, not missing data - see
+    // _MIN_READ_TIME_COVERAGE in mosaic_service.py. Say so on hover rather than letting
+    // the user read it as "we don't have this yet".
+    render: (r) =>
+      r.utilization_rvu_pct != null ? (
+        fmtPct(r.utilization_rvu_pct)
+      ) : (
+        <AIHoverCard
+          feature="capacity_coverage"
+          entityLabel={rowLabel(r)}
+          metricLabel="On-Shift Utilization (suppressed)"
+          value="—"
+          extra={{
+            read_time_coverage: fmtPct(r.pct_exams_with_valid_read_time),
+            threshold: `${(MIN_READ_TIME_COVERAGE * 100).toFixed(0)}%`,
+            note:
+              "Not missing - withheld. Read-time coverage for this slice is below the floor, and utilization's numerator counts only exams with a dictation timestamp while its denominator counts the whole scheduled shift. A value here would be understated by roughly the coverage fraction, so it is suppressed rather than shown with a caveat.",
+          }}
+        >
+          —
+        </AIHoverCard>
+      ),
+  },
   { key: "efficiency_rpwu_per_min", label: "On-Shift Efficiency (RPWU/min)", render: (r) => fmtNum(r.efficiency_rpwu_per_min, 3) },
+  {
+    key: "pct_exams_with_valid_read_time",
+    label: "Read-Time Coverage",
+    render: (r) => readTimeCoverageBadge(r.pct_exams_with_valid_read_time, rowLabel(r), r.pct_shifts_rpce_source),
+  },
+  {
+    key: "pct_shifts_rpce_source",
+    label: "% Cases from RPCE",
+    // Computed and cached since the capacity CTE was written; never rendered until now.
+    // Distinct from read-time coverage - a slice can be fully RPCE-sourced and still have
+    // no usable dictation timestamps - so the two travel as separate columns, not one score.
+    render: (r) => fmtPct(r.pct_shifts_rpce_source),
+  },
   { key: "pct_mosaic", label: "% Mosaic", render: (r) => fmtPct(r.pct_mosaic) },
   { key: "pct_drafting", label: "% Mosaic Drafting", render: (r) => fmtPct(r.pct_drafting) },
   { key: "avg_rvu_per_case", label: "Avg RVU / Case", render: (r) => fmtNum(r.avg_rvu_per_case, 2) },
@@ -50,10 +98,30 @@ const SHARED_COLUMNS = <T extends CapacityPracticeRollup | CapacityRadiologistIt
   { key: "ir_cases", label: "IR" },
 ];
 
-const PRACTICE_COLUMNS: DataTableColumn<CapacityPracticeRollup>[] = [
-  { key: "practice", label: "Practice" },
-  ...SHARED_COLUMNS<CapacityPracticeRollup>(),
-];
+function practiceColumns(onSelectPractice: (practice: string) => void): DataTableColumn<CapacityPracticeRollup>[] {
+  return [
+    {
+      key: "practice",
+      label: "Practice",
+      render: (r) =>
+        r.practice ? (
+          <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
+            <span
+              onClick={() => onSelectPractice(r.practice!)}
+              style={{ cursor: "pointer", textDecoration: "underline", textDecorationStyle: "dotted" }}
+              title="Click to drill into this practice"
+            >
+              {r.practice}
+            </span>
+            <NotesButton entityType="practice" entityKey={r.practice} />
+          </span>
+        ) : (
+          "—"
+        ),
+    },
+    ...SHARED_COLUMNS<CapacityPracticeRollup>(),
+  ];
+}
 
 const RAD_COLUMNS: DataTableColumn<CapacityRadiologistItem>[] = [
   { key: "radiologist_name", label: "Radiologist" },
@@ -69,13 +137,19 @@ const RAD_COLUMNS: DataTableColumn<CapacityRadiologistItem>[] = [
 function coverageBadge(r: CapacityBaselineScorecard): ReactNode {
   const exact = r.pct_exact ?? 0;
   const noBaseline = r.pct_no_baseline ?? 0;
-  if (noBaseline >= 70) {
-    return <Badge label={`${noBaseline.toFixed(0)}% no baseline`} color="var(--status-critical)" />;
-  }
-  if (exact >= 50) {
-    return <Badge label={`${exact.toFixed(0)}% exact`} color="var(--status-good)" />;
-  }
-  return <Badge label={`${(r.pct_proxy ?? 0).toFixed(0)}% proxy`} color="var(--status-warning)" />;
+  const label = noBaseline >= 70 ? `${noBaseline.toFixed(0)}% no baseline` : exact >= 50 ? `${exact.toFixed(0)}% exact` : `${(r.pct_proxy ?? 0).toFixed(0)}% proxy`;
+  const color = noBaseline >= 70 ? "var(--status-critical)" : exact >= 50 ? "var(--status-good)" : "var(--status-warning)";
+  return (
+    <AIHoverCard
+      feature="capacity_coverage"
+      entityLabel={r.practice ?? "this practice"}
+      metricLabel="Baseline coverage"
+      value={label}
+      extra={{ pct_exact: String(exact), pct_proxy: String(r.pct_proxy ?? 0), pct_no_baseline: String(noBaseline) }}
+    >
+      <Badge label={label} color={color} />
+    </AIHoverCard>
+  );
 }
 
 const BASELINE_SCORECARD_COLUMNS: DataTableColumn<CapacityBaselineScorecard>[] = [
@@ -84,17 +158,54 @@ const BASELINE_SCORECARD_COLUMNS: DataTableColumn<CapacityBaselineScorecard>[] =
   {
     key: "baseline_capacity_tbwu_per_hour",
     label: "Baseline Capacity (TBWU/hr)",
-    render: (r) => fmtNum(r.baseline_capacity_tbwu_per_hour, 2),
+    render: (r) =>
+      r.baseline_capacity_tbwu_per_hour == null ? (
+        "—"
+      ) : (
+        <AIHoverCard
+          feature="capacity_figure"
+          entityLabel={r.practice ?? "this practice"}
+          metricLabel="Baseline capacity (TBWU/hr)"
+          value={fmtNum(r.baseline_capacity_tbwu_per_hour, 2)}
+        >
+          {fmtNum(r.baseline_capacity_tbwu_per_hour, 2)}
+        </AIHoverCard>
+      ),
   },
   {
     key: "avg_capacity_tbwu_per_hour",
     label: "Mosaic Capacity (TBWU/hr)",
-    render: (r) => fmtNum(r.avg_capacity_tbwu_per_hour, 2),
+    render: (r) =>
+      r.avg_capacity_tbwu_per_hour == null ? (
+        "—"
+      ) : (
+        <AIHoverCard
+          feature="capacity_figure"
+          entityLabel={r.practice ?? "this practice"}
+          metricLabel="Current Mosaic capacity (TBWU/hr)"
+          value={fmtNum(r.avg_capacity_tbwu_per_hour, 2)}
+          extra={{ baseline_capacity: fmtNum(r.baseline_capacity_tbwu_per_hour, 2) }}
+        >
+          {fmtNum(r.avg_capacity_tbwu_per_hour, 2)}
+        </AIHoverCard>
+      ),
   },
   {
     key: "additional_capacity_pct",
     label: "Additional Capacity %",
-    render: (r) => (r.additional_capacity_pct === null ? "—" : fmtPct(r.additional_capacity_pct / 100)),
+    render: (r) =>
+      r.additional_capacity_pct === null ? (
+        "—"
+      ) : (
+        <AIHoverCard
+          feature="capacity_additional_pct"
+          entityLabel={r.practice ?? "this practice"}
+          metricLabel="Additional capacity vs. baseline"
+          value={fmtPct(r.additional_capacity_pct / 100)}
+        >
+          {fmtPct(r.additional_capacity_pct / 100)}
+        </AIHoverCard>
+      ),
   },
   { key: "pct_exact", label: "Baseline Coverage", render: (r) => coverageBadge(r) },
 ];
@@ -119,6 +230,19 @@ export function CapacityDetail() {
   const filters = useFilters();
   const proxyDetail = useFetch(() => mosaicApi.getBaselineProxyDetail(filters.practice || undefined), [filters.practice]);
   const anyError = byPractice.error || byRadiologist.error || baselineScorecard.error || proxyDetail.error;
+
+  // Drill-down: clicking a practice name in "By Practice" opens this instead of requiring a
+  // separate scroll-and-filter through "By Radiologist"/"How Proxies Are Derived" below.
+  const [drilldownPractice, setDrilldownPractice] = useState<string | null>(null);
+  const drilldownRadiologists = useMemo(
+    () => (byRadiologist.data ?? []).filter((r) => r.practice === drilldownPractice),
+    [byRadiologist.data, drilldownPractice]
+  );
+  const drilldownProxy = useFetch(
+    () => (drilldownPractice ? mosaicApi.getBaselineProxyDetail(drilldownPractice) : Promise.resolve([])),
+    [drilldownPractice]
+  );
+  const practiceColumnsMemo = useMemo(() => practiceColumns(setDrilldownPractice), []);
 
   const practices = useMemo(() => {
     if (!byPractice.data) return [];
@@ -181,18 +305,21 @@ export function CapacityDetail() {
         </div>
       </div>
 
-      <div style={TABLE_SECTION_STYLE}>
-        <div style={{ color: "var(--text-muted)", fontSize: 13, marginBottom: 12, textTransform: "uppercase", letterSpacing: 0.5 }}>
-          By Practice
+      <div style={CARD_STYLE}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 12 }}>
+          <div style={{ color: "var(--text-muted)", fontSize: 13, textTransform: "uppercase", letterSpacing: 0.5 }}>
+            By Practice
+          </div>
+          <div style={{ fontSize: 11, color: "var(--text-muted)" }}>Click a practice name to drill in</div>
         </div>
         <div style={TABLE_SCROLL_STYLE}>
           {byPractice.data && (
-            <DataTable columns={PRACTICE_COLUMNS} rows={filteredByPractice} rowKey={(r) => r.practice ?? "unknown"} />
+            <DataTable columns={practiceColumnsMemo} rows={filteredByPractice} rowKey={(r) => r.practice ?? "unknown"} />
           )}
         </div>
       </div>
 
-      <div style={TABLE_SECTION_STYLE}>
+      <div style={CARD_STYLE}>
         <div style={{ color: "var(--text-muted)", fontSize: 13, marginBottom: 12, textTransform: "uppercase", letterSpacing: 0.5 }}>
           By Radiologist
         </div>
@@ -203,7 +330,7 @@ export function CapacityDetail() {
         </div>
       </div>
 
-      <div style={TABLE_SECTION_STYLE}>
+      <div style={CARD_STYLE}>
         <div style={{ color: "var(--text-muted)", fontSize: 13, marginBottom: 4, textTransform: "uppercase", letterSpacing: 0.5 }}>
           How Proxies Are Derived{filters.practice ? ` - ${filters.practice}` : ""}
         </div>
@@ -225,6 +352,43 @@ export function CapacityDetail() {
             ))}
         </div>
       </div>
+
+      <Drawer
+        open={drilldownPractice !== null}
+        onClose={() => setDrilldownPractice(null)}
+        title={drilldownPractice ?? undefined}
+      >
+        {drilldownPractice && (
+          <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+            <div>
+              <div style={{ color: "var(--text-muted)", fontSize: 12, marginBottom: 8, textTransform: "uppercase", letterSpacing: 0.5 }}>
+                Radiologists
+              </div>
+              {drilldownRadiologists.length === 0 ? (
+                <div style={{ color: "var(--text-muted)", fontSize: 13 }}>No radiologists found for this practice.</div>
+              ) : (
+                <DataTable columns={RAD_COLUMNS} rows={drilldownRadiologists} rowKey={(r) => r.npi} />
+              )}
+            </div>
+            <div>
+              <div style={{ color: "var(--text-muted)", fontSize: 12, marginBottom: 8, textTransform: "uppercase", letterSpacing: 0.5 }}>
+                How Proxies Are Derived
+              </div>
+              {drilldownProxy.data && drilldownProxy.data.length === 0 ? (
+                <div style={{ color: "var(--text-muted)", fontSize: 13 }}>No proxy matches for this practice.</div>
+              ) : (
+                drilldownProxy.data && (
+                  <DataTable
+                    columns={PROXY_DETAIL_COLUMNS}
+                    rows={drilldownProxy.data}
+                    rowKey={(r) => `${r.npi}-${r.target_shift}`}
+                  />
+                )
+              )}
+            </div>
+          </div>
+        )}
+      </Drawer>
     </div>
   );
 }

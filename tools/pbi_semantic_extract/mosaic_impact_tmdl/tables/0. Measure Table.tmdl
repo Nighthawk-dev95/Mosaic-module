@@ -1,0 +1,387 @@
+table '0. Measure Table'
+	lineageTag: 9fec02e4-73bb-4efc-ae93-36b2cdb4c089
+
+	measure '% VRA Assisted per shift' = sum('0. Cur'[on_shift_assisted_cases])/ SUM('0. Cur'[on_shift_non_irStrokeTrauma_cases])
+		lineageTag: 6a6c5386-afc1-4fce-ba32-fe98b1334c84
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	measure '% VRA Assisted per hour' = sum('0. Cur'[on_shift_assisted_cases_per_hour])/ SUM('0. Cur'[on_shift_non_irStrokeTrauma_cases_per_hour])
+		lineageTag: c23e97cd-d324-4140-ac4d-035fbaaadb9f
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	measure '% VRA Assisted per 9hour' = sum('0. Cur'[on_shift_assisted_cases_per_9hours])/ SUM('0. Cur'[on_shift_non_irStrokeTrauma_cases_per_9hours])
+		lineageTag: b03d260a-4a9b-484f-8dfe-65f36b893330
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	measure '% Autonext per shift' = Sum('0. Cur'[on_shift_autonext_cases])/ sum('0. Cur'[on_shift_cases])
+		lineageTag: 0bca2dd6-80e5-4e02-91ff-2e56f5f3d8f3
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	measure '% Autonext per hour' = Sum('0. Cur'[on_shift_autonext_cases_per_hour])/ sum('0. Cur'[on_shift_cases_per_hour])
+		lineageTag: 983e3080-8077-44f6-ab86-59bc341bf400
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	measure '% Autonext per 9hour' = Sum('0. Cur'[on_shift_autonext_cases_per_9hours])/ sum('0. Cur'[on_shift_cases_per_9hours])
+		lineageTag: 76e6b036-8891-4651-a52a-f1a838e56c77
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	measure '% XR per shift' = Sum('0. Cur'[on_shift_XR_cases])/ sum('0. Cur'[on_shift_cases])
+		lineageTag: 2d3bd19c-aa38-4da6-ba68-190ce4f095b1
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	measure '% XR per hour' = Sum('0. Cur'[on_shift_XR_cases_per_hour])/ sum('0. Cur'[on_shift_cases_per_hour])
+		lineageTag: 3a92d60d-bd04-43ff-a230-5c2ae83d8ffc
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	measure '% XR per 9hour' = Sum('0. Cur'[on_shift_XR_cases_per_9hours])/ sum('0. Cur'[on_shift_cases_per_9hours])
+		lineageTag: 73f4dcc1-4ca6-41d4-a14a-21cbe6f37abc
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	measure '% CT per shift' = Sum('0. Cur'[on_shift_CT_cases])/ sum('0. Cur'[on_shift_cases])
+		lineageTag: 85b1b3bc-ae89-45d6-ae7c-219b8c14dc83
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	measure '% CT per hour' = Sum('0. Cur'[on_shift_CT_cases_per_hour])/ sum('0. Cur'[on_shift_cases_per_hour])
+		lineageTag: 630dc9cb-9f6d-42a6-8c65-104ddbd065ad
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	measure '% CT per 9hour' = Sum('0. Cur'[on_shift_CT_cases_per_9hours])/ sum('0. Cur'[on_shift_cases_per_9hours])
+		lineageTag: 8f324e03-f613-4783-85a7-5b5344776402
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	measure '% US per shift' = Sum('0. Cur'[on_shift_US_cases])/ sum('0. Cur'[on_shift_cases])
+		lineageTag: 9a3e2dae-e66e-4799-b75b-ffb88a7fded8
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	measure '% US per hour' = Sum('0. Cur'[on_shift_US_cases_per_hour])/ sum('0. Cur'[on_shift_cases_per_hour])
+		lineageTag: 356fb957-2fae-4e21-831e-91e974a3b25c
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	measure '% US per 9hour' = Sum('0. Cur'[on_shift_US_cases_per_9hours])/ sum('0. Cur'[on_shift_cases_per_9hours])
+		lineageTag: 164a8fa1-f021-427d-b3b8-ed2286f1acf0
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	measure '% MR per shift' = Sum('0. Cur'[on_shift_MR_cases])/ sum('0. Cur'[on_shift_cases])
+		lineageTag: 58a5f5c5-5239-471c-974f-c800518c80cc
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	measure '% MR per hour' = Sum('0. Cur'[on_shift_MR_cases_per_hour])/ sum('0. Cur'[on_shift_cases_per_hour])
+		lineageTag: a8dba64d-bf6c-4c58-8b2b-bb4a0f00c355
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	measure '% MR per 9hour' = Sum('0. Cur'[on_shift_MR_cases_per_9hours])/ sum('0. Cur'[on_shift_cases_per_9hours])
+		lineageTag: ba5bedc5-a9a2-4115-9d19-54343b6b9e27
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	measure '% NM per shift' = Sum('0. Cur'[on_shift_NM_cases])/ sum('0. Cur'[on_shift_cases])
+		lineageTag: 3fa5dcbe-60d9-44cd-9c47-f052d5d6515d
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	measure '% NM per 9hour' = Sum('0. Cur'[on_shift_NM_cases_per_9hours])/ sum('0. Cur'[on_shift_cases_per_9hours])
+		lineageTag: 7cd4dfb0-f9c9-430d-ba08-b67a1cdd0861
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	measure '% NM per hour' = Sum('0. Cur'[on_shift_NM_cases_per_hour])/ sum('0. Cur'[on_shift_cases_per_hour])
+		lineageTag: 839864c3-1468-4352-a9a4-5f3fa45ffd3b
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	measure '% PT per shift' = Sum('0. Cur'[on_shift_PT_cases])/ sum('0. Cur'[on_shift_cases])
+		lineageTag: 5ebe6f6d-9090-4050-bf0e-8306806ee30b
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	measure '% PT per hour' = Sum('0. Cur'[on_shift_PT_cases_per_hour])/ sum('0. Cur'[on_shift_cases_per_hour])
+		lineageTag: f3605fff-42ec-4d2c-b72c-d9f30be2c517
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	measure '% PT per 9hour' = Sum('0. Cur'[on_shift_PT_cases_per_9hours])/ sum('0. Cur'[on_shift_cases_per_9hours])
+		lineageTag: 049e3e3e-9251-4782-a615-a0ecda96572e
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	measure '% IR per shift' = Sum('0. Cur'[on_shift_IR_cases])/ sum('0. Cur'[on_shift_cases])
+		lineageTag: 58519061-1591-43ff-a586-1cb6bfdb0ee9
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	measure '% IR per hour' = Sum('0. Cur'[on_shift_IR_cases_per_hour])/ sum('0. Cur'[on_shift_cases_per_hour])
+		lineageTag: 011daad4-962a-49e2-919f-8e9e235dd20f
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	measure '% IR per 9hour' = Sum('0. Cur'[on_shift_IR_cases_per_9hours])/ sum('0. Cur'[on_shift_cases_per_9hours])
+		lineageTag: a84a398d-9b49-4ba2-bfd8-9407f6cc06e7
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	measure '% Other per shift' = Sum('0. Cur'[on_shift_Other_Modality_cases])/ sum('0. Cur'[on_shift_cases])
+		lineageTag: dbe7d2dc-94ad-421c-85df-b29c23d584f4
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	measure '% Other per hour' = Sum('0. Cur'[on_shift_Other_cases_per_hour])/ sum('0. Cur'[on_shift_cases_per_hour])
+		lineageTag: 706a0bdb-2b1c-4095-a8e8-ce0fc0aeae96
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	measure '% Other per 9hour' = Sum('0. Cur'[on_shift_Other_cases_per_9hours])/ sum('0. Cur'[on_shift_cases_per_9hours])
+		lineageTag: 7210275b-ccbe-4c0d-82f5-8d78bd32bd87
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	measure '% Routine per 9hour' = Sum('0. Cur'[on_shift_Routine_cases_per_9hours])/ sum('0. Cur'[on_shift_cases_per_9hours])
+		lineageTag: 8c0cecea-fffc-43f3-94c8-c6b351bd8073
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	measure '% Routine per hour' = Sum('0. Cur'[on_shift_Routine_cases_per_hour])/ sum('0. Cur'[on_shift_cases_per_hour])
+		lineageTag: 471f3d45-7753-4b89-8c72-6b384e5d6c56
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	measure '% Routine per shift' = Sum('0. Cur'[on_shift_Routine_cases])/ sum('0. Cur'[on_shift_cases])
+		lineageTag: 81b5aef4-f00c-4a6f-a591-2f3b2b77017b
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	measure '% Stat per 9hour' = Sum('0. Cur'[on_shift_Stat_cases_per_9hours])/ sum('0. Cur'[on_shift_cases_per_9hours])
+		lineageTag: 309f6afa-7a7c-4bb2-901d-f75b02537f49
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	measure '% Stat per hour' = Sum('0. Cur'[on_shift_Stat_cases_per_hour])/ sum('0. Cur'[on_shift_cases_per_hour])
+		lineageTag: 17e07ab1-f7d0-4b80-bc11-0d4172af2256
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	measure '% Stat per shift' = Sum('0. Cur'[on_shift_Stat_cases])/ sum('0. Cur'[on_shift_cases])
+		lineageTag: a67d2c9e-2262-43f4-9a13-8053e69a99c7
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	measure '% Stroke per 9hour' = Sum('0. Cur'[on_shift_Stroke_cases_per_9hours])/ sum('0. Cur'[on_shift_cases_per_9hours])
+		lineageTag: 5a72d546-8120-4124-a902-ffa6b44dc1d8
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	measure '% Stroke per shift' = Sum('0. Cur'[on_shift_Stroke_cases])/ sum('0. Cur'[on_shift_cases])
+		lineageTag: 74ec4a49-7e1d-4653-aeef-66493256f12c
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	measure '% Stroke per hour' = Sum('0. Cur'[on_shift_Stroke_cases_per_hour])/ sum('0. Cur'[on_shift_cases_per_hour])
+		lineageTag: 36a1c3ac-1ef0-4373-bafb-2ae0bc7b5ff1
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	measure '% Trauma per shift' = Sum('0. Cur'[on_shift_Trauma_cases])/ sum('0. Cur'[on_shift_cases])
+		lineageTag: b6938373-2117-4b2b-acda-088fda04ae4a
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	measure '% Trauma per hour' = Sum('0. Cur'[on_shift_Trauma_cases_per_hour])/ sum('0. Cur'[on_shift_cases_per_hour])
+		lineageTag: 1b286605-fd3e-407b-b3d8-0d7ab4c82b42
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	measure '% Trauma per 9hour' = Sum('0. Cur'[on_shift_Trauma_cases_per_9hours])/ sum('0. Cur'[on_shift_cases_per_9hours])
+		lineageTag: 61fa2100-6fda-493e-ac48-67846d9323b6
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	measure '% OtherP per 9hour' = Sum('0. Cur'[on_shift_OtherP_cases_per_9hours])/ sum('0. Cur'[on_shift_cases_per_9hours])
+		lineageTag: 42ae30ae-d715-4a04-af82-f768af35b700
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	measure '% OtherP per hour' = Sum('0. Cur'[on_shift_OtherP_cases_per_hour])/ sum('0. Cur'[on_shift_cases_per_hour])
+		lineageTag: b8cfde39-cb48-4d83-9676-ddd2fe16c062
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	measure '% OtherP per shift' = Sum('0. Cur'[on_shift_OtherP_cases])/ sum('0. Cur'[on_shift_cases])
+		lineageTag: ef0346e9-2a75-4b82-86ef-c86b13939b21
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	measure 'Max_shift_no_for_Top N series' = MAXX(FILTER('0. Cur','0. Cur'[VRAShift_TAG] = 1),'0. Cur'[ShiftNo])
+		formatString: 0
+		lineageTag: c4489eba-67cc-44c2-b575-0519758a5655
+
+	measure Live_Rads = CALCULATE( DISTINCTCOUNT('0. Cur'[NPI]), filter('0. Cur','0. Cur'[Rad_Go_Live_date] <> BLANK()))
+		formatString: 0
+		lineageTag: d6c97c87-1776-43bd-abc9-28ec43f634cf
+
+	measure '% mosaic per shift' = Sum('0. Cur'[on_shift_mosaic_cases])/ sum('0. Cur'[on_shift_cases])
+		lineageTag: 376d5cbf-7f5e-45b1-b794-89ad6f446f84
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	measure '% Mosaic per hour' = Sum('0. Cur'[on_shift_mosaic_cases_per_hour])/ sum('0. Cur'[on_shift_cases_per_hour])
+		lineageTag: 276138a1-b422-4a9a-82ba-c6ae22569338
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	measure '% Mosaic per 9hour' = Sum('0. Cur'[on_shift_mosaic_cases_per_9hours])/ sum('0. Cur'[on_shift_cases_per_9hours])
+		lineageTag: 87b8284d-075c-4847-9014-082cef0b0047
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	measure 'Shift Ct' = COUNTROWS('0. Cur')
+		formatString: 0
+		lineageTag: ca7ed917-8522-4e48-bdb3-b64778799ddb
+
+	measure '% MG per 9hour' = Sum('0. Cur'[on_shift_MG_cases_per_9hours])/ sum('0. Cur'[on_shift_cases_per_9hours])
+		lineageTag: f6242851-e95e-4575-9b6d-d6aa64aede1d
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	measure '% MG per hour' = Sum('0. Cur'[on_shift_MG_cases_per_hour])/ sum('0. Cur'[on_shift_cases_per_hour])
+		lineageTag: 90cf49cf-19cf-4334-9fbf-4cf88ea3dc72
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	measure '% MG per shift' = Sum('0. Cur'[on_shift_MG_cases])/ sum('0. Cur'[on_shift_cases])
+		lineageTag: be7e9caf-2858-4a46-85ac-6822b160abe2
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	measure '% Mosaic drafting per 9hour' = Sum('0. Cur'[on_shift_mosaic_drafting_cases_per_9hours])/ sum('0. Cur'[on_shift_cases_per_9hours])
+		lineageTag: 0bc106e8-f939-4c47-8b97-8fb2f99bf93c
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	measure '% Mosaic drafting per hour' = Sum('0. Cur'[on_shift_mosaic_drafting_cases_per_hour])/ sum('0. Cur'[on_shift_cases_per_hour])
+		lineageTag: 17bcddcd-80c1-4ea3-a22d-3ce86968ed4f
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	measure '% Mosaic drafting per shift' = Sum('0. Cur'[on_shift_mosaic_drafting_cases])/ sum('0. Cur'[on_shift_cases])
+		lineageTag: 1c5a6ba4-c27a-4f0a-bcf4-1248d9abc736
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	measure '% pool per shift' = Sum('0. Cur'[on_shift_pool_cases])/ sum('0. Cur'[on_shift_cases])
+		lineageTag: e5ac37bb-218c-4d39-be71-e995e193e0b1
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	measure '% assigned per shift' = Sum('0. Cur'[on_shift_assigned_cases])/ sum('0. Cur'[on_shift_cases])
+		lineageTag: a7c796cc-c472-495a-8d41-44fb85dfdf5f
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	measure '% assigned per hour' = Sum('0. Cur'[on_shift_assigned_cases_per_hour])/ sum('0. Cur'[on_shift_cases_per_hour])
+		lineageTag: 05ba15ac-18be-468f-90a7-4c81cadc090a
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	measure Measure
+		lineageTag: c0f77a62-adf1-4934-9cef-423037a6b825
+
+	measure '% pool per hour' = Sum('0. Cur'[on_shift_pool_cases_per_hour])/ sum('0. Cur'[on_shift_cases_per_hour])
+		lineageTag: 4109c800-8ddf-4860-828f-badfa803b1bf
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	measure '% Pool per 9hour' = Sum('0. Cur'[on_shift_pool_cases_per_9hours])/ sum('0. Cur'[on_shift_cases_per_9hours])
+		lineageTag: 5683cbb0-fd4a-4ab9-8d1b-789b19ccc302
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	measure '% Assigned per 9hour' = Sum('0. Cur'[on_shift_assigned_cases_per_9hours])/ sum('0. Cur'[on_shift_cases_per_9hours])
+		lineageTag: 55726cc0-1ce6-41aa-a29c-e661d88b0e70
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	measure '% Capture per 9hour' = Sum('0. Cur'[on_shift_captured_US_in_mosaic_cases_per_9hours])/ sum('0. Cur'[on_shift_cases_per_9hours])
+		lineageTag: 5b121d78-8d5e-452b-b729-9105c0175f98
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	measure '% capture per shift' = Sum('0. Cur'[on_shift_captured_US_in_mosaic_cases])/ sum('0. Cur'[on_shift_cases])
+		lineageTag: 1733477e-c986-4832-84cc-881f70de534e
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	measure '% capture per hour' = Sum('0. Cur'[on_shift_captured_US_in_mosaic_cases_per_hour])/ sum('0. Cur'[on_shift_cases_per_hour])
+		lineageTag: ded17662-66b0-40a5-b8b3-9040babe61ea
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	measure '% inpatient per shift' = Sum('0. Cur'[on_shift_Inpatient_cases])/ sum('0. Cur'[on_shift_cases])
+		formatString: 0%;-0%;0%
+		lineageTag: 6260c8cc-49e9-4b53-9c1e-2196ec3564f9
+
+	measure '% inpatient per hour' = Sum('0. Cur'[on_shift_Inpatient_cases_per_hour])/ sum('0. Cur'[on_shift_cases_per_hour])
+		formatString: 0%;-0%;0%
+		lineageTag: 7c3cab03-8942-4748-86f2-a929e2f8443a
+
+	measure '% inpatient per 9hour' = Sum('0. Cur'[on_shift_Inpatient_cases_per_9hours])/ sum('0. Cur'[on_shift_cases_per_9hours])
+		lineageTag: 6d4d41e9-61cf-4413-9b77-0f4cb3ea8663
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	measure '% outpatient per shift' = Sum('0. Cur'[on_shift_Outpatient_cases])/ sum('0. Cur'[on_shift_cases])
+		formatString: 0%;-0%;0%
+		lineageTag: 63ce61e3-b0f4-4984-ac69-3d705dd9dba6
+
+	measure '% outpatient per hour' = Sum('0. Cur'[on_shift_Outpatient_cases_per_hour])/ sum('0. Cur'[on_shift_cases_per_hour])
+		formatString: 0%;-0%;0%
+		lineageTag: c4e450d5-06be-4778-8fdd-9ffcd9fd421b
+
+	measure '% outpatient per 9hour' = Sum('0. Cur'[on_shift_Outpatient_cases_per_9hours])/ sum('0. Cur'[on_shift_cases_per_9hours])
+		formatString: 0%;-0%;0%
+		lineageTag: 8aebeda9-dc49-44a1-80e9-360b66f77763
+
+	measure '% ER per shift' = Sum('0. Cur'[on_shift_ER_cases])/ sum('0. Cur'[on_shift_cases])
+		formatString: 0%;-0%;0%
+		lineageTag: d7cdfd93-9119-4040-97ca-30c43a34ea07
+
+	measure '% ER per hour' = Sum('0. Cur'[on_shift_ER_cases_per_hour])/ sum('0. Cur'[on_shift_cases_per_hour])
+		formatString: 0%;-0%;0%
+		lineageTag: 8bf17623-0577-4715-a45c-44c23cacc2de
+
+	measure '% ER per 9hour' = Sum('0. Cur'[on_shift_ER_cases_per_9hours])/ sum('0. Cur'[on_shift_cases_per_9hours])
+		formatString: 0%;-0%;0%
+		lineageTag: 252c1bf2-63d0-445b-a7af-62e20aeed806
+
+	column Column
+		formatString: 0
+		lineageTag: 13f23680-474b-4aa1-8aac-f9fe7e223103
+		summarizeBy: sum
+		isNameInferred
+		sourceColumn: [Column]
+
+		annotation SummarizationSetBy = Automatic
+
+	partition '0. Measure Table' = calculated
+		mode: import
+		source = Row("Column", BLANK())
+
+	annotation PBI_Id = 29f1bc40fa204762a46f6c5b293267ba
+
+	annotation 436ba87b-9c83-4389-a31b-ebd06a36be98 = {"Expression":""}
+
