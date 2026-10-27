@@ -7,18 +7,20 @@
  * but it puts TABS in the temporal dead zone during module evaluation, which is a trap to
  * leave lying around for whoever next needs the route list.
  */
+/**
+ * Explore replaces five tabs that each answered one fixed question - Volume, Efficiency,
+ * Capacity, Non-Drafted and Shift Utilization. None of them composed, so a question spanning
+ * two of them meant reading across two tabs. Their routes still resolve; App.tsx redirects
+ * them, because these URLs are in Teams messages and email threads.
+ */
 export const TABS = [
   { to: "/", label: "Today", end: true },
+  { to: "/explore", label: "Explore" },
   { to: "/mvp", label: "MVP" },
-  { to: "/volume", label: "Volume" },
-  { to: "/efficiency", label: "Efficiency" },
-  { to: "/capacity", label: "Capacity" },
   { to: "/baseline-review", label: "Baseline Review" },
   { to: "/radiologist-lookup", label: "Radiologist Lookup" },
   { to: "/capture", label: "Capture" },
   { to: "/scorecard", label: "Rad Mosaic Scorecard" },
   { to: "/roster", label: "Roster" },
-  { to: "/non-drafted", label: "Non-Drafted" },
   { to: "/pulse", label: "Mosaic Pulse" },
-  { to: "/shift-utilization", label: "Shift Utilization" },
 ];

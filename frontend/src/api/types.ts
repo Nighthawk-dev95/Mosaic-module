@@ -1091,3 +1091,84 @@ export interface GenieMessageResponse {
   suggested_questions: string[];
   result: GenieResultTable | null;
 }
+
+/* ------------------------------------------------------------------------- *
+ * The cube - POST /api/mosaic/cube
+ *
+ * One scope in, one grid out. These mirror `CubeRequest` in backend/app/routes/cube.py and
+ * `cube_service.query`'s return shape; the two are hand-synced, so a field added there needs
+ * adding here. Note the verb: a GET to this path hits the SPA catch-all and returns index.html
+ * with HTTP 200, which looks exactly like success until you parse it.
+ * ------------------------------------------------------------------------- */
+
+export interface CubeRequest {
+  /** Registry metric keys. At least one. An unknown key is a 404, not an empty grid. */
+  metrics: string[];
+  /** Registry dimension keys: practice | team | local_region | month. */
+  group_by?: string[];
+  /**
+   * Names the entity grain directly, including grains that are not group-by dimensions -
+   * `radiologist` rows exist in the cube but rolling a rate across the ~70 managing practices
+   * one radiologist reads at has no governed definition, so it is reachable only this way.
+   */
+  entity_type?: string | null;
+  entity_id?: string | null;
+  /** 'YYYY-MM-DD'. The day is ignored; months are the grain. */
+  period_from?: string | null;
+  period_to?: string | null;
+  limit?: number | null;
+}
+
+export interface CubeCell {
+  measure: string;
+  label: string;
+  solution: string;
+  is_rate: boolean;
+  /**
+   * Stored un-divided. `value` is num/den with the registry's offset applied exactly once, and
+   * is null when the denominator is zero or absent - a rate of "no data" and a rate of "zero
+   * percent" are different answers, and only one of them is safe to render as 0%.
+   */
+  num: number | null;
+  den: number | null;
+  value: number | null;
+  fact_rows?: number;
+  /** Present only when the grid was grouped by month. */
+  period_start?: string;
+  /** Present only when the grid was grouped by, or filtered to, an entity. */
+  entity_id?: string;
+  entity_label?: string;
+  /** Present only where the metric carries a coverage denominator. */
+  coverage_pct?: number;
+}
+
+export interface CubeScopeEcho {
+  metrics: string[];
+  group_by: string[];
+  entity_type: string;
+  entity_id: string | null;
+  period_from: string | null;
+  period_to: string | null;
+}
+
+export interface CubeResponse {
+  /** What the server actually answered, which may be narrower than what was asked. */
+  scope: CubeScopeEcho;
+  rows: CubeCell[];
+  /** Keyed by metric key. Same shape the registry serves, so no definition is typed into TSX. */
+  definitions: Record<string, RegistryMetric>;
+  grain: string;
+}
+
+export interface CubeStatus {
+  rows: number;
+  measures: number;
+  entity_types: number;
+  first_period: string | null;
+  last_period: string | null;
+  measure_keys: string[];
+  entity_type_keys: string[];
+  wave_1_metrics: string[];
+  lookback_months: number;
+  registry_version: string;
+}

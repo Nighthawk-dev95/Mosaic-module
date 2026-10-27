@@ -1,4 +1,4 @@
-import { Routes, Route } from "react-router-dom";
+import { Routes, Route, Navigate } from "react-router-dom";
 import { Sidebar } from "./components/Sidebar";
 import { MosaicShell } from "./components/MosaicShell";
 import { FilterProvider } from "./context/FilterContext";
@@ -17,6 +17,7 @@ import { RadMosaicScorecard } from "./pages/RadMosaicScorecard";
 import { DraftVsFinal } from "./pages/DraftVsFinal";
 import { MosaicPulse } from "./pages/MosaicPulse";
 import { ShiftUtilization } from "./pages/ShiftUtilization";
+import { Explorer } from "./pages/Explorer";
 
 export default function App() {
   return (
@@ -29,7 +30,16 @@ export default function App() {
               <Route path="/" element={<MosaicIntelligence />} />
               <Route path="/mvp" element={<Mvp />} />
               <Route path="/roster" element={<RadiologistRoster />} />
-              <Route path="/volume" element={<VolumeDetail />} />
+              <Route path="/explore" element={<Explorer />} />
+              {/*
+                Volume is the one page the cube fully supersedes today - all seven stored
+                measures are its own. It redirects rather than 404s because these URLs are in
+                Teams messages and email threads. The other four pages Explore will eventually
+                absorb stay routed and reachable from Explore itself: their metrics are not in
+                the cube yet, so redirecting them now would delete working answers.
+              */}
+              <Route path="/volume" element={<Navigate to="/explore" replace />} />
+              <Route path="/volume-detail" element={<VolumeDetail />} />
               <Route path="/efficiency" element={<EfficiencyDetail />} />
               <Route path="/capacity" element={<CapacityDetail />} />
               <Route path="/baseline-review" element={<BaselineReviewQueue />} />

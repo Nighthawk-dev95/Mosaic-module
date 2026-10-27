@@ -1,0 +1,139 @@
+/*
+ * The first and, for now, only CSS module in this app.
+ *
+ * Everything else here is inline React style objects over theme.css custom properties, and that
+ * stays true. The exception is deliberate and bounded: the Explorer grid needs hover, focus-visible
+ * and reduced-motion states on hundreds of cells, and none of those can be expressed in a style
+ * object without attaching listeners per cell. The boundary is the grid - its scaffold, its cells
+ * and their states. Scope bar, pickers, drawer and prose above and around it remain inline. If a
+ * second surface needs a module, that is a decision to make on its own merits, not by citing this
+ * file as precedent.
+ *
+ * Every value below is a theme.css token. No hex, no durations and no easing curves are invented
+ * here; the grid is meant to look like the rest of the product, not like its own small app.
+ */
+
+.grid {
+  /* Owns its scroll: MosaicShell routes pages into a flex child with minHeight 0, so an
+     overflowing grid would otherwise push the shell's own chrome off screen. */
+  overflow: auto;
+  max-width: 100%;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface-1);
+}
+
+.table {
+  border-collapse: separate;
+  border-spacing: 0;
+  /* Counts and rates share a scan column; proportional digits make them wander. */
+  font-variant-numeric: tabular-nums;
+  font-size: var(--font-size-12);
+  color: var(--text-primary);
+}
+
+/* The metric name column and the column headers both pin, so a scrolled cell never loses the
+   two labels that say what it is. */
+.rowHead,
+.colHead {
+  position: sticky;
+  background: var(--surface-1);
+  z-index: 1;
+  text-align: left;
+  font-weight: var(--font-weight-semibold);
+  white-space: nowrap;
+  padding: var(--space-8) var(--space-12);
+  border-bottom: 1px solid var(--border);
+}
+
+.rowHead {
+  left: 0;
+  /* The left edge carries the metric's domain, as structure rather than decoration: which
+     semantic a number came from is the first thing to know when two of them disagree. */
+  border-left: 3px solid var(--domain, var(--border));
+  font-weight: var(--font-weight-normal);
+  border-bottom: 1px solid var(--gridline);
+}
+
+.colHead {
+  top: 0;
+  z-index: 2;
+  color: var(--text-secondary);
+}
+
+.corner {
+  position: sticky;
+  left: 0;
+  top: 0;
+  z-index: 3;
+  background: var(--surface-1);
+  border-bottom: 1px solid var(--border);
+}
+
+.metricLabel {
+  display: block;
+  color: var(--text-primary);
+}
+
+.metricMeta {
+  display: block;
+  font-size: var(--font-size-10);
+  color: var(--text-muted);
+}
+
+.cellWrap {
+  padding: 2px;
+  border-bottom: 1px solid var(--gridline);
+}
+
+/* A real button, not a div with onClick: these are the drill-down affordance, and a keyboard
+   user has to be able to reach one and see which one they are on. */
+.cell {
+  appearance: none;
+  display: block;
+  width: 100%;
+  min-width: 96px;
+  padding: var(--space-6) var(--space-10);
+  border: 1px solid transparent;
+  border-radius: var(--radius);
+  background: var(--cell-fill, var(--surface-raised));
+  color: var(--text-primary);
+  font: inherit;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  cursor: pointer;
+  transition:
+    background var(--dur-card) var(--ease-standard),
+    border-color var(--dur-card) var(--ease-standard);
+}
+
+.cell:hover {
+  /* A border shorthand token, not a color - it carries width and style too. */
+  border: var(--glass-border-strong);
+}
+
+.cell:focus-visible {
+  /* The app has no global focus style, so the grid supplies its own rather than relying on the
+     browser default, which is invisible against these surfaces. */
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+/* Withheld, not absent. Without this the square is pixel-identical to a slice that simply has
+   no data, and those are opposite readings of the same cell. */
+.suppressed {
+  border: 1px dashed var(--text-muted);
+  color: var(--text-muted);
+  background: var(--surface-raised);
+}
+
+.empty {
+  color: var(--text-muted);
+  cursor: default;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cell {
+    transition: none;
+  }
+}

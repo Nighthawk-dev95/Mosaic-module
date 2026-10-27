@@ -32,6 +32,9 @@ import type {
   MvpProgramContext,
   AiContextRequest,
   AiContextResponse,
+  CubeRequest,
+  CubeResponse,
+  CubeStatus,
   RegistrySnapshot,
   MosaicIntelligenceSnapshot,
   MoversDecomposition,
@@ -87,6 +90,36 @@ async function postJson<T>(path: string, body: unknown): Promise<T> {
   });
   if (!res.ok) {
     throw new Error(`Request to ${path} failed: ${res.status} ${res.statusText}`);
+  }
+  return res.json() as Promise<T>;
+}
+
+/**
+ * Like `postJson`, but keeps the server's explanation.
+ *
+ * The cube answers a refused scope with a 404 or 422 whose `detail` already names the supported
+ * alternative - "pct_rpce_drafting cannot be grouped by radiologist; try practice or team". The
+ * shared helpers above drop the body and throw the status line, which turns a sentence the user
+ * could act on into "Request to /cube failed: 422 Unprocessable Entity". That is the difference
+ * between an error the Explorer can render as a prompt to refine and one it can only apologise for.
+ */
+async function postCube<T>(path: string, body: unknown): Promise<T> {
+  const res = await fetch(`${BASE_URL}${path}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) {
+    let detail = "";
+    try {
+      const parsed = await res.json();
+      // FastAPI sends a string for HTTPException and a list of objects for request validation.
+      detail = typeof parsed?.detail === "string" ? parsed.detail : "";
+    } catch {
+      // A non-JSON body here means the SPA catch-all answered, i.e. the path does not exist.
+      detail = "";
+    }
+    throw new Error(detail || `Request to ${path} failed: ${res.status} ${res.statusText}`);
   }
   return res.json() as Promise<T>;
 }
@@ -208,6 +241,10 @@ export const mosaicApi = {
   // Static, in-memory on the backend (frozen dataclasses, no EDW, no cache) - safe to call
   // eagerly. AIHoverCard fetches it once per browser session and holds it.
   getRegistry: () => get<RegistrySnapshot>("/registry"),
+  // POST, not GET: a scope is a structured object with two list fields. A GET to this path would
+  // fall through to the SPA catch-all and return index.html with HTTP 200.
+  postCube: (req: CubeRequest) => postCube<CubeResponse>("/cube", req),
+  getCubeStatus: () => get<CubeStatus>("/cube/status"),
   getRadSentiment: () => get<RadSurveySummary>("/survey/rad-sentiment"),
   searchRadiologistLookup: (q: string) => get<RadiologistLookupMatch[]>(`/radiologist-lookup/search?q=${encodeURIComponent(q)}`),
   getRadiologistLookup: (npi: number, q?: string) =>
