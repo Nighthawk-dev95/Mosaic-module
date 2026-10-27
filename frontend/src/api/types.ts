@@ -600,10 +600,19 @@ export interface UndraftedFilterOptions {
   sites: string[];
 }
 
+/**
+ * One (week, practice, region, leakage-category) cell of the Non-Drafted chart.
+ *
+ * `local_practice` is the *managing* site - where the exam was read - which is what the page's
+ * "Practice" filter has always claimed to mean. `local_region` is one of the six fixed Local
+ * buckets, already resolved server-side from the reading radiologist's home practice; do not
+ * run it through `getLocalRegion` again (that maps a practice name, not a region name, and
+ * would silently collapse every region to "Matrix").
+ */
 export interface UndraftedCategoryPoint {
   week_start: string;
   local_practice: string | null;
-  team: string | null;
+  local_region: string | null;
   category: string;
   category_sort_order: number;
   exam_count: number;
@@ -1045,6 +1054,9 @@ export interface ShiftUtilizationItem {
   pct_ai_drafted: number | null;
   reading_minutes: number | null;
   shift_total_minutes: number | null;
+  pct_exams_with_valid_read_time: number | null;
+  // 0/1 flag at single-shift grain, not a share - 1 means this shift is RPCE-sourced.
+  pct_shifts_rpce_source: number | null;
 }
 
 export interface GenieAskRequest {

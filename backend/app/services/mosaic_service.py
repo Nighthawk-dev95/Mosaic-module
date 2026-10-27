@@ -253,60 +253,129 @@ def get_utilization_by_practice(days_back: int = 30) -> list[UtilizationPractice
 # edw_dev.bipa_analytics.presentation_deneb_vw) was dropped when that pipeline's other 3 tables
 # moved out of enterprise_analytics to edw_prod.bipa_analytics (Yaro's request) - rather than
 # migrate this one too, we confirmed tbl_exam_inventory itself now carries everything needed
-# (scheduled_shift_id/start/end, shift_utilization_pct, mosaic_read_flag/mosaic_draft_flag), so
-# this queries it directly instead of a separately-refreshed copy. Live query, not a snapshot.
+# (scheduled_shift_id/start/end, dictation timestamps, mosaic_read_flag/mosaic_draft_flag), so
+# this queries it directly instead of a separately-refreshed copy.
 #
-# shift_utilization_pct is a RUNNING value that changes per exam as the shift progresses (not a
-# fixed per-shift number - confirmed live 2026-10-26: one shift showed 307 distinct values across
-# 1,348 exam rows) and is on a 0-100 scale, not the 0-1 fraction this endpoint returns. We take the
-# row with the latest time_into_shift_minutes per (shift, radiologist) as the shift's final
-# cumulative value, then divide by 100.
+# REWRITTEN 2026-10-27 to close the last ungated-lineage hole in the module. This used to read
+# the table's own `shift_utilization_pct` - a RUNNING value that changes per exam as the shift
+# progresses (one shift showed 307 distinct values across 1,348 exam rows), taken at the row with
+# the largest time_into_shift_minutes and divided by 100. Two things were wrong with that, and
+# neither was about the number being approximately right:
+#
+#   1. It carried NO read-time coverage gate, while every other utilization in this module goes
+#      through `_gated_utilization_sql` - see that function's closing docstring line, which
+#      asserted an invariant this one path broke. Boca and Bethesda have ZERO exams with usable
+#      dictation timestamps and still rendered a figure here; RASF, at 0.055% coverage, rendered
+#      another. The whole product suppresses those two cases everywhere else.
+#   2. `reading_minutes` was circular - utilization x duration - so the drawer showed one number
+#      twice and called the second one a measurement.
+#
+# So utilization is now derived the same way Capacity derives it: adjusted read seconds per exam
+# (the LAG/LEAST derivation copied verbatim from `_CAPACITY_SHIFT_CTE_SQL`) summed over the shift,
+# over scheduled shift duration, gated at `_MIN_READ_TIME_COVERAGE`. That restores the contract
+# `ShiftUtilizationItem.utilization_pct` has documented since it was written, makes
+# `reading_minutes` a real measurement, and emits the two coverage columns the UI badge needs.
+#
+# Two visible consequences, both intended:
+#   - The displayed number changes. It is no longer the shift's final cumulative running value;
+#     it is read-minutes over scheduled minutes, consistent with Capacity and Efficiency.
+#   - Shift dates can move by up to one day. This reads the `_utc` shift columns rather than the
+#     local-wall-clock ones, matching the capacity chain (so the two surfaces agree on which date
+#     a shift belongs to) and making the duration denominator DST-proof - a local shift spanning
+#     a DST boundary measures 23 or 25 hours, which is wrong for every purpose here. The `_utc`
+#     columns also bring the NULL guards capacity already relies on.
 def get_shift_utilization_by_radiologist(days_back: int = 90) -> list[dict]:
     safe_days = max(1, min(int(days_back), 365))
     return run_query(
         f"""
         WITH shift_exams AS (
           SELECT
-            scheduled_shift_id,
-            reading_provider_npi AS npi,
-            MAX(reading_provider_name_full) AS radiologist_name,
-            MAX(provider_local_practice_name_curr) AS practice,
-            MIN(scheduled_shift_start_datetime) AS shift_start,
-            MIN(scheduled_shift_end_datetime) AS shift_end,
-            COUNT(*) AS exam_count,
-            SUM(CASE WHEN mosaic_read_flag THEN 1 ELSE 0 END) / COUNT(*) AS pct_mosaic_read,
-            SUM(CASE WHEN mosaic_draft_flag THEN 1 ELSE 0 END) / COUNT(*) AS pct_ai_drafted
-          FROM {settings.qualified}.tbl_exam_inventory
-          WHERE scheduled_shift_id IS NOT NULL
-            AND scheduled_shift_start_datetime >= DATE_SUB(CURRENT_DATE(), {safe_days})
-          GROUP BY scheduled_shift_id, reading_provider_npi
+            e.exam_id,
+            e.reading_provider_npi AS npi,
+            e.reading_provider_name_full AS radiologist_name,
+            -- NOTE: this is provider_local_practice_name_curr, the rad's HOME practice - what the
+            -- rest of Mosaic calls Team, not Practice. Mislabelled here since this endpoint was
+            -- written. Left alone deliberately: `cache_service.get_shift_utilization_by_radiologist`
+            -- filters these rows by exact string equality on `r.get("practice")`, so renaming the
+            -- field silently returns an empty page rather than an error. Tracked separately.
+            e.provider_local_practice_name_curr AS practice,
+            e.scheduled_shift_id,
+            CAST(e.scheduled_shift_start_datetime_utc AS DATE) AS shift_date,
+            e.scheduled_shift_start_datetime_utc AS shift_start,
+            e.scheduled_shift_end_datetime_utc AS shift_end,
+            e.dictation_start_datetime,
+            e.dictation_end_datetime,
+            e.final_datetime,
+            e.mosaic_read_flag,
+            e.mosaic_draft_flag,
+            e.Source_System_Code AS source_system_code
+          FROM {settings.qualified}.tbl_exam_inventory e
+          WHERE e.scheduled_shift_id IS NOT NULL
+            AND e.scheduled_shift_start_datetime_utc IS NOT NULL
+            AND e.scheduled_shift_end_datetime_utc IS NOT NULL
+            AND CAST(e.scheduled_shift_start_datetime_utc AS DATE)
+                >= DATE_SUB(CURRENT_DATE(), {safe_days})
         ),
-        final_exam AS (
+        with_lag AS (
+          SELECT *,
+            LAG(final_datetime) OVER (
+              PARTITION BY npi, DATE(dictation_start_datetime)
+              ORDER BY dictation_start_datetime, exam_id
+            ) AS prev_final
+          FROM shift_exams
+        ),
+        with_read_time AS (
+          SELECT *,
+            CASE WHEN dictation_start_datetime IS NOT NULL AND dictation_end_datetime IS NOT NULL
+                   AND final_datetime IS NOT NULL
+              THEN LEAST(3600, GREATEST(0, TIMESTAMPDIFF(SECOND,
+                CASE WHEN prev_final IS NOT NULL AND prev_final > dictation_start_datetime
+                     THEN prev_final ELSE dictation_start_datetime END,
+                CASE WHEN final_datetime < dictation_end_datetime
+                     THEN final_datetime ELSE dictation_end_datetime END
+              )))
+              ELSE NULL
+            END AS adjusted_read_time_sec
+          FROM with_lag
+        ),
+        shifts AS (
           SELECT
+            npi,
+            MAX(radiologist_name) AS radiologist_name,
+            MAX(practice) AS practice,
+            shift_date,
             scheduled_shift_id,
-            reading_provider_npi AS npi,
-            shift_utilization_pct,
-            ROW_NUMBER() OVER (
-              PARTITION BY scheduled_shift_id, reading_provider_npi
-              ORDER BY time_into_shift_minutes DESC
-            ) AS rn
-          FROM {settings.qualified}.tbl_exam_inventory
-          WHERE scheduled_shift_id IS NOT NULL
-            AND scheduled_shift_start_datetime >= DATE_SUB(CURRENT_DATE(), {safe_days})
+            MAX(TIMESTAMPDIFF(MINUTE, shift_start, shift_end)) AS shift_total_minutes,
+            COUNT(*) AS exam_count,
+            SUM(adjusted_read_time_sec) / 60.0 AS reading_minutes,
+            SUM(CASE WHEN adjusted_read_time_sec IS NOT NULL THEN 1 ELSE 0 END)
+              AS exams_with_valid_read_time,
+            MAX(CASE WHEN source_system_code IN ('rpceMidwest', 'rpceSouthwest') THEN 1 ELSE 0 END)
+              AS is_rpce_source,
+            try_divide(SUM(CASE WHEN mosaic_read_flag THEN 1 ELSE 0 END), COUNT(*)) AS pct_mosaic_read,
+            try_divide(SUM(CASE WHEN mosaic_draft_flag THEN 1 ELSE 0 END), COUNT(*)) AS pct_ai_drafted
+          FROM with_read_time
+          GROUP BY npi, scheduled_shift_id, shift_date
         )
         SELECT
-          s.npi,
-          s.radiologist_name,
-          s.practice,
-          DATE(s.shift_start) AS shift_date,
-          f.shift_utilization_pct / 100.0 AS utilization_pct,
-          s.pct_mosaic_read,
-          s.pct_ai_drafted,
-          (f.shift_utilization_pct / 100.0) * TIMESTAMPDIFF(MINUTE, s.shift_start, s.shift_end) AS reading_minutes,
-          TIMESTAMPDIFF(MINUTE, s.shift_start, s.shift_end) AS shift_total_minutes
-        FROM shift_exams s
-        JOIN final_exam f
-          ON s.scheduled_shift_id = f.scheduled_shift_id AND s.npi = f.npi AND f.rn = 1
+          npi,
+          radiologist_name,
+          practice,
+          shift_date,
+          {_gated_utilization_sql(
+              "reading_minutes", "(shift_total_minutes / 60.0)",
+              "exams_with_valid_read_time", "exam_count",
+          )} AS utilization_pct,
+          pct_mosaic_read,
+          pct_ai_drafted,
+          reading_minutes,
+          shift_total_minutes,
+          try_divide(exams_with_valid_read_time, exam_count) AS pct_exams_with_valid_read_time,
+          -- At single-shift grain this is a 0/1 flag, not a share: the badge reads 0% or 100%,
+          -- meaning "this shift is / is not RPCE-sourced". Named to match CapacityDetail's column
+          -- so the same badge component renders both.
+          CAST(is_rpce_source AS DOUBLE) AS pct_shifts_rpce_source
+        FROM shifts
         """
     )
 
@@ -1553,21 +1622,36 @@ def get_undrafted_analysis() -> list[dict]:
     cannot be ranked on a procedure no model covers; both surfaces label which denominator
     they are on.
 
-    KNOWN RESIDUAL (not fixed here - fixing it changes this dataset's grain and needs a full
-    EDW refresh to take effect): the SELECT below aliases provider_local_practice_name_curr to
-    *both* `local_practice` and `team`. Per the Team/Practice rule, `team` is correct
-    (provider = the radiologist's home practice) but `local_practice` should be
-    managing_local_practice_name_curr (the site where the exam was read). So the Non-Drafted
-    page's practice filter is currently filtering on home practice under a "Practice" label.
-    This is the same conflation as the MAX(practice) AS team residual in
-    get_radiologist_scorecard. Adding managing as a separate GROUP BY column multiplies rows
-    (one radiologist reads at up to ~70 sites), so it is a cube-grain change, not a one-liner.
+    TEAM vs PRACTICE (fixed 2026-10-27). This SELECT used to alias
+    provider_local_practice_name_curr to *both* `local_practice` and `team`, so the Non-Drafted
+    page's "Practice" filter silently filtered on the radiologist's home practice while the
+    FilterBar tooltip told users it meant the site the exam was read at. `local_practice` is now
+    managing_local_practice_name_curr (the site) and `team` stays
+    provider_local_practice_name_curr (the rad's home practice), per the standing rule.
+
+    The old docstring claimed this was a cube-grain change because "one radiologist reads at up
+    to ~70 sites". That is false at *this* grain: Site_Name already functionally determines
+    managing_local_practice_name_curr (2,434 sites, zero violations), so adding managing to a
+    GROUP BY that already carries Site_Name adds no rows at all - measured 2,545,702 cache rows
+    before and after. What it does change is the *browser* payload, because
+    `cache_service.get_undrafted_analysis` collapses site/exam_category away and the two
+    hierarchies no longer collapse into one another. Measured collapsed-row counts:
+
+        week x provider x category                        29,130   (what shipped before)
+        week x managing x provider x category            131,492   4.51x - rejected
+        week x managing x local_region(provider) x cat    72,175   2.48x - what ships now
+        week x managing x category                        27,657   0.95x - breaks Local filter
+
+    cache_service therefore keeps `team` only as its six-bucket Local Region, which is the only
+    thing the page ever used it for; the raw `team` emitted here is still the full practice name,
+    because next_best_action_service and mvp_weekly_report_service read these rows raw and rank
+    by actual team.
     """
     rows = run_query(
         f"""
         SELECT
           CAST(DATE_TRUNC('WEEK', final_datetime) AS DATE) AS week_start,
-          provider_local_practice_name_curr AS local_practice,
+          managing_local_practice_name_curr AS local_practice,
           provider_local_practice_name_curr AS team,
           Site_Name AS site,
           exam_subspecialty_code AS exam_category,
@@ -1592,7 +1676,8 @@ def get_undrafted_analysis() -> list[dict]:
         FROM {settings.qualified}.tbl_exam_inventory
         WHERE Study_Status_Code = 'Final'
         GROUP BY
-          DATE_TRUNC('WEEK', final_datetime), provider_local_practice_name_curr, Site_Name, exam_subspecialty_code,
+          DATE_TRUNC('WEEK', final_datetime), managing_local_practice_name_curr,
+          provider_local_practice_name_curr, Site_Name, exam_subspecialty_code,
           CASE
             WHEN exam_draftable_flag AND mosaic_draft_flag THEN 'Drafted'
             WHEN exam_not_draftable_reason = 'rad_not_in_drafting' THEN 'Draftable - Rad Not Enrolled'
@@ -1729,9 +1814,21 @@ def get_draft_insights_raw() -> list[dict]:
 
     Hardcodes edw_prod.enterprise_analytics for both tables rather than using
     settings.qualified - this predates the rest of the file's migration onto the same schema,
-    kept as literal SQL since tbl_mosaic_draft_insights only ever existed there."""
-    return run_query(
-        """
+    kept as literal SQL since tbl_mosaic_draft_insights only ever existed there.
+
+    Returns [] when that table does not exist yet, which is a supported state rather than a
+    failure: the build script cannot be run by this app at all (its own header records that the
+    service principal can neither CREATE TABLE, MERGE, nor invoke ai_query's paid model calls),
+    so until a human runs it the table is legitimately absent. Letting the TABLE_OR_VIEW_NOT_FOUND
+    propagate put a permanent entry in /refresh/status errors every 30 minutes, which is how two
+    genuine refresh failures went unnoticed - a status surface that is never clean is not read.
+    DraftVsFinal.tsx already renders the right empty state for zero rows, naming the script to run.
+
+    Narrowed to this one table on purpose: the same error on the tbl_exam_inventory join would be
+    a real breakage of the app's primary fact table, so it must still raise."""
+    try:
+        return run_query(
+            """
         SELECT
           t.accession_number, t.retention_pct, t.overall_assessment,
           t.added_by_radiologist, t.added_by_radiologist_categories,
@@ -1746,7 +1843,18 @@ def get_draft_insights_raw() -> list[dict]:
           ON ei.accession_number = t.accession_number
         WHERE t.is_current = true
         """
-    )
+        )
+    except Exception as exc:
+        message = str(exc)
+        if "TABLE_OR_VIEW_NOT_FOUND" in message and "tbl_mosaic_draft_insights" in message:
+            print(
+                "[mosaic] draft_insights_raw: tbl_mosaic_draft_insights not built yet - run "
+                "tools/draft_insights/001_build_draft_insights_sample.sql by hand to populate "
+                "it. Serving 0 assessed exams.",
+                flush=True,
+            )
+            return []
+        raise
 
 
 # Exact tier: mosaic_rebaseline_notebook's own algorithm (20%-Mosaic-utilization crossing date,

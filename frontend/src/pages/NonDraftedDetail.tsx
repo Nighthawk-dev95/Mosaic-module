@@ -4,7 +4,6 @@ import { useFetch } from "../hooks/useFetch";
 import { FilterBar } from "../components/FilterBar";
 import { AIHoverCard } from "../components/AIHoverCard";
 import { useFilters, matchesPractice } from "../context/FilterContext";
-import { getLocalRegion } from "../utils/localRegion";
 import { UndraftedStackedChart, CATEGORY_ORDER, DRAFTED_CATEGORY } from "../components/UndraftedStackedChart";
 import { NextBestActions } from "../components/NextBestActions";
 import { BriefingPanel } from "../components/BriefingPanel";
@@ -104,7 +103,7 @@ export function NonDraftedDetail() {
         (r) =>
           matchesPractice(filters, r.local_practice) &&
           (!filters.month || r.week_start.startsWith(filters.month)) &&
-          (!filters.local || getLocalRegion(r.team) === filters.local)
+          (!filters.local || r.local_region === filters.local)
       ),
     [undrafted.data, filters]
   );

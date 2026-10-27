@@ -23,7 +23,7 @@ two things stored numerators cannot carry:
 Wave 1 covers the seven composable Utilization (Volume) metrics. Capacity (27 metrics) is Wave 2
 and Deployment is Wave 3; the 19 `composable=False` specs - all three Efficiency metrics, all
 fourteen MVP metrics, plus `expected_unlock_tbwu` and `peer_benchmark_draft_rate` - are computed in
-their own services and will never be cube-composed. `_WAVE1_METRICS` is filtered through
+their own services and will never be cube-composed. `_WAVE1_KEYS` is filtered through
 `spec.composable` anyway rather than hand-listed, so adding a non-composable metric to a wave
 raises at import rather than emitting SQL for an expression the registry refuses to build.
 """

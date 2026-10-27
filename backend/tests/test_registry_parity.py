@@ -929,13 +929,6 @@ def test_every_feature_key_is_grounded_on_the_backend():
     )
 
 
-# Read-time-gated features whose lineage does not actually enforce the gate, so the shared
-# caveat's central promise - "below 75% Utilization is suppressed and shows '-'" - would be a
-# lie in their prompt. An exemption list of one, named rather than special-cased inline, because
-# the next entry here is a decision someone should have to write a reason for.
-_UNGATED_LINEAGE = {"shift_utilization"}
-
-
 def test_the_coverage_caveat_reaches_the_prompt_exactly_once():
     """Duplication, not absence, is the live risk at this seam.
 
@@ -949,8 +942,12 @@ def test_the_coverage_caveat_reaches_the_prompt_exactly_once():
     suppression rule two different times is how you get commentary that hedges a number the rule
     did not actually suppress.
 
-    One read-time-gated feature is exempt, and the exemption is the interesting half. See
-    `_UNGATED_LINEAGE` below.
+    There used to be an exemption here. `shift_utilization` was declared read-time-gated and was
+    not actually gated - its lineage carried no coverage column - so the shared caveat's promise
+    of suppression would have been false in its prompt, and it carried a feature-specific
+    paragraph instead. That lineage was rewritten to compute coverage and route through the same
+    gate as Capacity, so the exemption and the paragraph are both gone and every read-time-gated
+    feature is now checked by the loop below.
     """
     from app.services import ai_context_service as ai
 
@@ -963,8 +960,6 @@ def test_the_coverage_caveat_reaches_the_prompt_exactly_once():
     for feature in sorted(reg.FEATURE_COVERAGE):
         if reg.FEATURE_COVERAGE[feature] != reg.READ_TIME_COVERAGE.key:
             continue
-        if feature in _UNGATED_LINEAGE:
-            continue
         checked += 1
         text = ai._grounding_for(feature)
         # Exactly once, not at-most-once: zero is its own failure. A read-time-gated feature
@@ -975,7 +970,7 @@ def test_the_coverage_caveat_reaches_the_prompt_exactly_once():
             f"{feature!r} - it must appear exactly once; registry.grounding_for omits it "
             "precisely because the methodology constants already append it"
         )
-    assert checked >= 4, (
+    assert checked >= 5, (
         f"only {checked} read-time-gated features were checked - the loop filter has drifted "
         "from FEATURE_COVERAGE and is now silently passing by examining almost nothing"
     )
@@ -984,47 +979,6 @@ def test_the_coverage_caveat_reaches_the_prompt_exactly_once():
         assert needle not in reg.grounding_for(feature), (
             f"registry.grounding_for({feature!r}) now carries the coverage caveat - that is the "
             "second copy, and ai_context_service already owns the first"
-        )
-
-
-def test_the_ungated_lineage_states_its_gap_in_its_own_words():
-    """An exemption has to cost something, or it is just a way to switch a test off.
-
-    `shift_utilization` is declared read-time-gated in `FEATURE_COVERAGE` and is not actually
-    gated: `tbl_shift_utilization` carries no coverage column, so every value renders including
-    ones built from almost no read time. That makes the shared caveat *inapplicable* rather than
-    merely redundant - it promises suppression this lineage does not perform, and a model told
-    the bad numbers were withheld will read the surviving low ones as certainly real. Confident,
-    specific and wrong beats silence only in the wrong direction.
-
-    So the exemption is from the shared text, not from the obligation. Assert both halves: the
-    suppression promise must be absent, and a feature-specific statement of the same gap must be
-    present. Without the second assertion `_UNGATED_LINEAGE` would be a one-word opt-out of the
-    only check standing between a CEO-facing utilization number and commentary that never
-    mentions its numerator may be missing.
-    """
-    from app.services import ai_context_service as ai
-
-    for feature in sorted(_UNGATED_LINEAGE):
-        assert reg.FEATURE_COVERAGE.get(feature) == reg.READ_TIME_COVERAGE.key, (
-            f"{feature!r} is exempted from the read-time caveat but is no longer declared "
-            "read-time-gated - delete it from _UNGATED_LINEAGE rather than leaving a dangling "
-            "exemption that silently covers nothing"
-        )
-        text = ai._grounding_for(feature)
-        assert "a scheduled shift has no" not in text, (
-            f"the shared caveat is back in {feature!r}'s prompt - it promises a suppression "
-            "this lineage does not perform"
-        )
-        # The gap itself, in words that do not claim the number was withheld. Two independent
-        # needles: the threshold (composed from the registry, so it cannot drift) and the
-        # not-enforced fact, which is the whole reason this feature differs from the other four.
-        assert f"{reg.READ_TIME_COVERAGE.min_ratio:.0%}" in text, (
-            f"{feature!r}'s prompt no longer states the read-time threshold at all"
-        )
-        assert "not enforced on this lineage" in text, (
-            f"{feature!r}'s prompt stopped saying the floor is unenforced here, which is the "
-            "one fact that distinguishes it from the four features that do suppress"
         )
 
 

@@ -488,9 +488,31 @@ class RadSummaryStat(BaseModel):
 
 
 class UndraftedCategoryPoint(BaseModel):
+    """One (week, practice, region, leakage-category) cell of the Non-Drafted chart.
+
+    Both hierarchies are present and they are NOT the same column. `local_practice` is
+    `managing_local_practice_name_curr` - the site where the exam was actually read, which is
+    what the page's "Practice" filter and its tooltip have always claimed to mean.
+    `local_region` is one of the six fixed Local buckets derived from
+    `provider_local_practice_name_curr`, the reading radiologist's own home practice.
+
+    The region arrives pre-resolved rather than as a raw team name because the team name is
+    never rendered on this surface - the only thing the page does with it is map it through
+    `getLocalRegion`. Collapsing it server-side is what keeps the payload affordable; see
+    `cache_service.get_undrafted_analysis` for the measured row counts. Consumers that need the
+    actual team (the Drafting worklist, the weekly report) read the raw cache rows, where
+    `team` survives in full.
+
+    Unlike `ShiftUtilizationItem`, these fields stay required on purpose. This model is never
+    built by splatting a cached row - `cache_service.get_undrafted_analysis` collapses the raw
+    rows itself and passes explicit keyword arguments, resolving `local_region` through
+    `get_local_region` at construction time. So a field here cannot go missing when the cache
+    predates it, and a default would only hide a real construction bug.
+    """
+
     week_start: date
     local_practice: str | None
-    team: str | None
+    local_region: str | None
     category: str
     category_sort_order: int
     exam_count: int
@@ -741,20 +763,38 @@ class BaselineProxyCandidate(BaseModel):
 
 
 class ShiftUtilizationItem(BaseModel):
-    """One row per (radiologist, shift date) - how much of the shift was reading time, and how
-    much of that reading was Mosaic-assisted or AI-drafted. Source:
-    edw_dev.bipa_analytics.presentation_deneb_vw (RP's own Deneb/shift-timeline source) joined to
-    tbl_exam_inventory's mosaic_read_flag/mosaic_draft_flag via accession number."""
+    """One row per (radiologist, scheduled shift) - how much of the shift was spent reading, and
+    how much of that reading was Mosaic-assisted or AI-drafted. Source: tbl_exam_inventory alone,
+    at exam grain, aggregated to the shift. Read time is the same LAG/LEAST derivation Capacity
+    uses (dictation start to final, clipped by the previous exam's final and capped at an hour),
+    so the two surfaces measure utilization identically.
+
+    `practice` is the radiologist's HOME practice - what the rest of Mosaic calls Team. The field
+    name is a historical mislabel kept deliberately: `cache_service` filters these rows on it by
+    exact string equality, so renaming it returns an empty page rather than an error."""
 
     npi: int
     radiologist_name: str | None
     practice: str | None
     shift_date: date
+    # None when read-time coverage falls under the threshold - the value is suppressed rather
+    # than shown wrong in a knowable direction, the same rule Capacity and Efficiency follow.
     utilization_pct: float | None  # fraction 0-1, reading_minutes/shift_total_minutes
     pct_mosaic_read: float | None  # fraction 0-1 of that shift's exams read on Mosaic
     pct_ai_drafted: float | None  # fraction 0-1 of that shift's exams AI-drafted
     reading_minutes: float | None
     shift_total_minutes: float | None
+    # The two columns the coverage badge reads. At single-shift grain pct_shifts_rpce_source is a
+    # 0/1 flag, not a share: 100% means this shift is RPCE-sourced.
+    #
+    # Defaulted rather than required, and the default is load-bearing. These rows are rehydrated
+    # from a cache written by a previous refresh cycle, so for up to one cycle after this code
+    # ships the cache still holds rows from the SQL that predates these columns. Required fields
+    # turn that window into a hard 500 on the whole page; defaulted ones degrade to an absent
+    # badge, which `readTimeCoverageBadge` already renders as an em dash. Any new column added to
+    # a cache-backed model needs the same treatment.
+    pct_exams_with_valid_read_time: float | None = None
+    pct_shifts_rpce_source: float | None = None
 
 
 class GenieAskRequest(BaseModel):

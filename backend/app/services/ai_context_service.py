@@ -89,40 +89,17 @@ _SENTIMENT_METHODOLOGY = (
     "actual usage and efficiency numbers, not in isolation."
 )
 
-# Read-time gated in the registry, and deliberately NOT carrying `_READ_TIME_COVERAGE_CAVEAT`.
-#
-# That text promises suppression - "below 75% Utilization is suppressed and shows '-'" - and on
-# this surface the promise is false. `tbl_shift_utilization` (tools/edw_fixes/014) carries no
-# coverage column, so the floor is declared and unenforced here; see the comment beside
-# `FEATURE_COVERAGE["shift_utilization"]` in the registry. Pasting the shared caveat in would put
-# a guarantee into the prompt that the data does not keep, and the model would then read a low
-# number as certainly real *because* it believed the untrustworthy ones had been withheld. That
-# is a worse failure than silence: it is confident, specific, and wrong.
-#
-# So: the same facts, the opposite enforcement status, composed from the same registry fields so
-# the threshold is stated in one place and cannot drift between the two paragraphs.
-_SHIFT_UTILIZATION_COVERAGE_CAVEAT = (
-    " One caveat specific to this surface. The numerator is read time, derived from dictation "
-    "timestamps, and those timestamps are missing for a large share of exams at some practices; "
-    "covered-only read minutes over full scheduled hours understates utilization by roughly the "
-    f"coverage fraction. Elsewhere in Mosaic a {registry.READ_TIME_COVERAGE.min_ratio:.0%} floor "
-    f"on {registry.READ_TIME_COVERAGE.measured_by} suppresses such a number rather than show it "
-    "wrong in a knowable direction, but that floor is not enforced on this lineage - it has no "
-    "coverage column - so every value here renders, including ones built from almost no read "
-    "time. Treat a low figure as a question about instrumentation first and radiologist "
-    "behaviour second, and never imply the untrustworthy ones were filtered out."
-)
-
 _SHIFT_UTILIZATION_METHODOLOGY = (
-    "Shift utilization is reading-time divided by scheduled shift duration, sourced from RP's own "
-    "shift-timeline data (the same source powering their Deneb shift visualizations) - it answers "
+    "Shift utilization is reading-time divided by scheduled shift duration, computed from the exam "
+    "inventory at exam grain and aggregated to the scheduled shift - the same read-time derivation "
+    "Capacity uses, so the two surfaces measure the same thing. It answers "
     "how much of a scheduled shift was actually spent reading, not how productive each minute was. "
     "% Mosaic read and % AI drafted are computed separately, over that same shift's exams: the "
     "first is any exam read on the Mosaic platform, the second is the subset where AI produced the "
     "draft report the radiologist reviewed and signed off - drafting is always a subset of Mosaic "
     "reads, never larger. Low utilization on a given shift can reflect light exam volume, schedule "
     "gaps, or non-reading duties, not necessarily underperformance."
-) + _SHIFT_UTILIZATION_COVERAGE_CAVEAT
+) + _READ_TIME_COVERAGE_CAVEAT
 
 _MVP_STATUS_FUNNEL_METHODOLOGY = (
     "This funnel mirrors the real MVP Weekly Update report sent to leadership: each radiologist "

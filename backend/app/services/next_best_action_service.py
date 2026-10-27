@@ -144,9 +144,11 @@ def rank(
     for row in rows:
         if str(row.get("week_start")) not in window:
             continue
-        # `team` and `local_practice` are the same provider column on these rows (see
-        # `get_undrafted_analysis`); the fallback is for older cached payloads only.
-        team = row.get("team") or row.get("local_practice")
+        # No fallback to `local_practice`: since 2026-10-27 that column is the *managing* site,
+        # not a duplicate of the provider practice, so falling back would file a site's leakage
+        # under a field this worklist renders to operators as a team. A row with no `team` is
+        # skipped instead.
+        team = row.get("team")
         if not team:
             continue
         category = row.get("category") or ""

@@ -1,7 +1,8 @@
 import threading
 import time
 import traceback
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
+from decimal import Decimal
 
 from pydantic import BaseModel
 
@@ -14,10 +15,31 @@ REFRESH_INTERVAL_SECONDS = 30 * 60  # 30 minutes
 
 
 def _dump(value):
+    """Coerce a fetch result into something json.dumps can encode.
+
+    The dict and date/datetime branches are not theoretical. Fetches that return Pydantic
+    models are safe because model_dump(mode="json") already stringifies dates, but the fetches
+    that return a raw list[dict] straight from run_query get no such pass - a DATE()/TIMESTAMP
+    column arrives as a datetime.date and nothing coerces it. Without a dict branch, _dump
+    recursed into the list, hit a dict, and fell through to `return value`, leaving the date in
+    place to blow up inside cache_store.save. That is exactly how
+    shift_utilization_by_radiologist ("Object of type date is not JSON serializable", from
+    `DATE(s.shift_start) AS shift_date`) failed every cycle in production for weeks: refresh_one
+    swallows the exception, so the only symptom was one permanently empty tab.
+    """
     if isinstance(value, BaseModel):
         return value.model_dump(mode="json")
     if isinstance(value, list):
         return [_dump(item) for item in value]
+    if isinstance(value, dict):
+        return {key: _dump(item) for key, item in value.items()}
+    if isinstance(value, (datetime, date)):
+        # isoformat() on both, matching what Pydantic's mode="json" emits, so a dataset reads
+        # back identically whether its fetch returns models or raw dicts.
+        return value.isoformat()
+    if isinstance(value, Decimal):
+        # float, not str: every consumer of these cached values does arithmetic on them.
+        return float(value)
     return value
 
 

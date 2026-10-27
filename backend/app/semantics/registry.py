@@ -1531,8 +1531,8 @@ FEATURE_METRICS: dict[str, tuple[str, ...]] = {
     #
     # Deliberately NOT in FEATURE_COVERAGE below: this is volume lineage, counted from exam
     # flags with no read-time dependency at all. Declaring READ_TIME_COVERAGE here would promise
-    # a gate that never runs on this data - the `shift_utilization` mistake, which cost an
-    # _UNGATED_LINEAGE exemption to repair. Same reasoning for `volume_counts`.
+    # a gate that never runs on this data - the `shift_utilization` mistake, which took a
+    # rewrite of that lineage to repair, not a prose change. Same reasoning for `volume_counts`.
     "volume_rpce": ("pct_rpce_reporting", "pct_rpce_drafting"),
     "capacity_coverage": ("pct_exams_with_valid_read_time", "pct_shifts_rpce_source"),
     "capacity_figure": ("capacity_rpwu", "capacity_rvu_per_hour"),
@@ -1613,9 +1613,11 @@ FEATURE_COVERAGE: dict[str, str] = {
     # caveat's small-sample half, and a bucket is a thinner slice than the whole group: declaring
     # the gate here is what puts that warning in front of a reader about to act on one row.
     "efficiency_movers": READ_TIME_COVERAGE.key,
-    # Known gap, stated rather than papered over: this lineage (tbl_shift_utilization, built by
-    # tools/edw_fixes/014) carries no coverage column and is NOT gated. The threshold is declared
-    # here so the surface can say so; it is not currently enforced on that table.
+    # This one used to be the exception. The lineage behind it carried no coverage column, so the
+    # threshold was declared here and enforced nowhere - a surface that promised suppression and
+    # rendered every value, including ones built from almost no read time. It now computes read
+    # time at exam grain the same way Capacity does and routes through the same gate, so the entry
+    # below means what the other five mean.
     "shift_utilization": READ_TIME_COVERAGE.key,
     # --- MVP ----------------------------------------------------------------------------------
     # A different gate shape entirely: a ceiling on the value's own magnitude, not a floor under
@@ -1716,9 +1718,25 @@ def validate_scope(metric_keys: list[str], dim_keys: list[str]) -> None:
         for dk in dim_keys:
             get_dimension(dk)
             if dk not in spec.allowed_dims:
+                # A metric with *no* allowed dims is the normal case for the 19 non-composable
+                # ones, and listing its alternatives then yields "Supported for this metric: "
+                # with nothing after the colon - which reads to a caller as a broken suggester
+                # rather than as an answer. Say the real reason instead, and take the grain from
+                # the spec rather than assuming it: the Efficiency pair is exam-grain but computed
+                # outside Spark (no SQL GROUP BY to attach a dimension to), while Capacity is
+                # shift-grain (its CTE's entity columns are not the cube's dimensions). Same
+                # shape as the refusal `scope.py` builds for the Ask path - that one intersects
+                # allowed_dims across several metrics, which this single-metric check cannot do.
+                if spec.allowed_dims:
+                    detail = f"Supported for this metric: {', '.join(spec.allowed_dims)}"
+                else:
+                    detail = (
+                        f"{spec.label} ({spec.grain} grain) has no breakdown in this registry "
+                        "yet - it is available enterprise-wide only. Ask for it without a "
+                        "breakdown, or pick a metric that supports one."
+                    )
                 raise UnsupportedDimensionError(
-                    f"metric {mk!r} cannot be grouped by {dk!r}. "
-                    f"Supported for this metric: {', '.join(spec.allowed_dims)}"
+                    f"metric {mk!r} cannot be grouped by {dk!r}. {detail}"
                 )
 
 

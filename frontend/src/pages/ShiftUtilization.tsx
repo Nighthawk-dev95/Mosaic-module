@@ -8,14 +8,21 @@ import { Drawer } from "../components/Drawer";
 import { StatTile } from "../components/StatTile";
 import { fmtPct } from "../components/DataTable";
 import { CARD_STYLE } from "../styles/glassCard";
+import { readTimeCoverageBadge, MIN_READ_TIME_COVERAGE } from "../utils/coverage";
 import type { ShiftUtilizationItem } from "../api/types";
 
 // Radiologist x day heatmap - how much of each shift was reading time, and how much of that
-// reading was Mosaic-assisted or AI-drafted. Source: edw_dev.bipa_analytics.presentation_deneb_vw
-// joined to tbl_exam_inventory's mosaic_read_flag/mosaic_draft_flag (see
-// mosaic_service.get_shift_utilization_by_radiologist). Given radiologist-level granularity
-// (thousands of rows across the whole company), a practice selection is required before
-// rendering any grid - otherwise this would be an unreadable wall of rows.
+// reading was Mosaic-assisted or AI-drafted. Source: tbl_exam_inventory alone, aggregated from
+// exam grain to the scheduled shift (see mosaic_service.get_shift_utilization_by_radiologist).
+// Given radiologist-level granularity (thousands of rows across the whole company), a practice
+// selection is required before rendering any grid - otherwise this would be an unreadable wall
+// of rows.
+//
+// Utilization is read-time gated like every other utilization in Mosaic: a shift whose exams
+// mostly lack dictation timestamps renders as suppressed, not as a confidently wrong low number.
+// Suppressed and no-shift-scheduled are visually distinct - suppressed cells carry a dashed
+// outline, empty ones are blank - because conflating "we withheld this" with "nothing happened"
+// is exactly the reading error the gate exists to prevent.
 
 type Metric = "utilization" | "drafting";
 
@@ -40,6 +47,14 @@ function heatColor(pct: number | null): string {
 function fmtMinutes(v: number | null): string {
   return v === null ? "—" : `${v.toFixed(0)} min`;
 }
+
+// Same wording Capacity uses for the same suppression, because it is the same gate on the same
+// lineage - a CEO who reads the explanation on one surface should not meet a different one here.
+const SUPPRESSION_NOTE =
+  "Not missing - withheld. Read-time coverage for this shift is below the floor, and utilization's " +
+  "numerator counts only exams with a dictation timestamp while its denominator counts the whole " +
+  "scheduled shift. A value here would be understated by roughly the coverage fraction, so it is " +
+  "suppressed rather than shown with a caveat.";
 
 export function ShiftUtilization() {
   const { practice, radiologistSearch } = useFilters();
@@ -154,6 +169,10 @@ export function ShiftUtilization() {
                   {dates.map((d) => {
                     const row = cellByKey.get(`${npi}|${d}`);
                     const value = row ? metricValue(row, metric) : null;
+                    // A shift that exists but whose metric came back null is suppressed, not
+                    // absent. Without the dashed outline it is pixel-identical to a day the
+                    // radiologist wasn't scheduled - two opposite readings of the same square.
+                    const suppressed = !!row && value === null;
                     return (
                       <td key={d} style={{ padding: 2 }}>
                         <AIHoverCard
@@ -161,7 +180,16 @@ export function ShiftUtilization() {
                           entityLabel={name}
                           metricLabel={METRIC_LABEL[metric]}
                           value={value !== null ? fmtPct(value) : "—"}
-                          extra={{ shift_date: d }}
+                          extra={
+                            suppressed
+                              ? {
+                                  shift_date: d,
+                                  read_time_coverage: fmtPct(row!.pct_exams_with_valid_read_time),
+                                  threshold: `${(MIN_READ_TIME_COVERAGE * 100).toFixed(0)}%`,
+                                  note: SUPPRESSION_NOTE,
+                                }
+                              : { shift_date: d }
+                          }
                           underline={false}
                         >
                           <div
@@ -171,6 +199,8 @@ export function ShiftUtilization() {
                               height: 22,
                               borderRadius: 4,
                               background: heatColor(value),
+                              border: suppressed ? "1px dashed var(--text-muted)" : undefined,
+                              boxSizing: "border-box",
                               cursor: row ? "pointer" : "default",
                               transition: "background var(--dur-card) var(--ease-standard)",
                             }}
@@ -194,8 +224,17 @@ export function ShiftUtilization() {
               <AIHoverCard
                 feature="shift_utilization"
                 entityLabel={selectedRow.radiologist_name ?? `NPI ${selectedRow.npi}`}
-                metricLabel="Shift utilization"
+                metricLabel={selectedRow.utilization_pct === null ? "Shift utilization (suppressed)" : "Shift utilization"}
                 value={fmtPct(selectedRow.utilization_pct)}
+                extra={
+                  selectedRow.utilization_pct === null
+                    ? {
+                        read_time_coverage: fmtPct(selectedRow.pct_exams_with_valid_read_time),
+                        threshold: `${(MIN_READ_TIME_COVERAGE * 100).toFixed(0)}%`,
+                        note: SUPPRESSION_NOTE,
+                      }
+                    : undefined
+                }
                 underline={false}
                 style={{ flex: "1 1 140px", minWidth: 140 }}
               >
@@ -224,6 +263,29 @@ export function ShiftUtilization() {
             </div>
             <div style={{ fontSize: 13, color: "var(--text-secondary)" }}>
               {fmtMinutes(selectedRow.reading_minutes)} reading out of {fmtMinutes(selectedRow.shift_total_minutes)} scheduled.
+            </div>
+            {/* The two numbers that decide whether the tile above shows a value at all. They have
+                been computed on this lineage since the rewrite and are what the gate reads. */}
+            <div style={{ display: "flex", gap: 20, alignItems: "center", flexWrap: "wrap", fontSize: 12 }}>
+              <span style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                <span style={{ color: "var(--text-muted)" }}>Read-time coverage</span>
+                {readTimeCoverageBadge(
+                  selectedRow.pct_exams_with_valid_read_time,
+                  selectedRow.radiologist_name ?? `NPI ${selectedRow.npi}`,
+                  selectedRow.pct_shifts_rpce_source,
+                  "shift_utilization"
+                )}
+              </span>
+              <span style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                <span style={{ color: "var(--text-muted)" }}>Case source</span>
+                <span style={{ color: "var(--text-secondary)" }}>
+                  {selectedRow.pct_shifts_rpce_source === null
+                    ? "—"
+                    : selectedRow.pct_shifts_rpce_source >= 0.5
+                      ? "RPCE"
+                      : "Non-RPCE"}
+                </span>
+              </span>
             </div>
           </div>
         )}

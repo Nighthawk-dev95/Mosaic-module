@@ -853,7 +853,16 @@ def get_undrafted_analysis(
     # Collapse site/exam_category away after filtering - they're only ever used as filter
     # criteria; shipping every (week, practice, team, site, exam_category, category)
     # combination to the browser would be ~845K rows / 120MB+ for the unfiltered case, far
-    # more than the chart (which only ever groups by week/practice/team/category) needs.
+    # more than the chart (which only ever groups by week/practice/region/category) needs.
+    #
+    # `team` collapses to its six-bucket Local Region rather than shipping as a full practice
+    # name, because the Local filter is the only thing the page ever does with it (the team
+    # name is never rendered on this surface). That choice is what keeps the two hierarchies
+    # affordable now that `local_practice` is the managing site rather than a duplicate of
+    # `team`: measured on prod, week x managing x provider x category is 131,492 collapsed
+    # rows (4.51x the old 29,130), while week x managing x region x category is 72,175 (2.48x).
+    # Callers that need the real team read the raw cache rows instead - see
+    # `next_best_action_service.rank` and `mvp_weekly_report_service`.
     collapsed: dict[tuple, dict] = {}
     for row in rows:
         # Finalized exams with no final_datetime land in the cache with a null `week_start`,
@@ -866,7 +875,13 @@ def get_undrafted_analysis(
         week_start = row.get("week_start")
         if not week_start or str(week_start) == "None":
             continue
-        key = (week_start, row.get("local_practice"), row.get("team"), row["category"], row["category_sort_order"])
+        key = (
+            week_start,
+            row.get("local_practice"),
+            local_region.get_local_region(row.get("team")),
+            row["category"],
+            row["category_sort_order"],
+        )
         acc = collapsed.setdefault(key, {"exam_count": 0, "tbwu": 0.0})
         acc["exam_count"] += row.get("exam_count") or 0
         acc["tbwu"] += row.get("tbwu") or 0
@@ -875,7 +890,7 @@ def get_undrafted_analysis(
         UndraftedCategoryPoint(
             week_start=key[0],
             local_practice=key[1],
-            team=key[2],
+            local_region=key[2],
             category=key[3],
             category_sort_order=key[4],
             exam_count=acc["exam_count"],
