@@ -5,7 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
-from app.routes import mosaic
+from app.routes import cube, mosaic
 from app.services import refresh_service
 
 app = FastAPI(title="Mosaic Module API")
@@ -19,6 +19,7 @@ app.add_middleware(
 )
 
 app.include_router(mosaic.router)
+app.include_router(cube.router)
 
 
 @app.on_event("startup")

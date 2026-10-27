@@ -6,7 +6,7 @@ from datetime import datetime, timezone
 from pydantic import BaseModel
 
 from app.db import cache_store, efficiency_store, postgres_client
-from app.services import ai_context_service, baseline_overrides
+from app.services import ai_context_service, baseline_overrides, cube_service
 from app.services import mosaic_service as edw
 from app.services import volume_service
 
@@ -85,6 +85,12 @@ DATASETS: list[tuple[str, object, object]] = [
     ("volume_by_local_region", lambda: volume_service.get_volume_by_local_region(), None),
     ("volume_trend", lambda: volume_service.get_volume_trend(), None),
     ("volume_filter_options", lambda: volume_service.get_volume_filter_options(), None),
+    # Appended, never inserted: the three mvp_*_narrative entries above read
+    # cache_store.load("mvp_rad_onboarding_raw") written by the entry directly above them in this
+    # same cycle, so the order of everything preceding this line is load-bearing.
+    # Like efficiency_matrix, the bulk lands in its own SQLite table (app/db/fact_store.py) and
+    # only a summary goes to the JSON cache, so this shows a refreshed_at in /refresh/status.
+    ("mosaic_cube", lambda: cube_service.fetch_rows(), cube_service.store_rows),
 ]
 
 _refresh_lock = threading.Lock()

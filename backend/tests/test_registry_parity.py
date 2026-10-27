@@ -46,8 +46,10 @@ from app.data.mvp_dashboard_stats import (  # noqa: E402
     _ESCALATION_OWNER_MAP,
     _IMPLAUSIBLE_PCT_MAGNITUDE,
 )
+from app.db import fact_store  # noqa: E402
 from app.semantics import registry as reg  # noqa: E402
 from app.services import cache_service  # noqa: E402
+from app.services import cube_service  # noqa: E402
 from app.services import volume_service  # noqa: E402
 
 _VOLUME_KEYS = [m.key for m in reg.VOLUME_METRICS]
@@ -1390,6 +1392,263 @@ def test_scorecard_metric_kind_agrees_with_the_registry():
                 f"{key} is additive in the registry but declares no normalizeBy - the "
                 f"radiologist's own figure would be compared against the practice total"
             )
+
+
+# =================================================================================================
+# The cube (app/db/fact_store.py + app/services/cube_service.py)
+#
+# Every test below is string-level or pure-function. The cube's write side runs ONE EDW query, and
+# a live dual-run against volume_service would need the 150-800s cold connection - which would end
+# this file's offline-in-CI property for the sake of re-proving something the registry parity tests
+# above already prove transitively: the cube lifts its SQL from the registry, and the registry is
+# verbatim-identical to the deployed volume SQL, therefore the cube is identical to the deployed
+# volume SQL. Checking the first link is enough, and it is free.
+#
+# One scope delta is legitimate and deliberate, recorded here so a future diff is not mistaken for
+# a defect: the cube filters `final_datetime IS NOT NULL` and looks back 24 months
+# (ADD_MONTHS(CURRENT_DATE(), -23)), while get_volume_summary() is unbounded. The cube is a monthly
+# fact table - a row with no final_datetime has no month to file under, and an unbounded scan would
+# rebuild all of history on every 30-minute refresh.
+# =================================================================================================
+
+
+def _grid_row(**overrides) -> dict:
+    """One row shaped like `_grid_sql()`'s output, defaulting to the enterprise grouping set.
+
+    GROUPING() returns 1 for a column that was aggregated away and 0 for one in the grouping set,
+    so the enterprise row - the one that groups by month alone - has every flag set.
+    """
+    row = {
+        "month_start": "2026-09-01",
+        "practice": None, "team": None, "local_region": None, "npi": None, "rad_name": None,
+        "g_practice": 1, "g_team": 1, "g_local_region": 1, "g_npi": 1,
+    }
+    for spec in cube_service._wave1_specs():
+        row[f"{spec.key}__num"] = 10.0
+        if spec.is_rate:
+            row[f"{spec.key}__den"] = 100.0
+    row.update(overrides)
+    return row
+
+
+def test_the_cube_measures_block_is_lifted_from_the_registry():
+    grid = cube_service._grid_sql()
+    deployed = volume_service._VOLUME_MEASURES_SQL
+    for spec in cube_service._wave1_specs():
+        for role, expr in (("numerator", spec.numerator), ("denominator", spec.denominator)):
+            if not expr:
+                continue
+            assert expr in grid, (
+                f"{spec.key}.{role} is not a verbatim substring of the cube's grid SQL. The cube "
+                f"composes its measures from the registry precisely so this cannot drift; if the "
+                f"expression was retyped or reformatted on the way in, the cube and the Volume "
+                f"page can disagree while both claim the registry as their source.\n  registry: {expr}"
+            )
+            # The transitive leg. The tests at the top of this file assert registry == deployed
+            # volume SQL; this one asserts registry == cube SQL. Together they are the dual-run.
+            assert expr in deployed, (
+                f"{spec.key}.{role} is in the cube but not in the deployed _VOLUME_MEASURES_SQL. "
+                f"The cube would then be answering with a definition the Volume page does not use."
+            )
+
+
+def test_the_cube_covers_every_volume_metric():
+    assert cube_service._WAVE1_KEYS == tuple(_VOLUME_KEYS), (
+        f"the cube's wave 1 is {list(cube_service._WAVE1_KEYS)} but the registry's Volume domain "
+        f"is {_VOLUME_KEYS}. A Volume metric added to the registry and not folded into the cube is "
+        f"invisible to /api/mosaic/cube while appearing in /api/mosaic/registry as though it were "
+        f"available - the caller gets a 404 for a metric the registry told it existed."
+    )
+
+
+def test_the_cube_refuses_a_non_composable_metric():
+    non_composable = {k for k, m in reg.METRICS.items() if not m.composable}
+    overlap = non_composable & set(cube_service._WAVE1_KEYS)
+    assert not overlap, (
+        f"{sorted(overlap)} are declared non-composable but sit in cube wave 1. A non-composable "
+        f"metric has no num/den to store - MetricSpec.value_sql() raises for exactly that reason."
+    )
+    # And the read side refuses them by name rather than returning an empty result set, which the
+    # UI cannot tell apart from "this slice genuinely has no data".
+    victim = sorted(non_composable)[0]
+    try:
+        cube_service.query(metrics=[victim])
+    except reg.UnsupportedDimensionError as exc:
+        assert victim in str(exc), (
+            f"the refusal must name the metric it refused; got {exc!r}"
+        )
+    else:
+        raise AssertionError(
+            f"cube_service.query({victim!r}) returned instead of refusing. {victim} is computed in "
+            f"its own service, so the cube holds no rows for it - an empty answer here reads as "
+            f"'no data for this scope' rather than 'wrong endpoint'."
+        )
+    # The positive control: wave 1 itself resolves, so this test fails loudly if _wave1_specs()
+    # ever starts raising for everything.
+    assert len(cube_service._wave1_specs()) == len(_VOLUME_KEYS)
+
+
+def test_fan_out_writes_exactly_the_fact_columns():
+    facts = cube_service._fan_out([_grid_row()], cube_service._wave1_specs())
+    assert len(facts) == len(_VOLUME_KEYS), (
+        f"one grid row should fan out to one fact row per measure; got {len(facts)} for "
+        f"{len(_VOLUME_KEYS)} measures"
+    )
+    expected = set(fact_store._COLUMNS)
+    for fact in facts:
+        assert set(fact.keys()) == expected, (
+            f"fan-out row for {fact.get('measure')!r} does not match fact_store._COLUMNS.\n"
+            f"  missing: {sorted(expected - set(fact.keys()))}\n"
+            f"  extra:   {sorted(set(fact.keys()) - expected)}\n"
+            f"replace_all() executemany's over _COLUMNS in order, so a column present here and "
+            f"absent there is dropped silently, and one present there and absent here raises at "
+            f"write time - inside the refresh loop, which swallows the exception and logs it."
+        )
+
+
+def test_the_cube_never_stores_a_pre_divided_rate():
+    facts = {f["measure"]: f for f in
+             cube_service._fan_out([_grid_row()], cube_service._wave1_specs())}
+    for key in _VOLUME_KEYS:
+        spec = reg.get_metric(key)
+        fact = facts[key]
+        if spec.is_rate:
+            assert fact["value"] is None and fact["den"] is not None, (
+                f"{key} is a rate but its fact row carries value={fact['value']!r}. A stored rate "
+                f"is a number a caller can SUM or AVG, and AVG(rate) across months weights a "
+                f"100-exam month the same as a 100,000-exam one. Rates store num and den; the "
+                f"division happens once, in cube_service._divide, after the rollup."
+            )
+        else:
+            assert fact["den"] is None and fact["value"] == fact["num"], (
+                f"{key} is an additive count but its fact row carries den={fact['den']!r} / "
+                f"value={fact['value']!r}. A count's value is the count."
+            )
+
+
+def test_wave_one_declares_no_coverage():
+    gated = [k for k in _VOLUME_KEYS if reg.get_metric(k).gated_by]
+    assert not gated, (
+        f"{gated} declare gated_by, but _fan_out writes coverage_num/coverage_den as None for "
+        f"every wave 1 row. Capacity (wave 2) is where those columns start carrying values; "
+        f"folding a gated metric into wave 1 without wiring the gate would render a coverage "
+        f"badge of 'no coverage data' on a metric that has a declared threshold."
+    )
+    for fact in cube_service._fan_out([_grid_row()], cube_service._wave1_specs()):
+        assert fact["coverage_num"] is None and fact["coverage_den"] is None
+        assert fact["lifecycle_stage"] is None, (
+            "lifecycle_stage belongs to Deployment (wave 3). Writing an invented stage would "
+            "read as a governed go-live position in Entity 360."
+        )
+
+
+def test_a_rolled_up_rate_is_recomputed_not_averaged():
+    # Two months with deliberately lopsided denominators. The pooled rate is 100/1000 = 10%;
+    # the mean of the two monthly rates is (90% + 1.1%) / 2 = 45.6%. This 35-point gap is the
+    # entire reason the cube stores num/den instead of a rate, and is Fix 3 relocated into the
+    # storage schema where it cannot be forgotten by the next person to add an endpoint.
+    spec = reg.get_metric("pct_mosaic")
+    months = [{"num": 90.0, "den": 100.0}, {"num": 10.0, "den": 900.0}]
+    rolled = {"measure": spec.key,
+              "num": sum(m["num"] for m in months),
+              "den": sum(m["den"] for m in months)}
+    pooled = cube_service._divide(rolled, spec)["value"]
+    averaged = sum(m["num"] / m["den"] for m in months) / len(months)
+    assert abs(pooled - 0.10) < 1e-9, (
+        f"SUM(num)/SUM(den) over {months} should be 0.10; got {pooled!r}"
+    )
+    assert abs(pooled - averaged) > 0.3, (
+        f"the pooled rate ({pooled:.4f}) and the averaged rate ({averaged:.4f}) have converged, "
+        f"which means this fixture no longer tests anything - pick denominators further apart"
+    )
+
+
+def test_the_rpce_offset_is_applied_once_after_the_rollup():
+    spec = reg.get_metric("pct_rpce_reporting")
+    assert spec.offset == 0.02, (
+        f"this test is pinned to the RPCE +2pp adjustment; the registry now says {spec.offset!r}"
+    )
+    one_month = cube_service._divide({"measure": spec.key, "num": 50.0, "den": 100.0}, spec)
+    two_months = cube_service._divide({"measure": spec.key, "num": 100.0, "den": 200.0}, spec)
+    assert abs(one_month["value"] - 0.52) < 1e-9
+    assert abs(two_months["value"] - 0.52) < 1e-9, (
+        f"rolling two months up gave {two_months['value']!r}, not 0.52. The offset is additive "
+        f"and belongs to the grain, not the row: folded into a stored numerator it would be "
+        f"multiplied by the number of months summed, so a 24-month view would read +48pp."
+    )
+
+
+def test_a_missing_denominator_yields_no_value_not_zero():
+    spec = reg.get_metric("pct_drafting")
+    for row in ({"num": 0.0, "den": 0.0}, {"num": None, "den": 100.0}, {"num": 5.0, "den": None}):
+        out = cube_service._divide({"measure": spec.key, **row}, spec)
+        assert out["value"] is None, (
+            f"_divide({row}) returned {out['value']!r}. A rate of 'no data' and a rate of 'zero "
+            f"percent' are different answers and the second is the dangerous one to fabricate - "
+            f"a 0% drafting rate on an empty denominator reads as a practice refusing to adopt."
+        )
+    # The count path has no denominator to be missing, and 0 exams really is 0.
+    assert cube_service._divide(
+        {"measure": "total_exams", "num": 0.0, "den": None}, reg.get_metric("total_exams")
+    )["value"] == 0.0
+
+
+def test_the_radiologist_grain_carries_no_parent_practice():
+    cases = {
+        "radiologist": _grid_row(g_npi=0, npi="1234567890", rad_name="Doe, Jane",
+                                 team="Apex Radiology", g_team=0),
+        "practice": _grid_row(g_practice=0, practice="Saint Example"),
+        "team": _grid_row(g_team=0, team="Apex Radiology"),
+        "local_region": _grid_row(g_local_region=0, local_region="Genesis"),
+        "enterprise": _grid_row(),
+    }
+    for expected_type, row in cases.items():
+        entity_type, entity_id, label, parent_practice, parent_team = cube_service._entity_of(row)
+        assert entity_type == expected_type, (
+            f"grouping flags {{npi:{row['g_npi']}, practice:{row['g_practice']}, "
+            f"team:{row['g_team']}, region:{row['g_local_region']}}} resolved to {entity_type!r}, "
+            f"expected {expected_type!r}"
+        )
+        assert entity_id and label, f"{expected_type} row produced a blank entity id or label"
+    rad_type, _, _, rad_parent_practice, rad_parent_team = cube_service._entity_of(
+        cases["radiologist"])
+    assert rad_parent_practice is None, (
+        f"the radiologist row carries parent_practice={rad_parent_practice!r}. A radiologist reads "
+        f"at up to ~70 managing practices, so there is no single one to name - writing any value "
+        f"here is the MAX(practice) AS team conflation that Phase 1 removed from "
+        f"get_radiologist_scorecard, re-introduced one layer down in the storage schema."
+    )
+    assert rad_parent_team == "Apex Radiology", (
+        "parent_team IS single-valued for a radiologist - it is their home practice "
+        "(provider_local_practice_name_curr) - so it is the one parent the grain can carry."
+    )
+    # An unattributed group is named, not NULL: entity_id is part of the fact table's primary key,
+    # so a NULL there would collapse every unattributed group into one row or be rejected outright.
+    _, unknown_id, _, _, _ = cube_service._entity_of(_grid_row(g_practice=0, practice=None))
+    assert unknown_id == cube_service.UNATTRIBUTED
+
+
+def test_the_cube_solution_column_matches_the_registrys_tags():
+    expected = {
+        "total_exams": "all",
+        "mosaic_exams": "reporting", "pct_mosaic": "reporting", "pct_rpce_reporting": "reporting",
+        "drafting_exams": "drafting", "pct_drafting": "drafting", "pct_rpce_drafting": "drafting",
+    }
+    for key, want in expected.items():
+        spec = reg.get_metric(key)
+        got = cube_service._solution_for(spec)
+        assert got == want, (
+            f"{key} is filed on the cube's solution axis as {got!r}, expected {want!r} "
+            f"(registry solutions={list(spec.solutions)}). The axis is read off the registry so a "
+            f"metric cannot be filed under a solution its own definition does not claim; a "
+            f"mismatch means the solution filter on the Explorer would hide or double-count it."
+        )
+        if len(spec.solutions) == 1:
+            assert got == spec.solutions[0]
+    assert set(expected) == set(_VOLUME_KEYS), (
+        f"this test enumerates the solution axis by hand so a new metric cannot slip in "
+        f"unclassified; the registry's Volume domain is now {_VOLUME_KEYS}"
+    )
 
 
 def _main() -> int:
