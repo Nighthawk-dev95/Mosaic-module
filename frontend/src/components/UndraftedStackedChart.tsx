@@ -10,18 +10,37 @@ interface Props {
   displayMode: UndraftedDisplayMode;
 }
 
-const DRAFTED_CATEGORY = "Drafted";
+export const DRAFTED_CATEGORY = "Drafted";
 
-// Fixed order and color, keyed to category_sort_order 1-7 from the view - never cycled,
-// never reassigned based on which categories happen to have data for a given week.
-const CATEGORY_ORDER: { key: string; color: string }[] = [
-  { key: "RAD not enabled - Rad declined", color: "var(--undrafted-rad-declined)" },
-  { key: "RAD not enabled - Ops declined", color: "var(--undrafted-ops-declined)" },
-  { key: "RAD not enabled - Incomplete process", color: "var(--undrafted-incomplete-process)" },
-  { key: "PRACTICE not enabled for model", color: "var(--undrafted-practice-not-enabled)" },
-  { key: "DRAFT not available - Exam opened in <5 min", color: "var(--undrafted-opened-under-5min)" },
-  { key: "DRAFT not available - Exam opened in >5 min", color: "var(--undrafted-opened-over-5min)" },
-  { key: "Exam never opened, not drafted", color: "var(--undrafted-never-opened)" },
+/**
+ * Exams the radiologist never read on Mosaic at all. 104.9M of the 123M rows in the cache -
+ * 85% of everything - and not a drafting outcome: no draft was possible because Mosaic was
+ * not the reporting system for that exam. It is excluded from both the stack and the
+ * denominator. Leaving it in the denominator (which is what this chart used to do, per the
+ * backend's own docstring) pins every week near 93% undrafted and the bar stops moving when
+ * drafting improves, because the ratio is really measuring Mosaic *reporting* adoption.
+ */
+export const NOT_ON_MOSAIC_CATEGORY = "Not Read on Mosaic";
+
+/**
+ * Fixed order and color, keyed to category_sort_order 1-4 exactly as
+ * `mosaic_service.get_undrafted_analysis` emits them - never cycled, never reassigned from
+ * whichever categories happen to have data in a given week.
+ *
+ * These strings are a contract with the SQL CASE expression in mosaic_service.py. They
+ * previously named a retired seven-category taxonomy, so every `bucket[cat.key]` lookup
+ * missed, every segment was zero, and the chart rendered an empty axis over live data -
+ * which looks like "no leakage" rather than like a bug. If the CASE expression changes,
+ * these change in the same commit.
+ *
+ * Ordered by owner: the first two are convertible by whoever works the Drafting worklist
+ * below this chart, the last two are not and belong to deployment and model coverage.
+ */
+export const CATEGORY_ORDER: { key: string; color: string }[] = [
+  { key: "Draftable - Rad Not Enrolled", color: "var(--undrafted-rad-not-enrolled)" },
+  { key: "Draftable - Not Drafted (Workflow)", color: "var(--undrafted-workflow)" },
+  { key: "Practice Not Enabled for Model", color: "var(--undrafted-practice-not-enabled)" },
+  { key: "Procedure Not Covered", color: "var(--undrafted-procedure-not-covered)" },
 ];
 
 function formatWeekTick(weekStart: string): string {
@@ -81,23 +100,43 @@ export function UndraftedStackedChart({ data, metric, displayMode }: Props) {
     bucket[row.category] = (bucket[row.category] ?? 0) + value;
   }
 
-  const rows = Array.from(byWeek.entries())
+  const allRows = Array.from(byWeek.entries())
     .sort(([a], [b]) => a.localeCompare(b))
     .map(([weekStart, bucket]) => {
-      const weekTotal = Object.values(bucket).reduce((a, b) => a + b, 0);
+      // The denominator is every exam read on Mosaic that week: the four plotted reasons
+      // plus Drafted, which is the success and so is in the denominator but never its own
+      // segment. `Not Read on Mosaic` is excluded - see NOT_ON_MOSAIC_CATEGORY.
       const drafted = bucket[DRAFTED_CATEGORY] ?? 0;
-      const undraftedTotal = weekTotal - drafted;
+      const undraftedTotal = CATEGORY_ORDER.reduce((sum, cat) => sum + (bucket[cat.key] ?? 0), 0);
+      const mosaicRead = drafted + undraftedTotal;
       const row: Record<string, number | string> = {
         week_start: weekStart,
         weekTick: formatWeekTick(weekStart),
+        mosaicRead,
       };
       for (const cat of CATEGORY_ORDER) {
         const raw = bucket[cat.key] ?? 0;
-        row[cat.key] = displayMode === "percent" ? (weekTotal ? raw / weekTotal : 0) : raw;
+        row[cat.key] = displayMode === "percent" ? (mosaicRead ? raw / mosaicRead : 0) : raw;
       }
-      row.totalLabel = displayMode === "percent" ? (weekTotal ? undraftedTotal / weekTotal : 0) : undraftedTotal;
+      row.totalLabel = displayMode === "percent" ? (mosaicRead ? undraftedTotal / mosaicRead : 0) : undraftedTotal;
       return row;
     });
+
+  // Weeks where nothing was read on Mosaic at all are not drafting outcomes - they are weeks
+  // before the slice went live. Plotted, they draw a zero-height bar carrying a "0.0%" label,
+  // which reads as a *perfect* week rather than an absent one, and they stretch the x-axis
+  // across a dead zone (the enterprise series starts in Jan 2024 but the first real Mosaic
+  // volume is in Mar 2024).
+  const rows = allRows.filter((r) => (r.mosaicRead as number) > 0);
+
+  // One label per bar is legible at ~16 weeks and an unreadable white smear at 147. Thin to a
+  // fixed budget and always keep the most recent week, which is the one being discussed.
+  const LABEL_BUDGET = 16;
+  const labelStride = Math.max(1, Math.ceil(rows.length / LABEL_BUDGET));
+  for (let i = 0; i < rows.length; i++) {
+    const keep = i % labelStride === 0 || i === rows.length - 1;
+    rows[i].totalLabelText = keep ? fmtValue(rows[i].totalLabel as number, displayMode, metric) : "";
+  }
 
   const lastCategoryKey = CATEGORY_ORDER[CATEGORY_ORDER.length - 1].key;
 
@@ -115,6 +154,10 @@ export function UndraftedStackedChart({ data, metric, displayMode }: Props) {
             tickLine={false}
           />
           <YAxis
+            // Pinned in percent mode. Left to auto-scale, a week with no plotted volume
+            // lets recharts pick whatever domain it likes - which is how an all-zero stack
+            // came to be drawn under a 400% axis.
+            domain={displayMode === "percent" ? [0, 1] : [0, "auto"]}
             tickFormatter={(v) => (displayMode === "percent" ? `${Math.round(v * 100)}%` : formatCompactNumber(v))}
             tick={{ fill: "var(--text-muted)", fontSize: 11 }}
             axisLine={false}
@@ -129,9 +172,9 @@ export function UndraftedStackedChart({ data, metric, displayMode }: Props) {
             <Bar key={cat.key} dataKey={cat.key} stackId="undrafted" fill={cat.color} isAnimationActive={false}>
               {cat.key === lastCategoryKey && (
                 <LabelList
-                  dataKey="totalLabel"
+                  // Pre-formatted and pre-thinned above - suppressed bars carry "".
+                  dataKey="totalLabelText"
                   position="top"
-                  formatter={(v) => fmtValue(typeof v === "number" ? v : Number(v) || 0, displayMode, metric)}
                   style={{ fill: "var(--text-primary)", fontSize: 12, fontWeight: 700 }}
                 />
               )}
@@ -140,10 +183,16 @@ export function UndraftedStackedChart({ data, metric, displayMode }: Props) {
         </BarChart>
       </ResponsiveContainer>
       <div style={{ color: "var(--text-muted)", fontSize: 11, marginTop: 4 }}>
-        Weeks run Monday-Sunday; the label under each bar is the Monday it starts on. Only fully-elapsed weeks are
-        shown. Total at the top of each bar is {displayMode === "percent" ? "% Undrafted" : "total undrafted"} for
-        that week - the "Drafted" category itself is excluded from the stack but included in this total's
-        denominator.
+        Weeks run Monday-Sunday; the label under each bar is the Monday it starts on. Only fully-elapsed weeks with at
+        least one exam read on Mosaic are shown. The label above a bar is{" "}
+        {displayMode === "percent" ? "% not drafted" : "total not drafted"} for that week — shown on every bar when the
+        range is short, and thinned to roughly {LABEL_BUDGET} evenly-spaced weeks (always including the most recent)
+        when it isn't. Hover any bar for its exact split. Denominator is every exam{" "}
+        <strong>read on Mosaic</strong> that week: the four reasons above plus
+        "Drafted", which is in the denominator but is not drawn as its own segment. Exams never read on Mosaic are
+        excluded entirely - no draft was possible, so they measure reporting adoption rather than drafting. The first
+        two reasons are the ones the worklist below can convert; the last two belong to deployment and model coverage,
+        so the worklist reports them but does not rank on them.
       </div>
     </div>
   );

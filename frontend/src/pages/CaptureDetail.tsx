@@ -9,6 +9,7 @@ import { AIHoverCard } from "../components/AIHoverCard";
 import { TrendDelta } from "../components/TrendDelta";
 import { Badge } from "../components/Badge";
 import { CaptureTrendChart } from "../components/CaptureTrendChart";
+import { SolutionPin } from "../components/SolutionAxis";
 import { TABLE_SECTION_STYLE, TABLE_SCROLL_STYLE } from "../styles/tableLayout";
 import { CARD_STYLE } from "../styles/glassCard";
 import { useFilters, matchesPractice, matchesRadiologistSearch } from "../context/FilterContext";
@@ -171,6 +172,11 @@ export function CaptureDetail() {
           Mosaic Capture = US + Dexa combined. Utilization rate = captured ÷ capturable exams. Efficiency rate reuses the
           existing "Capture Only" TBWU/min mode from the Efficiency page.
         </div>
+        <SolutionPin
+          solution="capture"
+          elsewhere="Efficiency carries all four solutions on one axis, and Mosaic Pulse shows the three side by side"
+          style={{ marginTop: 8 }}
+        />
       </div>
 
       {anyError && (

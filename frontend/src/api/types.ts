@@ -312,6 +312,49 @@ export interface PopulationEfficiency {
   read_time_change_pct: number | null;
 }
 
+/** One row of the mix-vs-rate waterfall.
+ *
+ * The two nullable rates mean different things and the UI must not collapse them: on a folded
+ * "All other" row neither side has a meaningful blended rate, while on an imputed row the peers
+ * simply never touched that bucket. `imputed_peer_rate` tells them apart. */
+export interface MoversBucket {
+  bucket: string;
+  target_share: number;
+  peer_share: number | null;
+  target_rate: number | null;
+  peer_rate: number | null;
+  mix: number;
+  rate: number;
+  total: number;
+  imputed_peer_rate: boolean;
+  is_tail: boolean;
+}
+
+/** Shift-share split of an efficiency gap into case-mix and within-bucket rate.
+ *
+ * Carries a refusal shape: when `available` is false every numeric field is null and `reason`
+ * says why. Branch on `available` - a waterfall of zeros reads as "no difference found", which
+ * is a different and wrong claim. */
+export interface MoversDecomposition {
+  comparison: string;
+  available: boolean;
+  reason: string | null;
+  group_col: string | null;
+  group_value: string | null;
+  mode: string | null;
+  bucket_label: string | null;
+  target_rate: number | null;
+  comparison_rate: number | null;
+  gap: number | null;
+  mix_effect: number | null;
+  rate_effect: number | null;
+  /** True only vs baseline, where both rates cover the same exams so the weights cancel.
+   * Say so rather than drawing a bar that is permanently empty. */
+  mix_is_structurally_zero: boolean;
+  buckets: MoversBucket[];
+  methodology: string;
+}
+
 export interface EfficiencyFilterOptions {
   practices: string[];
   subspecialties: string[];
@@ -352,21 +395,64 @@ export interface EfficiencyTrendRpAvgPoint {
 
 // Loosely typed (not exact nested shapes) - mirrors whatever
 // backend/app/data/mvp_dashboard_stats.py's compute_status_funnel/compute_impact_breakdown/
-// compute_escalations_by_owner currently return. This is the shape GET /mvp/weekly-report and
-// /mvp/weekly-report/history actually return (the persisted Postgres columns only) - NOT the
-// same shape as the POST /generate response, which additionally includes transient `deltas`/
-// `has_previous` fields used only to ground that one request's AI narrative generation server-
-// side. The frontend never reads deltas off a snapshot object - MvpWeeklyReport.tsx always
-// derives them client-side (utils/mvpDashboardStats.ts's diffCounts) from two adjacent entries
-// in the fetched history list, since that's the only data source this page actually uses.
+// compute_escalations_by_owner currently return. This is the *persisted* half of what
+// GET /mvp/weekly-report and /mvp/weekly-report/history return - the Postgres columns. Those
+// routes also attach the scope-neutral `sections`/`deltas`/`scope_label`/`has_previous` fields
+// (see BriefingSnapshot below), which this interface deliberately omits: a caller typed to
+// WeeklyReportSnapshot is one that knows what the three blocks mean and reads them by name.
+// MvpWeeklyReport.tsx is that caller, and still derives its own deltas client-side
+// (utils/mvpDashboardStats.ts's diffCounts) from two adjacent entries in the fetched history.
 export interface WeeklyReportSnapshot {
-  scope: "overview" | "mammo";
+  scope: MvpBriefingScope;
   week_ending: string;
   funnel: Record<string, { on_track: number; escalated: number; declined: number }>;
   impact: Record<string, number>;
   escalations: Record<string, number>;
   key_insights: string;
   focus_next_week: string;
+  generated_at: string;
+}
+
+// Every scope `backend/app/services/mvp_weekly_report_service._SCOPES` declares. Kept in sync by
+// test_briefing_scopes.test_the_typescript_scope_union_matches_the_registry, which reads this
+// line - adding a scope on the backend and not here fails that test rather than 422-ing in a
+// browser. The MVP pages' two cohorts are a strict subset, below.
+export type BriefingScope = "overview" | "mammo" | "drafting";
+
+// The subset whose *persisted* shape is the MVP one above: `funnel` nested one level into
+// on_track/escalated/declined. This is deliberately narrower than BriefingScope rather than the
+// same type. Every scope writes to the same three Postgres columns, but what those columns hold
+// is the scope's own business - the Drafting scope's `funnel` is a flat Record<string, number>
+// of TBWU. Typing WeeklyReportSnapshot.scope as BriefingScope would tell MvpWeeklyReport.tsx
+// that `funnel[stage].on_track` is a number for a snapshot where it is `undefined`, and the page
+// renders NaN rather than failing.
+export type MvpBriefingScope = "overview" | "mammo";
+
+// The scope-neutral view of the same three blocks, returned by all three briefing routes. Any
+// scope can be rendered from this without the renderer knowing what the blocks mean: `label` is
+// what a reader sees, `values` is flat or one level nested, `deltas` has the same keys as
+// `values` with null where there is no prior snapshot to compare against.
+//
+// `label` and `description` are not stored - they come from the scope declaration in
+// mvp_weekly_report_service._SCOPES at read time. That is why a renderer must not cache a
+// section's label against its slot: editing a scope's wording changes what every past week is
+// called, which is correct, because the slot is the identity and the label is just the caption.
+export interface BriefingSection {
+  slot: "funnel" | "impact" | "escalations";
+  label: string;
+  description: string;
+  values: Record<string, number | Record<string, number>>;
+  deltas: Record<string, number | null | Record<string, number | null>>;
+}
+
+export interface BriefingSnapshot {
+  scope: BriefingScope;
+  scope_label: string;
+  week_ending: string;
+  sections: BriefingSection[];
+  key_insights: string;
+  focus_next_week: string;
+  has_previous: boolean;
   generated_at: string;
 }
 
@@ -524,6 +610,58 @@ export interface UndraftedCategoryPoint {
   tbwu: number;
 }
 
+/**
+ * One row of the Drafting worklist. Re-grouped from the same cached leakage rows that feed
+ * `UndraftedCategoryPoint` - no new dataset, no new query.
+ *
+ * `team` is the radiologist's home practice (`provider_local_practice_name_curr`), not the
+ * site the exam was read at. The leakage rows are grouped on the provider column, so a row
+ * here names a group of radiologists, not a location.
+ *
+ * `expected_unlock_tbwu` is the ranking key and the only number on this row that is a claim
+ * rather than a measurement: (peer benchmark draft rate - this team's rate) x its addressable
+ * draftable TBWU. Render it beside `gap_to_benchmark_pct`, because a team 4 points off the
+ * benchmark on a huge book outranking one 60 points off on a small one is correct and looks
+ * wrong until both numbers are visible at once.
+ */
+export interface NextBestAction {
+  team: string;
+  action: string;
+  primary_blocker: string;
+  rationale: string;
+  expected_unlock_tbwu: number;
+  gap_to_benchmark_pct: number;
+  draft_rate: number;
+  addressable_tbwu: number;
+  drafted_tbwu: number;
+  not_enrolled_tbwu: number;
+  workflow_gap_tbwu: number;
+  /** Share of this team's draftable gap sitting behind `primary_blocker`. */
+  blocker_share_of_gap: number;
+  gap_exams: number;
+  // Excluded from the rate - not convertible by whoever works this list - but carried so it
+  // can be escalated to the owner who can act on it.
+  deployment_blocked_tbwu: number;
+  procedure_not_covered_tbwu: number;
+  not_on_mosaic_tbwu: number;
+}
+
+export interface NextBestActionList {
+  actions: NextBestAction[];
+  benchmark_draft_rate: number;
+  benchmark_pctile: number;
+  benchmark_team_count: number;
+  excluded_low_volume_teams: number;
+  undated_rows_skipped: number;
+  min_addressable_tbwu: number;
+  window_start: string;
+  window_end: string;
+  weeks: number;
+  total_expected_unlock_tbwu: number;
+  /** Prose built from the numbers above. Render verbatim - do not paraphrase in the UI. */
+  basis: string;
+}
+
 // Draft vs Final: AI-assessed comparison of Mosaic draft findings against the radiologist's
 // final signed report, over a bounded recent sample (see
 // tools/draft_insights/001_build_draft_insights_sample.sql) - not the full drafted population.
@@ -637,6 +775,264 @@ export interface AiContextRequest {
 
 export interface AiContextResponse {
   explanation: string;
+}
+
+/**
+ * `GET /api/mosaic/registry` - the governed metric registry, mirrored from
+ * backend/app/semantics/registry.py's `snapshot()`.
+ *
+ * This is the one import that lets TSX stop hardcoding methodology prose. Before it, the same
+ * read-time coverage methodology was written out four times: as the threshold that actually
+ * suppresses a value (`mosaic_service._MIN_READ_TIME_COVERAGE`), as AI prompt grounding
+ * (`ai_context_service`), as a ~60-word string literal in `utils/coverage.tsx`, and as an EDW
+ * column comment - with nothing keeping the four equal.
+ *
+ * Fetched once per browser session and held, so `version` is how a cached copy knows it went
+ * stale. The payload is deliberately open at the edges on the backend (Waves 2-3 add whole
+ * sections), so every field here is read defensively rather than assumed present.
+ */
+export interface RegistryDimensionRef {
+  key: string;
+  label: string;
+  /** Team = the rad's home practice; Practice = the site where the exam was performed. */
+  note: string;
+}
+
+export interface RegistryMetric {
+  key: string;
+  label: string;
+  /**
+   * The column this metric arrives in on an API payload, which is not always its `key`.
+   *
+   * Two domains ship a column called `pct_mosaic` over different denominators - Volume's divides
+   * by all exams, Capacity's by on-shift cases only (~25% fewer). Resolving a response field back
+   * to a definition by key alone would silently hand you the wrong one, so the key is globally
+   * unique and this is the deployed name. Match on `column` within a known domain, never across.
+   */
+  column: string;
+  domain: string;
+  solutions: string[];
+  definition: string;
+  caveats: string[];
+  grain: string;
+  is_rate: boolean;
+  trust: string;
+  source: string;
+  owner: string;
+  version: string;
+  /**
+   * "" when ungated; otherwise the `RegistryCoverage.key` whose threshold suppresses this value.
+   * Set means a null here is a *policy* decision - the data was insufficient and the number was
+   * withheld - not a missing field. A surface can say "withheld below 75% coverage" instead of
+   * rendering a bare "—" that reads as an outage.
+   */
+  gated_by: string;
+  /** Empty for shift-grain Capacity metrics, whose entity columns are not the cube's dimensions. */
+  allowed_dims: RegistryDimensionRef[];
+}
+
+/**
+ * One solution of the product: Reporting, AI Drafting, Capture, or all Mosaic.
+ *
+ * This is the axis that makes Mosaic a cube rather than a metric list - crossed with the metrics
+ * above, it answers "how is Drafting doing" as a first-class question instead of a filter someone
+ * remembers to apply. `full_mosaic` is Reporting + Drafting and deliberately excludes Capture,
+ * mirroring the upstream ETL's `Is_Mosaic_Row` so the app and the warehouse agree on the word.
+ */
+export interface RegistryMode {
+  key: string;
+  label: string;
+  description: string;
+}
+
+export interface RegistryDimension {
+  key: string;
+  label: string;
+  note: string;
+  required_filter: string | null;
+  /** Metric keys that may be grouped by this dimension. */
+  metrics: string[];
+}
+
+export interface RegistryCoverage {
+  key: string;
+  label: string;
+  min_ratio: number;
+  /** Pre-formatted ("75%") so the percentage is never re-derived on this side. */
+  min_pct_label: string;
+  /**
+   * Which side of the threshold is the bad side: `"min"` is a floor under an instrumentation
+   * ratio (read-time coverage), `"max"` is a ceiling on the magnitude of the value itself (MVP's
+   * efficiency-change plausibility test). The two are opposites, and until this field existed
+   * this side could only render the first one.
+   */
+  direction: "min" | "max";
+  /** The threshold with its comparator attached: "below 75%" / "above 100%". */
+  threshold_label: string;
+  /**
+   * The whole rule, rendered server-side. Prefer this over composing a sentence from
+   * `suppresses` / `shows_anyway` / `min_pct_label` - that is what this component used to do,
+   * and the template it used hardcoded the direction, so a `max`-shaped spec described itself
+   * exactly backwards. The lists below remain for callers that want to group by them.
+   */
+  sentence: string;
+  measured_by: string;
+  suppresses: string[];
+  shows_anyway: string[];
+  caveat: string;
+  note: string;
+}
+
+export interface RegistryFeature {
+  /** The `feature` string an `AIHoverCard` is keyed by. */
+  feature: string;
+  /** May be empty while a domain is still awaiting its registry fold-in; `coverage` then
+   * carries the whole story. Both empty only when `unregistered_reason` is set. */
+  metrics: RegistryMetric[];
+  coverage: RegistryCoverage | null;
+  grounding: string;
+  /**
+   * Why this feature will never have a governed definition - `""` for every feature that has
+   * one, or is still waiting on its wave.
+   *
+   * The point of serving it: `useRegistryFeature` returns `null` for a feature the snapshot
+   * does not carry, which is also what it returns for a typo in a `feature` prop. Four features
+   * are deliberately undefined (a taxonomy, a survey, a workflow state, a free-text summary),
+   * and before this field they were indistinguishable from the typo - the card rendered bare AI
+   * text either way. A reason here lets the card say which.
+   */
+  unregistered_reason: string;
+}
+
+export interface RegistrySnapshot {
+  version: string;
+  generated_from: string;
+  waves_folded_in: string[];
+  /** The single declaration of the "no context available" string, shared with Python. */
+  ai_fallback_text: string;
+  metrics: RegistryMetric[];
+  modes: RegistryMode[];
+  dimensions: RegistryDimension[];
+  coverage: RegistryCoverage[];
+  features: RegistryFeature[];
+}
+
+/**
+ * One term the resolver would not resolve, and what it offers instead.
+ *
+ * Returned as *data* on a 200, never as an error status. A question naming one good metric and
+ * one unsupported breakdown is mostly answerable; a 4xx would throw away the part that worked.
+ * Render these as a prompt to refine, not as a failure.
+ *
+ * `alternatives` holds registry keys, and is empty when the resolver genuinely has nothing to
+ * offer - a metric available enterprise-wide only has no legal breakdown to suggest. Empty means
+ * "no alternative exists", not "the suggester broke"; `reason` carries the explanation either way.
+ */
+export interface ScopeRefusal {
+  term: string;
+  reason: string;
+  alternatives: string[];
+}
+
+/**
+ * The resolved scope behind an answer - what the question was taken to mean.
+ *
+ * `notes` and `refusals` are different claims and must not be merged in the UI. A refusal means
+ * something was dropped. A note means nothing was dropped but the answer carries a condition:
+ * a coverage gate may withhold a value, or the Team/Practice distinction applies to the
+ * breakdown that was used.
+ */
+export interface ResolvedScope {
+  metrics: RegistryMetric[];
+  solution: RegistryMode;
+  group_by: RegistryDimension[];
+  entity: string;
+  period: string;
+  refusals: ScopeRefusal[];
+  notes: string[];
+  is_answerable: boolean;
+  registry_version: string;
+}
+
+export interface AskRequest {
+  question: string;
+  /** The surface's current filters. A default the question overrides, never the reverse.
+   *  Also carries `entity_kind` ("practice" | "team" | "local_region") when the user has used
+   *  the entity chip's switch - the same question re-asked against the other column. */
+  page_scope?: Record<string, string>;
+}
+
+export interface AskResponse {
+  question: string;
+  /** "model" | "keywords" | "keywords (model unavailable)" - show it; a degraded answer should
+   *  look degraded rather than quietly worse. */
+  resolved_by: string;
+  scope: ResolvedScope;
+  entity_match: EntityMatch;
+  /** The grounded question actually put to Genie. Empty when the scope is unanswerable, which
+   *  is the point: with no resolved metrics there are no definitions to ground on. */
+  genie_prompt: string;
+  /** Set by an ambiguous metric or an unanswerable scope only - never by `entity_match.assumed`,
+   *  which is a default the answer shows rather than a question it has to ask first. */
+  needs_clarification: boolean;
+  /** The governed Drafting ranking, attached only when the question asked *where to act* rather
+   *  than what to measure.
+   *
+   *  Three states, and the difference between the last two is load-bearing:
+   *    - `null` - the question carried no action intent. Not that kind of question.
+   *    - `{ actions: [] }` - it did, and no team is behind the benchmark. That is good news and
+   *      a real, reportable answer; rendering it as nothing makes it read as silence.
+   *    - `{ actions: [...] }` - the ranking.
+   *
+   *  So branch on the object (`worklist && <Block …/>`), never on `worklist?.actions?.length`,
+   *  which collapses the first two into one. Over the wire this is explicitly `null` rather
+   *  than an absent key - `ask_service.ask()` omits it from its dict, and `AskResponse` then
+   *  serializes the unset field as null. `tests/test_ask_worklist.py` pins both halves. */
+  worklist?: AskWorklist | null;
+}
+
+/**
+ * The action half of an answer - the ranking, alongside the scope and never instead of it.
+ *
+ * `actions` are the same rows the Next Best Action panel ranks, capped at five here because a
+ * chat reply is read rather than scanned. `basis` is carried verbatim from the ranking and must
+ * be rendered that way: it holds this run's live benchmark, team count and window, and a second
+ * paraphrase of it is how the chat answer and the on-screen panel end up describing different
+ * rankings to the same person.
+ *
+ * `scoped_to` is empty when the full enterprise ranking came back - either the question named no
+ * entity, or it named a *Practice* (the site the exam was read at) while this list is grouped on
+ * Team (the radiologist's home practice). Those are different columns, so the ranking is shown
+ * unfiltered rather than filtered to nothing; say "across all teams" when this is empty.
+ */
+export interface AskWorklist {
+  scoped_to: string;
+  actions: NextBestAction[];
+  basis: string;
+  benchmark_draft_rate: number;
+  window_start: string;
+  window_end: string;
+}
+
+/**
+ * Which column answers the entity the question named.
+ *
+ * The distinction the user has stated twice: `team` is `provider_local_practice_name_curr`, the
+ * radiologist's *home* practice; `practice` is `managing_local_practice_name_curr`, the *site*
+ * they read the exam at. One rad has one Team and up to seventy Practices, so the two give
+ * genuinely different numbers for the same name.
+ */
+export interface EntityMatch {
+  /** "practice" | "team" | "local_region" | "unknown", or "" when no entity was named. */
+  kind: string;
+  /** The vocabulary's own casing - "BOCA" asked about comes back as "Boca". */
+  value: string;
+  /** The other readings, present only when there is a real choice. */
+  candidates: { kind: string; value: string }[];
+  /** True when the name was in more than one list and `kind` is the default rather than a
+   *  choice. Render it as a stated default with a switch, never as a blocker: practice and
+   *  team names overlap almost entirely, so this fires on most real questions. */
+  assumed: boolean;
 }
 
 export interface ShiftUtilizationItem {

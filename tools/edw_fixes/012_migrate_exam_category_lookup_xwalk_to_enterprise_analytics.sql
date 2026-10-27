@@ -1,6 +1,11 @@
--- STATUS: RUN 2026-10-15, via the `mosaic-app` PAT profile's SEC-AZ-DBX-P-EA-ADM group
--- membership (ALL PRIVILEGES on edw_prod.enterprise_analytics) - same mechanism as
--- 011_migrate_seal_reference_tables_to_enterprise_analytics.sql.
+-- STATUS: SUPERSEDED BY 047. Run 2026-10-15 via the `mosaic-app` PAT profile's
+-- SEC-AZ-DBX-P-EA-ADM group membership (ALL PRIVILEGES on edw_prod.enterprise_analytics) - same
+-- mechanism as 011_migrate_seal_reference_tables_to_enterprise_analytics.sql. The table this
+-- script created, edw_prod.enterprise_analytics.tbl_exam_category_lookup_xwalk, was RELOCATED
+-- on 2026-10-26 to edw_prod.enterprise_analytics_ref.ref_exam_category_lookup_xwalk and the copy
+-- here was DROPPED - a 969-row lookup is reference data, not a certified dataset, so it belongs
+-- in the _ref schema. Do not re-run this script; run 047 instead. Everything below is retained
+-- because the WHY still explains why the crosswalk exists at all and which join key is correct.
 --
 -- WHY: Root cause of the "Efficiency numbers don't match" bug (2026-10-15). The Efficiency
 -- pipeline's `mpcat` column (backend/app/services/mosaic_service.py's _MER_BASE_CTE_SQL) was

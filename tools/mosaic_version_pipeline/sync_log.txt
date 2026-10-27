@@ -23,3 +23,57 @@ Last loaded day: 2026-10-24. Pulling 2 day(s) (including 2 day(s) of refresh loo
   2026-10-24: 54802 rows
 Combined 139367 rows across 2 day(s). Staging and merging...
 Merge result: {'num_affected_rows': '139150', 'num_deleted_rows': '0', 'num_inserted_rows': '0', 'num_updated_rows': '139150'}
+---- Sun 10/25/2026 14:15:01.54 ---- 
+Last loaded day: 2026-10-24. Pulling 2 day(s) (including 2 day(s) of refresh lookback): 2026-10-23 .. 2026-10-24.
+  2026-10-23: 84565 rows
+  2026-10-24: 54802 rows
+Combined 139367 rows across 2 day(s). Staging and merging...
+Merge result: {'num_affected_rows': '139150', 'num_deleted_rows': '0', 'num_inserted_rows': '0', 'num_updated_rows': '139150'}
+---- Mon 10/26/2026  7:44:02.55 ---- 
+---- Mon 10/26/2026  8:15:01.50 ---- 
+Last loaded day: 2026-10-25. Pulling 2 day(s) (including 2 day(s) of refresh lookback): 2026-10-24 .. 2026-10-25.
+  2026-10-24: 54802 rows
+  2026-10-25: 55574 rows
+Combined 110376 rows across 2 day(s). Staging and merging...
+Merge result: {'num_affected_rows': '110272', 'num_deleted_rows': '0', 'num_inserted_rows': '0', 'num_updated_rows': '110272'}
+---- Mon 10/26/2026 14:15:01.54 ---- 
+Last loaded day: 2026-10-25. Pulling 2 day(s) (including 2 day(s) of refresh lookback): 2026-10-24 .. 2026-10-25.
+Traceback (most recent call last):
+  File "C:\Users\bhargav.narasimhan\mosaic-module\tools\mosaic_version_pipeline\sync_exam_lookup.py", line 203, in <module>
+    sys.exit(main())
+             ^^^^^^
+  File "C:\Users\bhargav.narasimhan\mosaic-module\tools\mosaic_version_pipeline\sync_exam_lookup.py", line 189, in main
+    out_path = pull_day(d, tmp_dir)
+               ^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\bhargav.narasimhan\mosaic-module\tools\mosaic_version_pipeline\sync_exam_lookup.py", line 112, in pull_day
+    csv_text = _run_cli(["experimental", "aitools", "tools", "query", "--profile", AWS_PROFILE, "--output", "csv", sql])
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\bhargav.narasimhan\mosaic-module\tools\mosaic_version_pipeline\sync_exam_lookup.py", line 62, in _run_cli
+    raise RuntimeError(f"databricks {' '.join(args)} failed:\n{result.stderr}")
+RuntimeError: databricks experimental aitools tools query --profile aws-dbx-workspace01 --output csv WITH parsed AS (
+      SELECT
+        accession_number,
+        date as log_date,
+        regexp_extract(message, 'radpair_instance\\":\\"([^\\"]*)', 1) as instance,
+        regexp_extract(message, '\\"NPI\\":\\"([^\\"]*)', 1) as npi,
+        regexp_extract(message, 'modality\\":\\"([^\\"]*)', 1) as modality
+      FROM p_use1_rp_aws_dbx_workspace01.support.prod_app_logs_silver_mosaicinfohub
+      WHERE date = DATE'2026-10-24'
+        AND message LIKE 'Report has been signed%' AND message LIKE '%radpair_instance%'
+        AND regexp_extract(message, 'radpair_instance\\":\\"([^\\"]*)', 1) IN ('rp-mg','rp-prod')
+    ),
+    dedup AS (
+      SELECT accession_number, max(log_date) as log_date, max_by(npi, log_date) as npi,
+             max_by(modality, log_date) as modality, max_by(instance, log_date) as instance
+      FROM parsed GROUP BY accession_number
+    )
+    SELECT
+      accession_number,
+      CASE WHEN instance = 'rp-mg' THEN 'Mosaic 2.0' ELSE 'Mosaic 1.0' END as mosaic_version,
+      npi, modality,
+      CASE WHEN modality = 'MG' THEN 'MG' ELSE 'Non-MG' END as modality_group,
+      log_date
+    FROM dedup failed:
+Error: A new access token could not be retrieved because the refresh token is invalid. To reauthenticate, run the following command:
+  $ databricks auth login --profile aws-dbx-workspace01
+

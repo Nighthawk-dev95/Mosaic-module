@@ -1,10 +1,14 @@
--- Scheduled refresh for edw_prod.enterprise_analytics_ref.mosaic_efficiency_detail.
+-- Scheduled refresh for edw_prod.bipa_analytics.mosaic_efficiency_detail.
 -- Same CTE logic as _materialize_efficiency_detail.sql, but INSERT OVERWRITE instead of
 -- CREATE OR REPLACE TABLE AS - preserves the table/column comments already set on this table.
 -- Must run AFTER refresh_mosaic_version_exam_detail.sql (joins mosaic_version_exam_detail for
 -- post-go-live version tagging).
+--
+-- MIGRATED 2026-10-26 from edw_prod.enterprise_analytics_ref to edw_prod.bipa_analytics, per
+-- Yaro's request. Note edw_dev.bipa_analytics.presentation_rpt_readtimeswith_draftingadjustedrt_tbl
+-- below is a DIFFERENT, dev-catalog schema of the same name - not the migration target, untouched.
 
-INSERT OVERWRITE edw_prod.enterprise_analytics_ref.mosaic_efficiency_detail
+INSERT OVERWRITE edw_prod.bipa_analytics.mosaic_efficiency_detail
 WITH tagged_source AS (
   SELECT
     r.Exam_ID, r.Accession_Number, r.Physician_NPI, r.Radiologist,
@@ -20,7 +24,7 @@ WITH tagged_source AS (
   FROM edw_dev.bipa_analytics.presentation_rpt_readtimeswith_draftingadjustedrt_tbl r
   LEFT JOIN edw_prod.enterprise_analytics.tbl_exam_inventory e
     ON r.Accession_Number = e.accession_number
-  LEFT JOIN edw_prod.enterprise_analytics_ref.mosaic_version_exam_detail m
+  LEFT JOIN edw_prod.bipa_analytics.mosaic_version_exam_detail m
     ON r.Accession_Number = m.accession_number
     AND DATE(r.Dictation_Start) >= DATE'2026-07-28'
   WHERE r.mosaic_flag = 0 OR (r.Dictation_Start < DATE'2026-07-28') OR m.accession_number IS NOT NULL

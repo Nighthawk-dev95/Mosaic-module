@@ -8,6 +8,7 @@ per-request - only by the background/manual refresh job.
 
 from app.data import capture_enablement, local_region, mvp_context, mvp_dashboard_stats, mvp_mentor_matching, mvp_methodology_checks, rad_survey
 from app.db import cache_store, efficiency_store
+from app.services import movers_service, next_best_action_service
 from app.models.mosaic import (
     BaselineProxyCandidate,
     BaselineProxyDetail,
@@ -38,8 +39,10 @@ from app.models.mosaic import (
     MammoScreeningTrendPoint,
     MentorMatchStatus,
     MosaicIntelligenceSnapshot,
+    MoversDecomposition,
     MvpProgramContext,
     MvpRadiologistItem,
+    NextBestActionList,
     PopulationEfficiency,
     RadiologistRosterItem,
     LikertDistribution,
@@ -238,6 +241,37 @@ def get_efficiency_population(
         baseline_tbwu_per_min=result["baseline_tbwu_per_min"],
         pct_change_vs_baseline=_pct_change(result["mosaic_tbwu_per_min"], result["baseline_tbwu_per_min"]),
         read_time_change_pct=_read_time_change(result["mosaic_tbwu_per_min"], result["baseline_tbwu_per_min"]),
+    )
+
+
+def get_efficiency_movers(
+    group_col: str,
+    group_value: str,
+    decompose_by: str = "exam_category",
+    mode: str = "full_mosaic",
+    comparison: str = "peers",
+) -> MoversDecomposition:
+    """Why is this group's efficiency different - harder work, or slower reading?
+
+    Reads per-bucket num/den from the efficiency matrix and hands the division to
+    `movers_service`, which splits the gap into mix and rate exactly. Raises ValueError for an
+    unknown column; the route turns that into a 400 rather than guessing a column, because a
+    silently substituted group-by renders a plausible number for the wrong question.
+    """
+    safe_mode = mode if mode in VALID_MODES else "full_mosaic"
+    safe_comparison = "baseline" if comparison == "baseline" else "peers"
+    rows = efficiency_store.decomposition_rows(
+        group_col=group_col,
+        group_value=group_value,
+        decompose_by=decompose_by,
+        mode=safe_mode,
+    )
+    result = movers_service.decompose(rows, comparison=safe_comparison, bucket_label=decompose_by)
+    return MoversDecomposition(
+        group_col=group_col,
+        group_value=str(group_value),
+        mode=safe_mode,
+        **result,
     )
 
 
@@ -822,7 +856,17 @@ def get_undrafted_analysis(
     # more than the chart (which only ever groups by week/practice/team/category) needs.
     collapsed: dict[tuple, dict] = {}
     for row in rows:
-        key = (row["week_start"], row.get("local_practice"), row.get("team"), row["category"], row["category_sort_order"])
+        # Finalized exams with no final_datetime land in the cache with a null `week_start`,
+        # which JSON-serializes to the *string* "None" (~2,700 of 2.97M rows today). The
+        # model types this field as a `date`, so one such row used to fail validation and
+        # 500 the whole endpoint - taking the chart down over 0.09% of the data.
+        # `next_best_action_service.rank` drops the same rows for its own reason (str(None)
+        # sorts after every ISO date, so an undated row would be admitted as the newest
+        # week); keep the two treatments in step.
+        week_start = row.get("week_start")
+        if not week_start or str(week_start) == "None":
+            continue
+        key = (week_start, row.get("local_practice"), row.get("team"), row["category"], row["category_sort_order"])
         acc = collapsed.setdefault(key, {"exam_count": 0, "tbwu": 0.0})
         acc["exam_count"] += row.get("exam_count") or 0
         acc["tbwu"] += row.get("tbwu") or 0
@@ -839,6 +883,26 @@ def get_undrafted_analysis(
         )
         for key, acc in collapsed.items()
     ]
+
+
+def get_next_best_actions(
+    weeks: int = 8, min_addressable_tbwu: float = 500.0, benchmark_pctile: float = 0.75, limit: int = 25
+) -> NextBestActionList:
+    """Drafting worklist ranked by expected TBWU unlock (plan item E-4).
+
+    Reads the same cached `undrafted_analysis` payload the Non-Drafted chart uses - no second
+    dataset, no EDW round trip - and hands it to the pure ranking function, which is where the
+    arithmetic and its justification live.
+    """
+    payload, _ = cache_store.load("undrafted_analysis")
+    result = next_best_action_service.rank(
+        payload or [],
+        weeks=weeks,
+        min_addressable_tbwu=min_addressable_tbwu,
+        benchmark_pctile=benchmark_pctile,
+        limit=limit,
+    )
+    return NextBestActionList(**result)
 
 
 def _load_draft_insights_raw() -> list[dict]:

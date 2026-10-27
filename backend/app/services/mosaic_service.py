@@ -22,6 +22,22 @@ from app.models.mosaic import (
 # efficiency/capacity alike now; every function below still touches at most one heavy view per
 # query and combines results in Python, same discipline as before.
 
+# A naming convention that predates the Team/Practice vocabulary, kept for wire compatibility
+# and written down here so nobody has to re-derive it per query: in this module an alias or a
+# model field called `practice` is, with two explicit exceptions, selected from
+# provider_local_practice_name_curr - which the product calls **Team**, the radiologist's home
+# practice. It is NOT managing_local_practice_name_curr, the site the exam was read at.
+#
+#   Team     = provider_local_practice_name_curr = the rad's home practice (one per rad)
+#   Practice = managing_local_practice_name_curr = the site read at (up to ~70 per rad)
+#
+# The two exceptions name the site column plainly and must keep doing so: the capacity CTE's
+# `managing_local_practice_name_curr AS localpractice` (see "Fix 2" at _CAPACITY_SHIFT_CTE_SQL)
+# and volume_service.py:171, which builds the filter bar's own Practice list from the managing
+# column. Anything else here that says `practice` means Team; the UI labels those surfaces
+# "Team" (FilterBar's `entityLabel` prop), and renaming the payload keys is deferred because
+# the cached rows are loaded into Pydantic models by name and would break until a full refresh.
+
 # enterprise_analytics_ref.drafting_eligible_rpids_vw replaces the old hand-maintained
 # CT_ABDPEL_DRAFT_CODES/CT_CHEST_DRAFT_CODES tuples - confirmed live: RPID152-3D/RAD2508 ->
 # 'CT Abd/Pel', RPID249 -> 'CT Chest', RPID22 -> 'CT Head', matching the old lists exactly -
@@ -30,11 +46,14 @@ from app.models.mosaic import (
 # (969 procedure codes) - correct for deployment/capture-eligibility joins (keyed on
 # RPID_Procedure_Code), but NOT a substitute for the real clinical exam-category taxonomy -
 # see _EXAM_CATEGORY_XWALK_VW below for that.
-_DRAFTING_ELIGIBLE_VW = f"{settings.qualified}_ref.drafting_eligible_rpids_vw"
+_DRAFTING_ELIGIBLE_VW = f"{settings.qualified_ref}.drafting_eligible_rpids_vw"
 
 # Governed copy of edw_dev.bipa_analytics.exam_category_lookup_xwalk (see memory:
-# exam_category_lookup_xwalk_reference.md) - migrated into enterprise_analytics 2026-10-15
-# (tools/edw_fixes/012_migrate_exam_category_lookup_xwalk_to_enterprise_analytics.sql) after
+# exam_category_lookup_xwalk_reference.md) - first migrated into enterprise_analytics 2026-10-15
+# (tools/edw_fixes/012_...) and relocated 2026-10-26 into enterprise_analytics_ref, which is
+# where reference/lookup data belongs (enterprise_analytics is for certified/Genie-facing
+# datasets) - tools/edw_fixes/047_relocate_exam_category_lookup_xwalk_to_enterprise_analytics_ref.sql.
+# The migration itself happened after
 # confirming the Efficiency pipeline's `mpcat` column was wrongly sourced from
 # _DRAFTING_ELIGIBLE_VW above - that view's 7 narrow drafting-eligibility buckets don't cover
 # real clinical categories like 'Mammo Diagnostic' at all (confirmed live: zero matching rows),
@@ -43,7 +62,7 @@ _DRAFTING_ELIGIBLE_VW = f"{settings.qualified}_ref.drafting_eligible_rpids_vw"
 # actually joins - on ParentRpt = RPID_parent_code, NOT RPID_Procedure_Code (confirmed live:
 # joining on RPID_parent_code covers 79.2M of 88.1M exams since 2024-11-01, vs. near-zero
 # coverage for categories like Mammo Diagnostic via the old drafting-eligibility source).
-_EXAM_CATEGORY_XWALK_VW = f"{settings.qualified}.tbl_exam_category_lookup_xwalk"
+_EXAM_CATEGORY_XWALK_VW = f"{settings.qualified_ref}.ref_exam_category_lookup_xwalk"
 
 # RPCE-sourced rows are identified the same way as before (Source_System_Code is still the
 # raw column name on tbl_exam_inventory).
@@ -199,6 +218,15 @@ def get_utilization_by_practice(days_back: int = 30) -> list[UtilizationPractice
     rows = run_query(
         f"""
         SELECT
+          -- This is the TEAM column (the radiologist's home practice) wearing the `practice`
+          -- alias, and the alias must not be read as the managing/site column. The name is kept
+          -- because the cached payload rows carry the key "practice" and the Pydantic model
+          -- loads them by name, so renaming here would break every cached row until a full
+          -- refresh. The grouping itself is right for its one consumer: MosaicPulse's adoption
+          -- tree pairs these rows with `getRoster({{practice}})`, which filters `home_practice`
+          -- - also provider_local_practice_name_curr - so both tiers of the tree are Team and
+          -- the hierarchy is internally consistent. Only the word was wrong, and the UI copy
+          -- now says Team.
           provider_local_practice_name_curr                                              AS practice,
           COUNT(*)                                                                       AS total_exams,
           SUM(CASE WHEN mosaic_read_flag THEN 1 ELSE 0 END)                              AS mosaic_exams,
@@ -221,19 +249,66 @@ def get_utilization_by_practice(days_back: int = 30) -> list[UtilizationPractice
     return [UtilizationPracticeRollup(**row) for row in rows]
 
 
-# tbl_mosaic_shift_utilization is a governed snapshot in enterprise_analytics (NOT a live view) -
-# migrated from edw_dev.bipa_analytics.presentation_deneb_vw (joined to tbl_exam_inventory for
-# mosaic_read_flag/mosaic_draft_flag) because the deployed app's service principal cannot be
-# granted edw_dev access (same wall _MVP_RAD_ONBOARDING_VW already hit - see
-# tools/edw_fixes/014_migrate_shift_utilization_to_enterprise_analytics.sql for the full
-# rationale and the exact CTAS/refresh SQL). Point-in-time snapshot of a rolling 90-day window as
-# of the last migration run, not live - re-run that script's INSERT OVERWRITE block to refresh.
-# utilization_pct/pct_mosaic_read/pct_ai_drafted are already fractions (0-1) in this table.
-_SHIFT_UTILIZATION_TBL = f"{settings.qualified}.tbl_mosaic_shift_utilization"
-
-
-def get_shift_utilization_by_radiologist() -> list[dict]:
-    return run_query(f"SELECT * FROM {_SHIFT_UTILIZATION_TBL}")
+# REBUILT 2026-10-26: the old governed snapshot (tbl_mosaic_shift_utilization, migrated from
+# edw_dev.bipa_analytics.presentation_deneb_vw) was dropped when that pipeline's other 3 tables
+# moved out of enterprise_analytics to edw_prod.bipa_analytics (Yaro's request) - rather than
+# migrate this one too, we confirmed tbl_exam_inventory itself now carries everything needed
+# (scheduled_shift_id/start/end, shift_utilization_pct, mosaic_read_flag/mosaic_draft_flag), so
+# this queries it directly instead of a separately-refreshed copy. Live query, not a snapshot.
+#
+# shift_utilization_pct is a RUNNING value that changes per exam as the shift progresses (not a
+# fixed per-shift number - confirmed live 2026-10-26: one shift showed 307 distinct values across
+# 1,348 exam rows) and is on a 0-100 scale, not the 0-1 fraction this endpoint returns. We take the
+# row with the latest time_into_shift_minutes per (shift, radiologist) as the shift's final
+# cumulative value, then divide by 100.
+def get_shift_utilization_by_radiologist(days_back: int = 90) -> list[dict]:
+    safe_days = max(1, min(int(days_back), 365))
+    return run_query(
+        f"""
+        WITH shift_exams AS (
+          SELECT
+            scheduled_shift_id,
+            reading_provider_npi AS npi,
+            MAX(reading_provider_name_full) AS radiologist_name,
+            MAX(provider_local_practice_name_curr) AS practice,
+            MIN(scheduled_shift_start_datetime) AS shift_start,
+            MIN(scheduled_shift_end_datetime) AS shift_end,
+            COUNT(*) AS exam_count,
+            SUM(CASE WHEN mosaic_read_flag THEN 1 ELSE 0 END) / COUNT(*) AS pct_mosaic_read,
+            SUM(CASE WHEN mosaic_draft_flag THEN 1 ELSE 0 END) / COUNT(*) AS pct_ai_drafted
+          FROM {settings.qualified}.tbl_exam_inventory
+          WHERE scheduled_shift_id IS NOT NULL
+            AND scheduled_shift_start_datetime >= DATE_SUB(CURRENT_DATE(), {safe_days})
+          GROUP BY scheduled_shift_id, reading_provider_npi
+        ),
+        final_exam AS (
+          SELECT
+            scheduled_shift_id,
+            reading_provider_npi AS npi,
+            shift_utilization_pct,
+            ROW_NUMBER() OVER (
+              PARTITION BY scheduled_shift_id, reading_provider_npi
+              ORDER BY time_into_shift_minutes DESC
+            ) AS rn
+          FROM {settings.qualified}.tbl_exam_inventory
+          WHERE scheduled_shift_id IS NOT NULL
+            AND scheduled_shift_start_datetime >= DATE_SUB(CURRENT_DATE(), {safe_days})
+        )
+        SELECT
+          s.npi,
+          s.radiologist_name,
+          s.practice,
+          DATE(s.shift_start) AS shift_date,
+          f.shift_utilization_pct / 100.0 AS utilization_pct,
+          s.pct_mosaic_read,
+          s.pct_ai_drafted,
+          (f.shift_utilization_pct / 100.0) * TIMESTAMPDIFF(MINUTE, s.shift_start, s.shift_end) AS reading_minutes,
+          TIMESTAMPDIFF(MINUTE, s.shift_start, s.shift_end) AS shift_total_minutes
+        FROM shift_exams s
+        JOIN final_exam f
+          ON s.scheduled_shift_id = f.scheduled_shift_id AND s.npi = f.npi AND f.rn = 1
+        """
+    )
 
 
 # mosaic_drafting_metric_vw is a governed Databricks Metric View (confirmed live) - its
@@ -1463,10 +1538,30 @@ def get_undrafted_analysis() -> list[dict]:
     rad_not_in_drafting/draftable) plus a Drafted/Not-Drafted split within "draftable", not a
     literal port.
 
-    "Drafted" (category_sort_order 0) is included, not filtered out, so the frontend can
-    compute each week's "% Undrafted" total as 1 - (Drafted / week total) - see
-    UndraftedStackedChart, which hides the Drafted segment itself but needs it in the
-    denominator.
+    "Drafted" (category_sort_order 0) is included, not filtered out, because it belongs in the
+    denominator even though it is never drawn as its own segment.
+
+    DENOMINATOR - this docstring used to prescribe `1 - (Drafted / week total)` over all six
+    categories, and that is wrong for the question the chart asks. The week total includes
+    "Not Read on Mosaic", which is 104.9M of the ~123M rows here (85%) and is not a drafting
+    outcome at all: no draft was possible because Mosaic was not the reporting system for that
+    exam. Dividing by it pins every week near 93% undrafted and the bar stops responding to
+    drafting improvements, because the ratio is really measuring Mosaic *reporting* adoption.
+    UndraftedStackedChart therefore divides by Mosaic-read exams only - the four plotted
+    reasons plus Drafted, excluding sort_order 5. NonDraftedDetail's worklist readout uses a
+    third, narrower denominator ("addressable" = Drafted + sort_order 1 + 2) because a team
+    cannot be ranked on a procedure no model covers; both surfaces label which denominator
+    they are on.
+
+    KNOWN RESIDUAL (not fixed here - fixing it changes this dataset's grain and needs a full
+    EDW refresh to take effect): the SELECT below aliases provider_local_practice_name_curr to
+    *both* `local_practice` and `team`. Per the Team/Practice rule, `team` is correct
+    (provider = the radiologist's home practice) but `local_practice` should be
+    managing_local_practice_name_curr (the site where the exam was read). So the Non-Drafted
+    page's practice filter is currently filtering on home practice under a "Practice" label.
+    This is the same conflation as the MAX(practice) AS team residual in
+    get_radiologist_scorecard. Adding managing as a separate GROUP BY column multiplies rows
+    (one radiologist reads at up to ~70 sites), so it is a cube-grain change, not a one-liner.
     """
     rows = run_query(
         f"""

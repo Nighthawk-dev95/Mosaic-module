@@ -7,6 +7,7 @@ import { Badge } from "../components/Badge";
 import { DataTable, fmtPct } from "../components/DataTable";
 import type { DataTableColumn } from "../components/DataTable";
 import { CARD_STYLE } from "../styles/glassCard";
+import { SolutionPin } from "../components/SolutionAxis";
 import type { DraftInsightCategoryStat, DraftInsightModalityStat, DraftInsightPracticeStat, DraftInsightSampleItem } from "../api/types";
 
 const ASSESSMENT_COLORS: Record<string, string> = {
@@ -131,6 +132,11 @@ export function DraftVsFinal() {
           AI-assessed comparison of Mosaic AI draft findings against the radiologist's final signed report - a bounded recent sample, not the
           full drafted population (see tools/draft_insights).
         </div>
+        <SolutionPin
+          solution="drafting"
+          elsewhere="there is no draft-to-final comparison for Reporting or Capture, since neither produces an AI draft to compare against"
+          style={{ marginTop: 8 }}
+        />
       </div>
 
       {anyError && (

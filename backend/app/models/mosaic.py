@@ -133,6 +133,54 @@ class EfficiencyTrendRpAvgPoint(BaseModel):
     full_mosaic_tbwu_per_min: float | None
 
 
+class MoversBucket(BaseModel):
+    """One row of the mix-vs-rate waterfall.
+
+    `target_rate` / `peer_rate` are nullable on purpose and the two nulls mean different
+    things: on a folded "All other" row neither side has a meaningful blended rate, and on an
+    imputed row the peers simply never touched that bucket. `imputed_peer_rate` tells the two
+    apart - a null `peer_rate` with the flag set means unknown, not zero.
+    """
+
+    bucket: str
+    target_share: float
+    peer_share: float | None = None
+    target_rate: float | None = None
+    peer_rate: float | None = None
+    mix: float
+    rate: float
+    total: float
+    imputed_peer_rate: bool = False
+    is_tail: bool = False
+
+
+class MoversDecomposition(BaseModel):
+    """Shift-share split of an efficiency gap into case-mix and within-bucket rate.
+
+    Carries a refusal shape: when `available` is False every numeric field is None and
+    `reason` says why. A waterfall of zeros reads as "no difference found", which is a
+    different and wrong claim, so the UI must branch on `available` rather than render.
+    """
+
+    comparison: str
+    available: bool
+    reason: str | None = None
+    group_col: str | None = None
+    group_value: str | None = None
+    mode: str | None = None
+    bucket_label: str | None = None
+    target_rate: float | None = None
+    comparison_rate: float | None = None
+    gap: float | None = None
+    mix_effect: float | None = None
+    rate_effect: float | None = None
+    # True only for the vs-baseline comparison, where both rates are measured over the same
+    # exams so the weights cancel. The UI should say so rather than draw an empty mix bar.
+    mix_is_structurally_zero: bool = False
+    buckets: list[MoversBucket] = []
+    methodology: str
+
+
 class VolumeSummary(BaseModel):
     """Company-wide (no grouping) volume snapshot - same measure set as the governed
     mosaic_volume_metric_view's company-wide roll-up, reconciled by construction since it reuses
@@ -452,6 +500,56 @@ class UndraftedCategoryPoint(BaseModel):
 class UndraftedFilterOptions(BaseModel):
     exam_categories: list[str]
     sites: list[str]
+
+
+class NextBestAction(BaseModel):
+    """One row of the Drafting worklist - see `services/next_best_action_service.py`.
+
+    `team` is `provider_local_practice_name_curr`, the radiologist's home practice, because that
+    is the grain the leakage rows are cached at and the grain an onboarding or coaching action is
+    actually taken at. It is not the site the exams were read at.
+    """
+
+    team: str
+    action: str
+    primary_blocker: str
+    rationale: str
+    # The ranking key: headroom to the peer benchmark x the team's addressable draftable TBWU.
+    expected_unlock_tbwu: float
+    gap_to_benchmark_pct: float
+    draft_rate: float
+    addressable_tbwu: float
+    drafted_tbwu: float
+    not_enrolled_tbwu: float
+    workflow_gap_tbwu: float
+    # How lopsided the gap is - 0.51 means the named blocker barely won and both need work.
+    blocker_share_of_gap: float
+    gap_exams: int
+    # Reported, never ranked on: a different owner closes each of these.
+    deployment_blocked_tbwu: float
+    procedure_not_covered_tbwu: float
+    not_on_mosaic_tbwu: float
+
+
+class NextBestActionList(BaseModel):
+    actions: list[NextBestAction]
+    benchmark_draft_rate: float
+    benchmark_pctile: float
+    benchmark_team_count: int
+    excluded_low_volume_teams: int
+    # Cached leakage rows carrying no `week_start` (finalized exams with no final_datetime -
+    # ~2,700 of 2.97M today). They are dropped from the window rather than bucketed into it,
+    # because `str(None)` sorts after every ISO date and would otherwise be admitted as the
+    # most recent "week". Reported so the drop is visible rather than silent.
+    undated_rows_skipped: int
+    min_addressable_tbwu: float
+    window_start: str
+    window_end: str
+    weeks: int
+    total_expected_unlock_tbwu: float
+    # Prose stating what the ranking does and does not claim, built from the same numbers above
+    # so it cannot drift from them. Rendered verbatim next to the list.
+    basis: str
 
 
 class LikertDistribution(BaseModel):

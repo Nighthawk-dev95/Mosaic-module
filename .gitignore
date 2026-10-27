@@ -82,3 +82,6 @@ tools/edw_health/__pycache__/
 
 # Databricks CLI local sync state - machine-specific, not portable
 .databricks/
+
+# Scratch Lakeview API payload (carries real NPIs) - rebuilt on demand by the dashboard tooling
+_update_request.json

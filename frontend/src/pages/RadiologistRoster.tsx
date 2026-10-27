@@ -72,7 +72,9 @@ export function RadiologistRoster() {
   return (
     <div style={{ padding: 24, display: "flex", flexDirection: "column", gap: 16, flex: 1, overflowY: "auto" }}>
       <h1 style={{ margin: 0, fontSize: 20 }}>Radiologist Roster</h1>
-      <FilterBar practices={practices} showCaptureEnabled showMonth={false} />
+      {/* Team, not Practice: the list is built from `home_practice`, which is
+          provider_local_practice_name_curr - the rad's home practice, not the site they read at. */}
+      <FilterBar practices={practices} showCaptureEnabled showMonth={false} entityLabel="Team" />
       {roster.error && <div style={{ color: "var(--status-critical)" }}>{roster.error}</div>}
       <div
         style={{

@@ -87,6 +87,17 @@ export function MvpOverview() {
       })),
     [escalations]
   );
+  // The hover card takes a single `value` string plus a string-valued `extra` map. Split the
+  // owner record into those two shapes here rather than at the call site, so the total and the
+  // breakdown it totals are derived from the same memo and cannot drift apart.
+  const escalationTotal = useMemo(
+    () => Object.values(escalations).reduce((sum, n) => sum + n, 0),
+    [escalations]
+  );
+  const escalationExtra = useMemo(
+    () => Object.fromEntries(Object.entries(escalations).map(([owner, n]) => [owner, String(n)])),
+    [escalations]
+  );
   const weeklyTrend = useMemo(() => computeWeeklyEngagementTrend(scoped), [scoped]);
 
   return (
@@ -139,7 +150,19 @@ export function MvpOverview() {
           />
         </div>
         <div style={CARD_STYLE}>
-          <AIHoverCard feature="mvp_status_funnel" entityLabel="Enterprise-wide" metricLabel="Solutioning Escalations by Owner" value={String(escalations)} underline={false}>
+          {/* `escalations` is an owner->count record, so `String(escalations)` sent the literal
+              "[object Object]" into both the AI prompt and the hover cache key - the model was
+              asked to explain a value it had never been shown, and every owner breakdown shared
+              one cache entry. Send the total as the value and the per-owner split as `extra`,
+              which is the field that exists for exactly this. */}
+          <AIHoverCard
+            feature="mvp_status_funnel"
+            entityLabel="Enterprise-wide"
+            metricLabel="Solutioning Escalations by Owner"
+            value={String(escalationTotal)}
+            extra={escalationExtra}
+            underline={false}
+          >
             <div style={{ color: "var(--text-muted)", fontSize: 11, marginBottom: 8, textTransform: "uppercase", letterSpacing: 0.5 }}>
               Solutioning Escalations by Owner (click a slice for the radiologist list)
             </div>

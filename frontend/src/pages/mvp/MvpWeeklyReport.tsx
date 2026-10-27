@@ -63,11 +63,12 @@ function sectionHeader(label: string) {
 interface ScopeSectionProps {
   title: string;
   snapshot: WeeklyReportSnapshot;
-  // The history endpoint (the only thing this page actually reads snapshots from) returns just
-  // the persisted columns - no "deltas" field (that only exists transiently in the POST
-  // /generate response, used to ground its own AI narrative). Deltas here are always derived
-  // client-side from this snapshot's chronological neighbor in the fetched history list, never
-  // read off the snapshot object itself - null when there's no older week to compare against.
+  // The history endpoint does now return a `deltas` field, but this page deliberately ignores
+  // it and derives its own from `previous`. The server's deltas are always against the
+  // immediately preceding week; this page has a "Compare against" picker, so the baseline is
+  // whichever week the user chose - a comparison the server's always-adjacent deltas cannot
+  // express. `previous` is that chosen neighbor in the fetched history list, and null when
+  // there's no older week to compare against.
   previous: WeeklyReportSnapshot | null;
   // Per-radiologist drill-down is only honest for the latest week - older snapshots persist
   // only aggregate counts, never which radiologists make them up (see plan's "one real

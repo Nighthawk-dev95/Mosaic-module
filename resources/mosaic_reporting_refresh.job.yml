@@ -1,18 +1,33 @@
 # Lakeflow Job covering the "Group 1" (Mosaic Reporting Version Adoption dashboard) and
 # "Group 2" (mosaic-module app) stale-table refreshes identified in this session's staleness
-# audit. tbl_exam_category_lookup_xwalk is intentionally excluded per instruction.
+# audit. The exam-category crosswalk (now
+# edw_prod.enterprise_analytics_ref.ref_exam_category_lookup_xwalk, relocated by 047) is
+# intentionally excluded per instruction.
 #
 # NOT included: edw_prod.enterprise_analytics.mosaic_version_exam_lookup's own refresh
 # (tools/mosaic_version_pipeline/sync_exam_lookup.py) - it pulls from the AWS workspace
 # (p_use1_rp_aws_dbx_workspace01) via the `databricks` CLI and local OAuth profiles, which a
 # job task running on this (Azure) workspace cannot reach without its own cross-workspace auth
-# setup. Keep that one running manually (or on its own schedule elsewhere) before this job fires
-# each day, until the pending radpair_instance Delta Share lands and removes the AWS pull
-# entirely.
+# setup. Instead it runs on its own schedule via the Windows Task Scheduler job
+# "MosaicVersionSync" (tools/mosaic_version_pipeline/run_sync.bat), every 6 hours at
+# 2:15am/8:15am/2:15pm/8:15pm local - until the pending radpair_instance Delta Share lands and
+# removes the AWS pull entirely.
+#
+# SCHEDULE: this job's 9am start (below) is deliberately set to run AFTER the 8:15am
+# MosaicVersionSync pass, not the 2:15am one - confirmed live 2026-10-24/25 that an overnight
+# run can be delayed if the machine is asleep (that exact gap left refresh_exam_detail one day
+# stale on 2026-10-25, since the 5am run then in place fired before the delayed AWS sync
+# caught up). 9am leaves a 45-minute buffer after 8:15am for the sync to complete. This still
+# assumes the machine is on by 8:15am - if it's reliably off until later, push this later too.
 #
 # Also NOT included: edw_dev.enterprise_analytics.practice_to_local_mapping - it only changes
 # when Practice_to_Local_Mapping.xlsx is manually edited, so there's no repeatable EDW-side
 # query to schedule; re-run its load by hand when the Excel file changes.
+#
+# REMOVED 2026-10-26: refresh_shift_utilization. edw_prod.enterprise_analytics.tbl_mosaic_shift_
+# utilization was dropped - the backend now queries tbl_exam_inventory directly and live
+# (get_shift_utilization_by_radiologist in mosaic_service.py), no separate refresh needed.
+# tools/jobs/refresh_tbl_mosaic_shift_utilization.sql is now dead/historical.
 #
 resources:
   jobs:
@@ -31,18 +46,13 @@ resources:
             warehouse_id: ${var.warehouse_id}
             file:
               path: ../tools/jobs/refresh_mosaic_efficiency_detail.sql
-        - task_key: refresh_shift_utilization
-          sql_task:
-            warehouse_id: ${var.warehouse_id}
-            file:
-              path: ../tools/jobs/refresh_tbl_mosaic_shift_utilization.sql
         - task_key: refresh_mvp_rad_onboarding
           sql_task:
             warehouse_id: ${var.warehouse_id}
             file:
               path: ../tools/jobs/refresh_tbl_mvp_rad_onboarding.sql
       schedule:
-        quartz_cron_expression: "0 0 5 * * ?"
+        quartz_cron_expression: "0 0 9 * * ?"
         timezone_id: "America/Chicago"
         pause_status: UNPAUSED
       max_concurrent_runs: 1

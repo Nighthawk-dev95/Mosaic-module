@@ -1,4 +1,9 @@
-CREATE OR REPLACE TABLE edw_prod.enterprise_analytics_ref.mosaic_efficiency_detail AS
+-- MIGRATED 2026-10-26: this table now lives in edw_prod.bipa_analytics (not
+-- enterprise_analytics_ref) - see tools/jobs/refresh_mosaic_efficiency_detail.sql for the
+-- scheduled INSERT OVERWRITE version of this same query, used going forward instead of this
+-- manual CREATE OR REPLACE (which would wipe the table/column comments). Kept here for
+-- reference only.
+CREATE OR REPLACE TABLE edw_prod.bipa_analytics.mosaic_efficiency_detail AS
 WITH tagged_source AS (
   SELECT
     r.Exam_ID, r.Accession_Number, r.Physician_NPI, r.Radiologist,
@@ -14,7 +19,7 @@ WITH tagged_source AS (
   FROM edw_dev.bipa_analytics.presentation_rpt_readtimeswith_draftingadjustedrt_tbl r
   LEFT JOIN edw_prod.enterprise_analytics.tbl_exam_inventory e
     ON r.Accession_Number = e.accession_number
-  LEFT JOIN edw_prod.enterprise_analytics_ref.mosaic_version_exam_detail m
+  LEFT JOIN edw_prod.bipa_analytics.mosaic_version_exam_detail m
     ON r.Accession_Number = m.accession_number
     AND DATE(r.Dictation_Start) >= DATE'2026-07-28'
   WHERE r.mosaic_flag = 0 OR (r.Dictation_Start < DATE'2026-07-28') OR m.accession_number IS NOT NULL

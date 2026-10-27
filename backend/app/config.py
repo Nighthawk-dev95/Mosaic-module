@@ -19,16 +19,27 @@ class Settings:
         databricks_http_path: str = os.environ["DATABRICKS_HTTP_PATH"]
         databricks_token: str = os.environ["DATABRICKS_TOKEN"]
 
-    # app-25js08's service principal is granted SELECT/USE_SCHEMA on edw_prod.enterprise_analytics
-    # ONLY (confirmed live via SHOW GRANTS) - edw_dev.bipa_analytics/mosaictechops and the raw
-    # Dataverse schema are unreachable from the deployed app, so this is the real default now,
-    # not just a local-dev convenience.
+    # The deployed app's service principal (practice-command-bhargav,
+    # 4a77686c-5d36-4e88-9233-7c29f93f1b81 - "app-25js08" is the display-name prefix every
+    # Databricks App in this workspace shares, not an app name) holds SELECT/USE_SCHEMA on
+    # edw_prod.enterprise_analytics AND edw_prod.enterprise_analytics_ref, confirmed live via
+    # SHOW GRANTS. edw_dev.bipa_analytics/mosaictechops and the raw Dataverse schema are
+    # unreachable from the deployed app, so edw_prod is the real default now, not just a
+    # local-dev convenience.
     catalog: str = os.environ.get("MOSAIC_CATALOG", "edw_prod")
     schema: str = os.environ.get("MOSAIC_SCHEMA", "enterprise_analytics")
+    # enterprise_analytics holds certified/Genie-facing datasets; enterprise_analytics_ref holds
+    # reference/lookup/crosswalk data (ref_* naming, no tbl_ prefix). Both are readable by the
+    # app - see drafting_eligible_rpids_vw and ref_exam_category_lookup_xwalk.
+    schema_ref: str = os.environ.get("MOSAIC_SCHEMA_REF", "enterprise_analytics_ref")
 
     @property
     def qualified(self) -> str:
         return f"{self.catalog}.{self.schema}"
+
+    @property
+    def qualified_ref(self) -> str:
+        return f"{self.catalog}.{self.schema_ref}"
 
     # Foundation Model API endpoint for AI hover-context explanations (see
     # app/services/ai_context_service.py). The name itself is a fixed, workspace-wide moniker -

@@ -74,17 +74,21 @@
   --blocker-other: var(--text-muted);
 
   /* Fixed categorical order for the Non-Drafted Analysis stacked chart, keyed to
-     category_sort_order 1-7 from examsnotdraftedbutdraftable_vw (0 = Drafted, never
-     plotted as its own segment - see UndraftedStackedChart). Reuses the same validated
-     8-hue slots as the blocker charts above, under names describing this chart's roles;
-     slot 8 (red/domain-feedback) is intentionally unused here. */
-  --undrafted-rad-declined: var(--domain-deployment);
-  --undrafted-ops-declined: var(--series-4-yellow);
-  --undrafted-incomplete-process: var(--domain-capacity);
-  --undrafted-practice-not-enabled: var(--series-5-magenta);
-  --undrafted-opened-under-5min: var(--domain-utilization);
-  --undrafted-opened-over-5min: var(--domain-efficiency);
-  --undrafted-never-opened: var(--series-6-green);
+     category_sort_order 1-4 as `mosaic_service.get_undrafted_analysis` emits them today
+     (0 = Drafted, never plotted as its own segment; 5 = Not Read on Mosaic, outside this
+     chart's question entirely - see UndraftedStackedChart).
+
+     Grouped by who owns the fix, not by size: the first two are convertible by whoever
+     works the Drafting worklist and carry that list's own chip colors so the same leak
+     reads the same in both places; the second two belong to deployment and model
+     coverage. An earlier set of names here was keyed to a retired seven-category
+     taxonomy (examsnotdraftedbutdraftable_vw) that the backend had stopped emitting -
+     every segment silently resolved to zero. Rename these only alongside the CASE
+     expression in mosaic_service.py that produces the strings. */
+  --undrafted-rad-not-enrolled: var(--status-warning);
+  --undrafted-workflow: var(--domain-efficiency);
+  --undrafted-practice-not-enabled: var(--domain-deployment);
+  --undrafted-procedure-not-covered: var(--series-5-magenta);
 
   /* Glass elevation system - verbatim recipe from PCC's own CSS (fill/border/shadow per
      surface + a shared blur scale), used via the .glass-card/.glass-drawer/.glass-modal

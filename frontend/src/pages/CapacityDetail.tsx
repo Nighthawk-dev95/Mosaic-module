@@ -25,6 +25,33 @@ function fmtNum(value: number | null | undefined, digits = 1): string {
   return value === null || value === undefined ? "—" : value.toFixed(digits);
 }
 
+/**
+ * Why this page has no solution axis, when Volume and Efficiency both do.
+ *
+ * The toggle was going to be rolled out here next, on the assumption Capacity had the same
+ * two-of-four shape as Volume. The registry says otherwise: every capacity metric is
+ * `grain="shift"` and tagged with all three solutions. That is not an oversight in the tagging -
+ * it is the finding. A *shift* is not worked "on Drafting". It is a scheduled block containing a
+ * mix of exams, some drafted and some not, and its RVU, its hours and its utilization are
+ * properties of the whole block. There is no subset of a shift that is the Drafting shift.
+ *
+ * So a solution toggle here would be the most expensive kind of wrong: picking "AI Drafting"
+ * would leave On-Shift Capacity, Utilization and Efficiency *numerically identical* while
+ * telling the reader they had scoped them. A control that appears to filter and does not is
+ * worse than no control, because the reader has no way to notice. `capacity_pct_mosaic` and
+ * `capacity_pct_drafting` are the mix *within* the shift - they describe the solution, they do
+ * not select it, which is exactly the distinction a toggle would erase.
+ *
+ * Splitting capacity by solution needs the measure re-derived at exam grain against scheduled
+ * time - a cube-grain change, not a frontend one. `test_capacity_has_no_solution_scoped_metric`
+ * asserts the premise, so if that ever lands the test fails and says the axis is now possible,
+ * rather than this comment quietly becoming untrue.
+ */
+const CAPACITY_NO_SOLUTION_AXIS_NOTE =
+  "Not split by solution: capacity is measured per scheduled shift, and a shift contains a mix " +
+  "of drafted and non-drafted exams rather than belonging to one solution. % Mosaic and % Mosaic " +
+  "Drafting below report that mix. For solution-scoped rates, see Efficiency.";
+
 /** SHARED_COLUMNS serves both the practice and the radiologist table; each names its rows differently. */
 function rowLabel(r: CapacityPracticeRollup | CapacityRadiologistItem): string {
   if ("radiologist_name" in r && r.radiologist_name) return r.radiologist_name;
@@ -274,6 +301,12 @@ export function CapacityDetail() {
         <h1 style={{ margin: 0, fontSize: 20 }}>Capacity</h1>
         <div style={{ color: "var(--text-muted)", fontSize: 13 }}>
           On-shift capacity, efficiency, utilization, Mosaic/drafting mix, and case-mix, rolled up by practice and by radiologist.
+        </div>
+        {/* Stated on the page, not just in the source. A reader arriving from Volume or
+            Efficiency has just used a solution toggle and will look for it here; the absence
+            needs to read as a measurement fact rather than a missing feature. */}
+        <div style={{ color: "var(--text-muted)", fontSize: 12, marginTop: 6, fontStyle: "italic", maxWidth: 820 }}>
+          {CAPACITY_NO_SOLUTION_AXIS_NOTE}
         </div>
       </div>
 

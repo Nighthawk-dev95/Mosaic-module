@@ -41,8 +41,12 @@ AWS_PROFILE = "aws-dbx-workspace01"
 # 2026-10-22) - using the full user OAuth login instead, which has it.
 EDW_PROFILE = "mosaic-oauth"
 SOURCE_TABLE = "p_use1_rp_aws_dbx_workspace01.support.prod_app_logs_silver_mosaicinfohub"
-TARGET_TABLE = "edw_prod.enterprise_analytics.mosaic_version_exam_lookup"
-VOLUME_DIR = "/Volumes/edw_prod/enterprise_analytics/mosaic_version_staging"
+# Migrated 2026-10-26 from edw_prod.enterprise_analytics to edw_prod.bipa_analytics, per Yaro's
+# request to keep enterprise_analytics reserved for certified/Genie-governed datasets. Target
+# chosen over edw_dev specifically because the dashboard's existing viewers (incl. Yaro) already
+# hold SELECT on edw_prod.bipa_analytics but not on any edw_dev schema.
+TARGET_TABLE = "edw_prod.bipa_analytics.mosaic_version_exam_lookup"
+VOLUME_DIR = "/Volumes/edw_prod/bipa_analytics/mosaic_version_staging"
 STAGED_FILENAME = "mosaic_version_exam_lookup_incremental.csv"
 
 # A day pulled same-day (or the next morning, before all its log events have landed)

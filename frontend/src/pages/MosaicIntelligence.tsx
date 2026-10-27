@@ -68,7 +68,10 @@ const DRAFTING_GROUP_COLORS: Record<string, string> = {
 
 const RAD_COLUMNS: DataTableColumn<RadSummaryStat>[] = [
   { key: "radiologist_name", label: "Radiologist" },
-  { key: "home_practice", label: "Practice" },
+  // `home_practice` is provider_local_practice_name_curr - the rad's home practice, which
+  // this product calls Team. Labelling it "Practice" put the site's name on the home
+  // column, and the two differ for every rad who reads outside their own practice.
+  { key: "home_practice", label: "Team" },
   {
     key: "drafting_groups",
     label: "Drafting Group",
@@ -157,7 +160,8 @@ export function MosaicIntelligence() {
         </div>
       )}
 
-      <FilterBar practices={practices} showLocal={false} />
+      {/* Built from `home_practice` on the rad summary stats, so this filters Team. */}
+      <FilterBar practices={practices} showLocal={false} entityLabel="Team" />
 
       <div style={{ display: "flex", gap: 16, flexWrap: "wrap" }}>
         <AIHoverCard

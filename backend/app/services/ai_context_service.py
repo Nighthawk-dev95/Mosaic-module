@@ -10,31 +10,28 @@ timeout, or quota error degrades to a short static fallback string instead of a 
 hover explanation should never be visible as an error to the end user.
 """
 import threading
+from typing import Sequence
 
 from app.config import settings
 from app.data import mvp_context, mvp_dashboard_stats, mvp_mentor_matching
+from app.semantics import registry
+# Safe to import at module scope: both are pure Python over dicts with no cache, network or
+# Pydantic import, deliberately so (see their module docstrings - `movers_service` imports
+# nothing but `typing`). Nothing here imports back into this module, so there is no cycle to
+# create.
+from app.services import movers_service, next_best_action_service
 
-_FALLBACK = "No additional context is available for this value right now."
+# Both of these are declared in app/semantics/registry.py and imported, not re-typed. The
+# fallback string was independently hardcoded in AIHoverCard.tsx, and the coverage caveat below
+# existed here, in mosaic_service's threshold, and again as a TSX string literal - the registry
+# exists to end exactly that. The import direction is one-way: registry imports from the service
+# modules, so nothing in registry may import this module back.
+_FALLBACK = registry.AI_FALLBACK_TEXT
 
-# Read-time coverage governs both Utilization and Efficiency, so it is written once and
-# appended to both methodologies rather than paraphrased twice and allowed to drift.
-# Mirrors _MIN_READ_TIME_COVERAGE in mosaic_service.py.
-_READ_TIME_COVERAGE_CAVEAT = (
-    " Both Utilization and Efficiency depend on read time, which is derived from dictation "
-    "timestamps - and those timestamps are missing for a large share of exams at some "
-    "practices (measured 24 Oct 2026: coverage ranges from 0% to ~99%, and 20 of 84 practices "
-    "sit below 75%). The two metrics are affected differently. Efficiency is repaired by "
-    "matching populations: its numerator now counts TBWU only from the same exams that "
-    "contributed read minutes to its denominator, so it is correct at any coverage level. "
-    "Utilization cannot be repaired that way, because a scheduled shift has no 'covered "
-    "subset' to match against - covered-only read minutes over full scheduled hours "
-    "understates it by roughly the coverage fraction. So below 75% read-time coverage "
-    "Utilization is deliberately suppressed and shows '—' rather than a number that is "
-    "wrong in a knowable direction. A '—' there means withheld, not missing. Until this was "
-    "added, two practices with literally zero read-time coverage displayed a perfect 100% "
-    "utilization, because Spark's LEAST() skips NULL arguments and the 100% cap became the "
-    "answer. The raw coverage % is rendered beside the metric so the suppression is visible."
-)
+# Read-time coverage governs both Utilization and Efficiency, so it is appended to both
+# methodologies rather than paraphrased twice. Leading space because it is concatenated onto the
+# end of a sentence below; the registry stores the canonical text without it.
+_READ_TIME_COVERAGE_CAVEAT = " " + registry.READ_TIME_COVERAGE.caveat
 
 _CAPACITY_METHODOLOGY = (
     "Capacity = TBWU/hour scheduled. Baseline Capacity comes from each radiologist's own "
@@ -92,6 +89,30 @@ _SENTIMENT_METHODOLOGY = (
     "actual usage and efficiency numbers, not in isolation."
 )
 
+# Read-time gated in the registry, and deliberately NOT carrying `_READ_TIME_COVERAGE_CAVEAT`.
+#
+# That text promises suppression - "below 75% Utilization is suppressed and shows '-'" - and on
+# this surface the promise is false. `tbl_shift_utilization` (tools/edw_fixes/014) carries no
+# coverage column, so the floor is declared and unenforced here; see the comment beside
+# `FEATURE_COVERAGE["shift_utilization"]` in the registry. Pasting the shared caveat in would put
+# a guarantee into the prompt that the data does not keep, and the model would then read a low
+# number as certainly real *because* it believed the untrustworthy ones had been withheld. That
+# is a worse failure than silence: it is confident, specific, and wrong.
+#
+# So: the same facts, the opposite enforcement status, composed from the same registry fields so
+# the threshold is stated in one place and cannot drift between the two paragraphs.
+_SHIFT_UTILIZATION_COVERAGE_CAVEAT = (
+    " One caveat specific to this surface. The numerator is read time, derived from dictation "
+    "timestamps, and those timestamps are missing for a large share of exams at some practices; "
+    "covered-only read minutes over full scheduled hours understates utilization by roughly the "
+    f"coverage fraction. Elsewhere in Mosaic a {registry.READ_TIME_COVERAGE.min_ratio:.0%} floor "
+    f"on {registry.READ_TIME_COVERAGE.measured_by} suppresses such a number rather than show it "
+    "wrong in a knowable direction, but that floor is not enforced on this lineage - it has no "
+    "coverage column - so every value here renders, including ones built from almost no read "
+    "time. Treat a low figure as a question about instrumentation first and radiologist "
+    "behaviour second, and never imply the untrustworthy ones were filtered out."
+)
+
 _SHIFT_UTILIZATION_METHODOLOGY = (
     "Shift utilization is reading-time divided by scheduled shift duration, sourced from RP's own "
     "shift-timeline data (the same source powering their Deneb shift visualizations) - it answers "
@@ -101,7 +122,7 @@ _SHIFT_UTILIZATION_METHODOLOGY = (
     "draft report the radiologist reviewed and signed off - drafting is always a subset of Mosaic "
     "reads, never larger. Low utilization on a given shift can reflect light exam volume, schedule "
     "gaps, or non-reading duties, not necessarily underperformance."
-)
+) + _SHIFT_UTILIZATION_COVERAGE_CAVEAT
 
 _MVP_STATUS_FUNNEL_METHODOLOGY = (
     "This funnel mirrors the real MVP Weekly Update report sent to leadership: each radiologist "
@@ -165,9 +186,56 @@ _NON_DRAFTED_METHODOLOGY = (
     "anyone."
 )
 
+_VOLUME_COUNTS_METHODOLOGY = (
+    "The exam counts on this surface are enterprise-wide and unfiltered - the summary query runs "
+    "with no WHERE clause, so the practice/region filters on the page govern the table below "
+    "them, not the headline tiles. The two Mosaic flags overlap and must never be added "
+    "together: an exam that got an AI draft is also a Mosaic read, so Mosaic and Drafting counts "
+    "are nested subsets of the exam total, not slices of a pie. The three grouping cuts answer "
+    "genuinely different questions - 'By Practice' groups on the managing practice, the site "
+    "where the exam was actually read; 'By Team' groups on the reading radiologist's own home or "
+    "float-pool practice (SEAL Team, for instance, is a cross-coverage pool rather than a "
+    "billing practice); and 'By Local Region' rolls up one of six fixed regions keyed on that "
+    "home Team, so a radiologist covering a site outside their own region still counts under "
+    "their home region. The same radiologist therefore appears under one Team and potentially "
+    "many Practices. These counts use the same measure SQL as the governed "
+    "mosaic_volume_metric_view, so a company-wide total here reconciles with the dashboard's by "
+    "construction rather than by coincidence."
+)
+
+_VOLUME_RPCE_METHODOLOGY = (
+    "The RPCE percentages are not comparable to the adoption percentage beside them, because "
+    "they do not share a denominator. Their denominator is exams from exactly two source "
+    "systems, rpceMidwest and rpceSouthwest, while the numerator counts Mosaic reads (or AI "
+    "drafts) across every source system - which is why the figure can legitimately exceed 100% "
+    "wherever Mosaic activity exists outside those two systems. Both measures also carry a flat "
+    "+2 percentage point adjustment inherited from the source DAX model; it was raised with the "
+    "business owner and confirmed as an intentional, known adjustment to retain rather than a "
+    "leftover hack, and it is still applied in the SQL behind these tiles. Treat these as "
+    "source-system penetration measures for the two RPCE regions, not as an enterprise adoption "
+    "rate."
+)
+
 # feature -> grounding text injected into the system prompt, so the model explains using RP's
 # actual program language instead of guessing. Keep each entry short - this is prompt context
 # for a one-paragraph tooltip, not a document to summarize.
+#
+# Measured and rejected: retiring these constants in favour of `registry.grounding_for()`.
+# The plan called for it ("retire the 13 `_*_METHODOLOGY` constants"), so it was tested rather
+# than assumed - every key below was split into sentences, normalized, and intersected with the
+# registry's output for the same key. The overlap is **zero sentences on all 24 keys**. The two
+# sources answer different questions: the registry says what a metric *is* (label, definition,
+# caveats), these say why it is computed that way, which table it comes from, and what a reader
+# will otherwise misread. `_grounding_for()` below therefore concatenates them deliberately -
+# see its docstring. Two further reasons a grep-driven pass would get this wrong:
+#   - Five keys get `""` back from the registry (`baseline_review_match`, `capacity_additional_pct`,
+#     `mvp_notes_summary`, `non_drafted_reason`, `sentiment`), so the constant is their *only*
+#     grounding. Four are in `UNREGISTERED_FEATURES`; `capacity_additional_pct` is coverage-only
+#     until Wave 3 lands Deployment.
+#   - `_ADOPTION_ROLLOUT` is a grounding constant that does not end in `_METHODOLOGY`, so a sweep
+#     over `_*_METHODOLOGY` silently drops it while appearing complete.
+# The real prompt-budget problem was inside `registry.grounding_for()`, which re-emitted shared
+# caveats once per metric; that is fixed there, not here.
 _FEATURE_GROUNDING: dict[str, str] = {
     "mvp_cohort": mvp_context.PROGRAM_NARRATIVE,
     "mvp_exclusion": mvp_context.PROGRAM_NARRATIVE,
@@ -184,12 +252,56 @@ _FEATURE_GROUNDING: dict[str, str] = {
     "capacity_additional_pct": _CAPACITY_METHODOLOGY,
     "capacity_figure": _CAPACITY_METHODOLOGY,
     "adoption_rollout": _ADOPTION_ROLLOUT,
+    # Utilization's two volume keys. `adoption_rollout` sits between them on the same KPI row and
+    # is reused rather than duplicated - it already explains the rollout tracks these percentages
+    # measure. What it does not explain is what is inside the counts, or why the RPCE denominator
+    # is a different one, so those get their own keys rather than being folded into it.
+    "volume_counts": _VOLUME_COUNTS_METHODOLOGY,
+    "volume_rpce": _VOLUME_RPCE_METHODOLOGY,
     "efficiency_metric": _EFFICIENCY_METHODOLOGY,
     "baseline_review_match": _BASELINE_REVIEW_METHODOLOGY,
     "sentiment": _SENTIMENT_METHODOLOGY,
     "non_drafted_reason": _NON_DRAFTED_METHODOLOGY,
     "shift_utilization": _SHIFT_UTILIZATION_METHODOLOGY,
+    # The worklist rows reused `non_drafted_reason`, which is the right grounding for *what the
+    # six categories mean* and the wrong grounding for *why this team is ranked first*. The
+    # expected-unlock figure is the one number on that page someone will challenge out loud, and
+    # it was the one with no methodology behind it: the model would have explained the leakage
+    # taxonomy and said nothing about the peer frontier the ranking rests on.
+    #
+    # Imported, not restated - `next_best_action_service.METHODOLOGY` is the same string the
+    # live `basis` field is built around, so the tooltip and the response cannot describe
+    # different rankings.
+    "next_best_action": _NON_DRAFTED_METHODOLOGY + "\n\n" + next_best_action_service.METHODOLOGY,
+    # Same two-part shape, for the same reason. `_EFFICIENCY_METHODOLOGY` says what the rate is;
+    # `movers_service.METHODOLOGY` says what the *split* of a difference between two rates means,
+    # and without it the model has no way to know that mix and rate are the two halves of an exact
+    # identity rather than two independent estimates it should hedge against each other.
+    #
+    # The prefix is `_EFFICIENCY_METHODOLOGY` specifically, not a new constant: it already ends
+    # with the read-time coverage caveat imported from the registry, so `efficiency_movers` being
+    # declared in `FEATURE_COVERAGE` resolves to exactly one copy of that text in the prompt -
+    # which is what `test_the_coverage_caveat_reaches_the_prompt_exactly_once` requires.
+    "efficiency_movers": _EFFICIENCY_METHODOLOGY + "\n\n" + movers_service.METHODOLOGY,
 }
+
+
+def _grounding_for(feature: str) -> str:
+    """Registry metric definitions first, then this module's program narrative.
+
+    Additive, not a replacement, because the two carry different things. The registry knows what
+    `% Mosaic` *is* (exam-count adoption, not time utilization - the conflation this product has
+    actually shipped); the constants above carry program narrative with no metric equivalent, and
+    six of the keys are pure MVP program context from `mvp_context`. Swapping one for the other
+    in either direction deletes real content.
+
+    `registry.grounding_for` deliberately omits the coverage caveat so this stays single-copy:
+    `_CAPACITY_METHODOLOGY` and `_EFFICIENCY_METHODOLOGY` already end with it, from the same
+    registry string.
+    """
+    parts = [registry.grounding_for(feature), _FEATURE_GROUNDING.get(feature, "")]
+    return " ".join(p for p in parts if p)
+
 
 _lock = threading.Lock()
 _cache: dict[tuple, str] = {}
@@ -246,7 +358,7 @@ def explain_data_point(
     try:
         from databricks.sdk.service.serving import ChatMessage, ChatMessageRole
 
-        grounding = _FEATURE_GROUNDING.get(feature, "")
+        grounding = _grounding_for(feature)
         extra_lines = "\n".join(f"- {k}: {v}" for k, v in extra.items())
         if feature == "mvp_notes_summary":
             # `value` carries the full raw case-note text here (not a metric reading) - a
@@ -470,60 +582,85 @@ def generate_mvp_mammo_narrative(rows: list[dict]) -> str:
     return _generate_mvp_dashboard_narrative("Mammo Screening", mvp_context.PROGRAM_NARRATIVE, scoped)
 
 
-_WEEKLY_REPORT_FALLBACK = {
-    "key_insights": _MVP_DASHBOARD_FALLBACK,
-    "focus_next_week": _MVP_DASHBOARD_FALLBACK,
-}
+def _weekly_report_fallback(sections: "Sequence[tuple[str, str, dict, dict]]") -> str:
+    """The text shown when the narrative model is unreachable - naming this scope's own blocks.
+
+    It used to be `_MVP_DASHBOARD_FALLBACK`, which points the reader at "the status funnel and
+    impact breakdown above". That is accurate on the MVP pages and nowhere else: on the
+    enterprise Drafting briefing it sends a reader to two blocks that are not on the page, in
+    the one message whose entire job is to say the prose is missing and the numbers are not.
+
+    A fallback is read precisely when something has already gone wrong, so it is the worst place
+    to carry a second, quieter error - and the least likely to be caught, since it only renders
+    when the serving endpoint is down.
+    """
+    labels = [label for label, *_ in sections]
+    if not labels:
+        return "Narrative is temporarily unavailable - the numbers above are current."
+    named = labels[0] if len(labels) == 1 else f"{', '.join(labels[:-1])} and {labels[-1]}"
+    return f"Narrative is temporarily unavailable - see {named} above for the current numbers."
 
 
 def generate_weekly_report_narrative(
     scope_label: str,
     grounding: str,
-    funnel: dict,
-    impact: dict,
-    escalations: dict,
-    deltas: dict,
+    sections: Sequence[tuple[str, str, dict, dict]],
     has_previous: bool,
 ) -> dict[str, str]:
-    """The MVP Weekly Report's two-part insight text - mirrors the real PDF's own "Key insights
-    this week" / "Focus next week" sections exactly, unlike _generate_mvp_dashboard_narrative's
-    single blended paragraph. Grounded in real week-over-week deltas when a prior snapshot
-    exists, honestly flagged as a first baseline when it doesn't (never fabricates a "vs last
-    week" claim with nothing to compare against). Same precomputed-at-generate-time, fail-closed
-    contract as every other narrative generator in this module."""
+    """The weekly briefing's two-part insight text - mirrors the real MVP PDF's own "Key
+    insights this week" / "Focus next week" sections exactly, unlike
+    _generate_mvp_dashboard_narrative's single blended paragraph. Grounded in real week-over-week
+    deltas when a prior snapshot exists, honestly flagged as a first baseline when it doesn't
+    (never fabricates a "vs last week" claim with nothing to compare against). Same
+    precomputed-at-generate-time, fail-closed contract as every other narrative generator here.
+
+    `sections` is `(label, description, values, deltas)` per block, and it is what made this
+    reusable past MVP (plan item E-5). The previous signature took `funnel`, `impact` and
+    `escalations` as named arguments and wrote three MVP sentences around them - "radiologist
+    counts by stage", "radiologists who've reached Solutioning or later", "escalations by owning
+    team". Any other program handed to it got those numbers introduced as MVP onboarding stages,
+    and the model wrote confident prose about a funnel that did not exist. The description now
+    travels with the numbers from the scope that defined them, so the model is never told what a
+    block means by a function that cannot know.
+
+    The program name is likewise not hardcoded: `scope_label` plus `grounding` carry it. MVP's
+    scopes pass `mvp_context.PROGRAM_NARRATIVE`; the Drafting scope passes its own.
+    """
+    # Built before the try, not inside the except arm that uses it: an exception raised while
+    # building the fallback is the one exception this function's `except Exception` cannot
+    # absorb, and it would surface as a 500 on a request that had already succeeded.
+    fallback = _weekly_report_fallback(sections)
+
     try:
         from databricks.sdk.service.serving import ChatMessage, ChatMessageRole
 
         system_prompt = (
             f"You write the 'Key insights this week' and 'Focus next week' sections of a weekly "
-            f"status report for an internal radiology-practice leadership audience, about the "
-            f"{scope_label} slice of the Mosaic Value Project (MVP) program. Be concrete and "
-            "specific to the real numbers given below - never generic filler. Respond with "
-            "exactly two sections, each 2-4 sentences, plain language, no markdown, no bullet "
-            "points, no preamble, in this exact format:\n"
+            f"status report for an internal radiology-practice leadership audience, about "
+            f"{scope_label}. Be concrete and specific to the real numbers given below - never "
+            "generic filler. Respond with exactly two sections, each 2-4 sentences, plain "
+            "language, no markdown, no bullet points, no preamble, in this exact format:\n"
             "KEY_INSIGHTS: <text>\n"
             "FOCUS_NEXT_WEEK: <text>\n"
             f"Program background: {grounding}"
         )
         comparison_note = (
-            "Deltas below are versus last week's snapshot - cite specific week-over-week "
+            "Deltas are versus last week's snapshot - cite specific week-over-week "
             "changes where they're notable."
             if has_previous
             else "This is the first snapshot ever generated for this scope - there is no prior "
             "week to compare against, so do not claim any week-over-week change; describe the "
             "current state as a starting baseline instead."
         )
-        user_prompt = (
-            f"Current status funnel (radiologist counts by stage, each split on-track/escalated/"
-            f"declined): {funnel}.\n"
-            f"Impact breakdown among radiologists who've reached Solutioning or later: {impact}.\n"
-            f"Solutioning escalations by owning team: {escalations}.\n"
-            f"Week-over-week deltas (same shape, None where there's nothing to compare): "
-            f"funnel {deltas.get('funnel')}, impact {deltas.get('impact')}, escalations "
-            f"{deltas.get('escalations')}.\n"
-            f"{comparison_note}\n"
-            "Write both sections now."
+        # Each block introduces itself with the description its scope supplied, then its numbers,
+        # then its own deltas directly underneath - rather than collecting every delta into a
+        # trailing paragraph the model has to re-pair with the right block by name.
+        blocks = "\n".join(
+            f"{label} ({description}): {values}.\n"
+            f"  Week-over-week change, same shape, None where there is nothing to compare: {delta}."
+            for label, description, values, delta in sections
         )
+        user_prompt = f"{blocks}\n{comparison_note}\nWrite both sections now."
         response = _get_client().serving_endpoints.query(
             name=settings.ai_context_serving_endpoint,
             messages=[
@@ -535,18 +672,18 @@ def generate_weekly_report_narrative(
         text = (_extract_text(response.choices[0].message.content) or "").strip()
         if not text:
             print(f"[ai-context] generate_weekly_report_narrative({scope_label}): empty text from model response", flush=True)
-            return dict(_WEEKLY_REPORT_FALLBACK)
+            return {"key_insights": fallback, "focus_next_week": fallback}
 
-        key_insights, focus_next_week = _MVP_DASHBOARD_FALLBACK, _MVP_DASHBOARD_FALLBACK
+        key_insights, focus_next_week = fallback, fallback
         if "FOCUS_NEXT_WEEK:" in text:
             before, after = text.split("FOCUS_NEXT_WEEK:", 1)
-            focus_next_week = after.strip() or _MVP_DASHBOARD_FALLBACK
-            key_insights = before.replace("KEY_INSIGHTS:", "").strip() or _MVP_DASHBOARD_FALLBACK
+            focus_next_week = after.strip() or fallback
+            key_insights = before.replace("KEY_INSIGHTS:", "").strip() or fallback
         else:
             # Model didn't follow the marker format - still real text, just not split; show it
             # as the key-insights half rather than discarding it.
-            key_insights = text.replace("KEY_INSIGHTS:", "").strip() or _MVP_DASHBOARD_FALLBACK
+            key_insights = text.replace("KEY_INSIGHTS:", "").strip() or fallback
         return {"key_insights": key_insights, "focus_next_week": focus_next_week}
     except Exception as exc:  # noqa: BLE001 - must never break the snapshot-generation request
         print(f"[ai-context] generate_weekly_report_narrative({scope_label}) failed: {exc}", flush=True)
-        return dict(_WEEKLY_REPORT_FALLBACK)
+        return {"key_insights": fallback, "focus_next_week": fallback}

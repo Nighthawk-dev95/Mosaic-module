@@ -208,6 +208,73 @@ def rollup_by(group_col: str, mode: str = "full_mosaic") -> list[dict[str, Any]]
     return results
 
 
+# Columns a caller may name as the group being explained, and as the axis it is explained
+# along. Same whitelist-or-raise discipline as distinct_values() below, for the same reason:
+# both end up interpolated into SQL because SQLite cannot parameterise an identifier.
+_GROUP_COLS = ("practice", "npi", "subspecialty", "modality_code", "parent_procedure_name", "exam_category")
+_DECOMP_COLS = ("exam_category", "subspecialty", "modality_code", "parent_procedure_name")
+
+
+def decomposition_rows(
+    group_col: str,
+    group_value: str | int,
+    decompose_by: str = "exam_category",
+    mode: str = "full_mosaic",
+) -> list[dict[str, Any]]:
+    """Per-bucket num/den for one group *and* for everyone else, in a single pass.
+
+    This is the raw material for the movers waterfall (`movers_service`). It returns, for each
+    bucket of `decompose_by`, six sums: TBWU / time / baseline-contribution for the target
+    group, and the same three for its peers. The division is deliberately left to the caller -
+    a decomposition that averaged pre-divided rates would be the exact defect
+    `_scorecard_window_sql`'s "Fix 3" exists to prevent.
+
+    Peers are `IS NOT` the target rather than `<> `: in SQLite `practice <> 'X'` is NULL, not
+    true, for a row whose practice is NULL, which would silently drop unattributed rows out of
+    the comparison and make the peer rate quietly different from the enterprise rate everyone
+    else on the page is reading.
+    """
+    if group_col not in _GROUP_COLS:
+        raise ValueError(f"unsupported group column: {group_col} (known: {', '.join(_GROUP_COLS)})")
+    if decompose_by not in _DECOMP_COLS:
+        raise ValueError(f"unsupported decomposition column: {decompose_by} (known: {', '.join(_DECOMP_COLS)})")
+    if decompose_by == group_col:
+        raise ValueError(
+            f"cannot decompose {group_col} along itself - the result would be one bucket "
+            "holding the whole group and nothing to attribute"
+        )
+
+    tbwu_expr, time_expr, baseline_expr = _MODE_EXPRS.get(mode, _MODE_EXPRS["full_mosaic"])
+    # npi is stored as INTEGER; binding "1234" would match nothing and silently return an
+    # all-zero target, which reads as "this radiologist produced no TBWU" rather than as a bad
+    # argument.
+    value: str | int = int(group_value) if group_col == "npi" else str(group_value)
+
+    conn = _connect()
+    try:
+        rows = conn.execute(
+            f"""
+            SELECT {decompose_by} AS bucket,
+                   SUM(CASE WHEN {group_col} IS ? THEN {tbwu_expr} ELSE 0 END) AS target_tbwu,
+                   SUM(CASE WHEN {group_col} IS ? THEN {time_expr} ELSE 0 END) AS target_time,
+                   SUM(CASE WHEN {group_col} IS ? THEN {baseline_expr} ELSE 0 END) AS target_baseline,
+                   SUM(CASE WHEN {group_col} IS NOT ? THEN {tbwu_expr} ELSE 0 END) AS peer_tbwu,
+                   SUM(CASE WHEN {group_col} IS NOT ? THEN {time_expr} ELSE 0 END) AS peer_time,
+                   SUM(CASE WHEN {group_col} IS NOT ? THEN {baseline_expr} ELSE 0 END) AS peer_baseline
+            FROM efficiency_matrix
+            WHERE {decompose_by} IS NOT NULL
+            GROUP BY {decompose_by}
+            ORDER BY {decompose_by}
+            """,
+            (value,) * 6,
+        ).fetchall()
+    finally:
+        conn.close()
+
+    cols = ["bucket", "target_tbwu", "target_time", "target_baseline", "peer_tbwu", "peer_time", "peer_baseline"]
+    return [dict(zip(cols, row)) for row in rows]
+
+
 def distinct_values(column: str) -> list[str]:
     if column not in ("practice", "subspecialty", "modality_code", "parent_procedure_name", "exam_category"):
         raise ValueError(f"unsupported column: {column}")

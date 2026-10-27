@@ -123,9 +123,11 @@ covers views (including metric views) too.
 - `edw_prod.enterprise_analytics_ref.drafting_eligible_rpids_vw` — RPID-procedure-code → one of 7
   drafting-model categories (CT Abd/Pel, CT Chest, CT Head, CT Spine, DEXA Capturable, US
   Capturable, XR/MSK). Confirmed unique on `rpid_procedure_code`.
-- `edw_prod.enterprise_analytics.tbl_exam_category_lookup_xwalk` — the WIDER (26-category,
+- `edw_prod.enterprise_analytics_ref.ref_exam_category_lookup_xwalk` — the WIDER (26-category,
   969-procedure-code) clinical exam-category taxonomy, joined on `RPID_parent_code = ParentRpt`.
   Do not conflate with drafting-model category — different vocabulary, different purpose.
+  Relocated 2026-10-26 from `edw_prod.enterprise_analytics.tbl_exam_category_lookup_xwalk` into
+  the `_ref` schema (script 047) — reference data, not a certified dataset.
 - `edw_prod.enterprise_analytics.dynamics_rad_drafting_enablement_vw` — per-(npi, drafting_model)
   AD-group/training/consent status. Only safely joinable per-category if you avoid Bug 2 above;
   `edw_test.enterprise_analytics.dynamics_rad_drafting_enablement_by_npi_vw` is the already-built
@@ -612,7 +614,12 @@ not stale copies of something live, so they were correctly left alone. One excep
 `tbl_exam_category_lookup_xwalk` exists in BOTH catalogs with identical row counts (969=969,
 low-churn reference data) — Volume already joined the `edw_prod` copy, Efficiency/Capacity still
 join the `edw_test` copy; harmless today given the identical count, but worth unifying later for
-consistency.
+consistency. **Update 2026-10-26 (script 047):** the `edw_prod` copy was relocated to
+`edw_prod.enterprise_analytics_ref.ref_exam_category_lookup_xwalk`, Volume's `dim_category`
+join was repointed there (036 re-applied, live object verified), and
+`edw_prod.enterprise_analytics.tbl_exam_category_lookup_xwalk` was then **dropped** — that path
+no longer resolves, so any script still naming it will fail. The `edw_test` copy still exists
+under the old name and still backs Efficiency/Capacity — the unification above is still open.
 
 **Lesson for any future metric-view work in this project**: when a metric view's `source:` or a
 base view's `FROM` references an `edw_test`-schema object, don't assume it's a thin passthrough to

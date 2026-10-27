@@ -27,13 +27,17 @@ export function readTimeCoverageBadge(
   coverage: number | null | undefined,
   entityLabel: string,
   rpceCoverage?: number | null,
+  // Which surface is asking. Defaults to the capacity tables, the first consumer, so the
+  // existing call sites keep their attribution; the scorecard passes its own so the AI
+  // explanation is grounded in the metric the user is actually looking at there.
+  feature = "capacity_coverage",
 ): ReactNode {
   if (coverage == null) return "—";
   const sufficient = coverage >= MIN_READ_TIME_COVERAGE;
   const label = `${(coverage * 100).toFixed(1)}%`;
   return (
     <AIHoverCard
-      feature="capacity_coverage"
+      feature={feature}
       entityLabel={entityLabel}
       metricLabel="% of exams with a usable dictation timestamp"
       value={label}
@@ -41,9 +45,13 @@ export function readTimeCoverageBadge(
         threshold: `${(MIN_READ_TIME_COVERAGE * 100).toFixed(0)}%`,
         status: sufficient ? "sufficient" : "insufficient",
         ...(rpceCoverage == null ? {} : { pct_shifts_rpce_source: `${(rpceCoverage * 100).toFixed(1)}%` }),
-        note: sufficient
-          ? "Read-time coverage is high enough for Utilization and Efficiency to be meaningful for this slice."
-          : `Below the ${(MIN_READ_TIME_COVERAGE * 100).toFixed(0)}% floor, so On-Shift Utilization is suppressed (shown as "—") rather than displayed. Its numerator counts only exams with a dictation timestamp while its denominator counts the whole scheduled shift, so a low-coverage value understates the truth by roughly the coverage fraction. Efficiency is still shown because its numerator is restricted to the same exams as its denominator.`,
+        // No methodology prose here. It used to carry a ~60-word paraphrase of the suppression
+        // rule, which was the third copy of text that also lived in `ai_context_service` and in
+        // `mosaic_service`'s threshold. It is now declared once, in
+        // backend/app/semantics/registry.py (READ_TIME_COVERAGE.caveat), and reaches this card
+        // two ways: the backend grounds the AI explanation on it, and AIHoverCard renders the
+        // threshold's structured fields from GET /api/mosaic/registry. What stays here is only
+        // what the registry cannot know - this slice's measured numbers.
       }}
     >
       <Badge label={label} color={sufficient ? "var(--status-good)" : "var(--status-critical)"} dot />

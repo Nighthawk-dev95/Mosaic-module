@@ -71,7 +71,11 @@ raw_exams AS (
   FROM edw_prod.enterprise_analytics.tbl_exam_inventory e
   JOIN mosaic_live_practices mlp ON mlp.team = e.provider_local_practice_name_curr
   JOIN qualified_radiologists qr ON qr.npi = e.reading_provider_npi
-  LEFT JOIN edw_prod.enterprise_analytics.tbl_exam_category_lookup_xwalk x
+  -- Relocated 2026-10-26 by 047: this crosswalk now lives in enterprise_analytics_ref under
+  -- that schema's ref_* naming. This file has never been deployed to edw_prod (the deployed
+  -- object is the _TEST twin, which joins the edw_test copy and is unaffected), so this is a
+  -- forward-looking repoint, not a live fix.
+  LEFT JOIN edw_prod.enterprise_analytics_ref.ref_exam_category_lookup_xwalk x
     ON x.ParentRpt = e.RPID_parent_code
   WHERE CAST(e.final_datetime AS DATE) >= DATE'2024-11-01'
     AND e.dictation_start_datetime IS NOT NULL

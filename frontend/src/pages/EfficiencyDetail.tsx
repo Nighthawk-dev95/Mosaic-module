@@ -7,6 +7,8 @@ import { TABLE_SECTION_STYLE, TABLE_SCROLL_STYLE } from "../styles/tableLayout";
 import { EfficiencyTrendChart } from "../components/EfficiencyTrendChart";
 import { FilterBar } from "../components/FilterBar";
 import { AIHoverCard } from "../components/AIHoverCard";
+import { SolutionAxis, SOLUTION_FALLBACK } from "../components/SolutionAxis";
+import { MoversWaterfall } from "../components/MoversWaterfall";
 import { useFilters, matchesPractice, matchesRadiologistSearch } from "../context/FilterContext";
 import type {
   EfficiencyMode,
@@ -19,12 +21,33 @@ function fmtRate(value: number | null | undefined): string {
   return value === null || value === undefined ? "—" : value.toFixed(3);
 }
 
-const MODES: { value: EfficiencyMode; label: string }[] = [
-  { value: "full_mosaic", label: "Full Mosaic" },
-  { value: "reporting", label: "Reporting Only" },
-  { value: "drafting", label: "Drafting Only" },
-  { value: "capture", label: "Capture Only" },
-];
+/**
+ * Read-time savings, rendered as a direction rather than as a signed percentage.
+ *
+ * The raw metric is `(baseline rate / Mosaic rate) - 1`, so NEGATIVE is the good direction:
+ * -0.12 means the same work now takes 12% less reading time. It sits on the same row as
+ * "Change vs Baseline", whose polarity is the opposite - positive is better there. Two
+ * adjacent percentages with inverted sign conventions is a misread waiting to happen, and the
+ * misread is the flattering one: a healthy -12% reads as "12% worse" to anyone who doesn't
+ * know the formula. Saying "12.0% faster" removes the convention from the reader's job
+ * entirely. The signed value is still what the registry defines and what Power BI's
+ * Parameter[Implied_RTS_Opt] returns - this changes the rendering, not the number.
+ */
+function fmtReadTimeSavings(value: number | null | undefined): string {
+  if (value === null || value === undefined) return "—";
+  const pct = Math.abs(value * 100).toFixed(1);
+  if (value === 0) return "no change";
+  return value < 0 ? `${pct}% faster` : `${pct}% slower`;
+}
+
+function readTimeSavingsColor(value: number | null | undefined): string {
+  if (value === null || value === undefined || value === 0) return "var(--text-muted)";
+  return value < 0 ? "var(--status-good)" : "var(--status-critical)";
+}
+
+function ReadTimeSavings({ value }: { value: number | null | undefined }) {
+  return <span style={{ color: readTimeSavingsColor(value) }}>{fmtReadTimeSavings(value)}</span>;
+}
 
 type ViewFilter = "all" | "positive" | "negative";
 
@@ -33,7 +56,7 @@ const PRACTICE_COLUMNS: DataTableColumn<EfficiencyPracticeRollup>[] = [
   { key: "mosaic_tbwu_per_min", label: "Mosaic TBWU / min", render: (r) => fmtRate(r.mosaic_tbwu_per_min) },
   { key: "baseline_tbwu_per_min", label: "Baseline TBWU / min", render: (r) => fmtRate(r.baseline_tbwu_per_min) },
   { key: "pct_change_vs_baseline", label: "Change vs Baseline", render: (r) => fmtPct(r.pct_change_vs_baseline) },
-  { key: "read_time_change_pct", label: "Read Time Change", render: (r) => fmtPct(r.read_time_change_pct) },
+  { key: "read_time_change_pct", label: "Read-Time Savings", render: (r) => <ReadTimeSavings value={r.read_time_change_pct} /> },
 ];
 
 const RAD_COLUMNS: DataTableColumn<EfficiencyRadiologistItem>[] = [
@@ -43,7 +66,7 @@ const RAD_COLUMNS: DataTableColumn<EfficiencyRadiologistItem>[] = [
   { key: "mosaic_tbwu_per_min", label: "Mosaic TBWU / min", render: (r) => fmtRate(r.mosaic_tbwu_per_min) },
   { key: "baseline_tbwu_per_min", label: "Baseline TBWU / min", render: (r) => fmtRate(r.baseline_tbwu_per_min) },
   { key: "pct_change_vs_baseline", label: "Change vs Baseline", render: (r) => fmtPct(r.pct_change_vs_baseline) },
-  { key: "read_time_change_pct", label: "Read Time Change", render: (r) => fmtPct(r.read_time_change_pct) },
+  { key: "read_time_change_pct", label: "Read-Time Savings", render: (r) => <ReadTimeSavings value={r.read_time_change_pct} /> },
 ];
 
 function ToggleGroup<T extends string>({
@@ -122,7 +145,12 @@ function PopulationTile({ label, data }: { label: string; data: PopulationEffici
       extra={{
         baseline_tbwu_per_min: fmtRate(data?.baseline_tbwu_per_min),
         pct_change_vs_baseline: fmtPct(data?.pct_change_vs_baseline),
+        // Both forms. The signed value is what the registry defines and what Power BI returns,
+        // so it has to be the one the model reasons over; the worded form is what the user is
+        // looking at on screen, and an explanation that contradicts the pixels is worse than
+        // none. The registry's sign-convention caveat travels with this card either way.
         read_time_change_pct: fmtPct(data?.read_time_change_pct),
+        read_time_savings_direction: fmtReadTimeSavings(data?.read_time_change_pct),
       }}
       underline={false}
       style={{ flex: "1 1 260px", minWidth: 240, display: "block" }}
@@ -156,10 +184,10 @@ function PopulationTile({ label, data }: { label: string; data: PopulationEffici
           <div style={{ fontSize: 11, color: "var(--text-muted)" }}>Change vs Baseline</div>
         </div>
         <div>
-          <div style={{ fontSize: 22, fontWeight: 600, color: "var(--text-primary)" }}>
-            {fmtPct(data?.read_time_change_pct)}
+          <div style={{ fontSize: 22, fontWeight: 600, color: readTimeSavingsColor(data?.read_time_change_pct) }}>
+            {fmtReadTimeSavings(data?.read_time_change_pct)}
           </div>
-          <div style={{ fontSize: 11, color: "var(--text-muted)" }}>Read Time Change</div>
+          <div style={{ fontSize: 11, color: "var(--text-muted)" }}>Read-Time Savings</div>
         </div>
         </div>
       </div>
@@ -272,7 +300,7 @@ export function EfficiencyDetail() {
       )}
 
       <div style={{ display: "flex", gap: 24, flexWrap: "wrap", alignItems: "center" }}>
-        <ToggleGroup options={MODES} value={mode} onChange={setMode} />
+        <SolutionAxis value={mode} onChange={setMode} fallback={SOLUTION_FALLBACK} />
         <ToggleGroup
           options={[
             { value: "all" as ViewFilter, label: "All" },
@@ -316,6 +344,19 @@ export function EfficiencyDetail() {
         <PopulationTile label="RP Benchmark (company-wide, ignores filters)" data={rpBenchmark} />
         <PopulationTile label="Population Efficiency (current filters)" data={population} />
       </div>
+
+      {/* Sits directly under the two population tiles because it answers the question they
+          provoke: the tiles show a gap, this shows whether the gap is case mix or reading rate.
+          Reading those two numbers without this one is how a practice gets told to work faster
+          when it was simply handed harder work. */}
+      <MoversWaterfall
+        mode={mode}
+        practice={practice}
+        subspecialty={subspecialty}
+        modality={modality}
+        procedure={procedure}
+        examCategory={examCategory}
+      />
 
       <div style={{ background: "var(--surface-1)", border: "1px solid var(--border)", borderRadius: 8, padding: 16 }}>
         <div style={{ color: "var(--text-muted)", fontSize: 13, marginBottom: 12, textTransform: "uppercase", letterSpacing: 0.5 }}>

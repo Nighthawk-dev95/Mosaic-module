@@ -69,6 +69,23 @@ interface DetailRow {
   primaryValue: string;
 }
 
+/**
+ * The drill-down list under a capability ring. Two different endpoints feed it, and - this is
+ * the part worth knowing - they are grouped by two *different* columns:
+ *
+ *   Capture              -> `provider_local_practice_name_curr` = the rad's home practice = Team
+ *   Reporting / Drafting -> `managing_local_practice_name_curr` = the site read at  = Practice
+ *
+ * (`get_capture_by_practice` groups on the provider column; the Efficiency matrix carries the
+ * "Fix 2" split and exposes the managing column as `Practice`.) One rad has one Team and reads
+ * at as many as seventy Practices, so labelling both lists "Practice" put the wrong word on the
+ * capture rows - and the same practice name legitimately appears in both lists with different
+ * numbers. The heading follows the data instead of asserting one answer for both.
+ */
+function entityLabelFor(selected: CapabilityKey | null): "Practice" | "Team" {
+  return selected === "capture" ? "Team" : "Practice";
+}
+
 function useCapabilityDetail(selected: CapabilityKey | null) {
   const [rows, setRows] = useState<DetailRow[] | null>(null);
   const [sortLabel, setSortLabel] = useState("");
@@ -122,11 +139,13 @@ function useCapabilityDetail(selected: CapabilityKey | null) {
   return { rows, sortLabel, loading };
 }
 
-function CapabilityDrawerBody({ config, rows, sortLabel, loading }: {
+function CapabilityDrawerBody({ config, rows, sortLabel, loading, entityLabel }: {
   config: CapabilityConfig;
   rows: DetailRow[] | null;
   sortLabel: string;
   loading: boolean;
+  /** Which column grouped these rows - see `entityLabelFor`. Not cosmetic. */
+  entityLabel: "Practice" | "Team";
 }) {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
@@ -153,16 +172,25 @@ function CapabilityDrawerBody({ config, rows, sortLabel, loading }: {
         </AIHoverCard>
       </div>
       <div>
-        <div style={{ fontWeight: "var(--font-weight-semibold)", marginBottom: 4 }}>By practice</div>
-        <div style={{ color: "var(--text-muted)", fontSize: 11, marginBottom: 8 }}>{sortLabel}</div>
+        <div style={{ fontWeight: "var(--font-weight-semibold)", marginBottom: 4 }}>
+          By {entityLabel.toLowerCase()}
+        </div>
+        <div style={{ color: "var(--text-muted)", fontSize: 11, marginBottom: 8 }}>
+          {sortLabel}
+          {entityLabel === "Team"
+            ? " · grouped by the radiologist's home practice (Team)"
+            : " · grouped by the site the exam was read at (Practice)"}
+        </div>
         {loading && <div style={{ color: "var(--text-muted)", fontSize: 13 }}>Loading…</div>}
         {!loading && rows && rows.length === 0 && (
-          <div style={{ color: "var(--text-muted)", fontSize: 13 }}>No practice-level data available.</div>
+          <div style={{ color: "var(--text-muted)", fontSize: 13 }}>
+            No {entityLabel.toLowerCase()}-level data available.
+          </div>
         )}
         {!loading && rows && rows.length > 0 && (
           <DataTable
             columns={[
-              { key: "practice", label: "Practice" },
+              { key: "practice", label: entityLabel },
               { key: "primaryValue", label: "Value", render: (r) => r.primaryValue },
             ]}
             rows={rows}
@@ -327,7 +355,7 @@ function PulseFacts({ capabilities, practicesFullyOnRpce, totalRadsLive }: {
   );
 }
 
-// Practice -> Radiologist adoption hierarchy - folded in from the standalone Adoption Map tab
+// Team -> Radiologist adoption hierarchy - folded in from the standalone Adoption Map tab
 // (removed per user feedback it felt redundant with this page). Built entirely from data the
 // app already has (utilization-by-practice for the parent tier, roster filtered by practice for
 // children, fetched lazily on expand). Fixes a real bug found while merging this in:
@@ -480,7 +508,12 @@ function AdoptionTreeSection() {
         <div>
           <div style={{ fontWeight: "var(--font-weight-semibold)", fontSize: 13 }}>Adoption map</div>
           <div style={{ color: "var(--text-muted)", fontSize: 11 }}>
-            Practice → radiologist adoption hierarchy. Click a practice to expand its radiologists.
+            {/* Team, not Practice: the parent tier is utilization-by-practice, which groups on
+                provider_local_practice_name_curr, and the children come from
+                `getRoster({ practice })`, which filters `home_practice` - the same column. Both
+                tiers are the radiologist's home practice, so the hierarchy is right; only the
+                word was wrong. */}
+            Team → radiologist adoption hierarchy. Click a team to expand its radiologists.
           </div>
         </div>
         <span style={{ color: "var(--text-muted)", fontSize: 12 }}>{collapsed ? "▸ Expand" : "▾ Collapse"}</span>
@@ -565,7 +598,8 @@ export function MosaicPulse() {
     <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 16, padding: "16px 24px", minHeight: 0, overflow: "auto" }}>
       <div style={{ color: "var(--text-muted)", fontSize: "var(--font-size-13)" }}>
         A live, animated overview of Mosaic as a platform - hover a capability for AI context,
-        click one to drill into its practices. Ring color and the flow strip both reflect each
+        click one to drill into its breakdown - by Practice (the site read at) for Reporting and
+        Drafting, by Team (the rad's home practice) for Capture. Ring color and the flow strip both reflect each
         capability's efficiency change vs baseline; ring sweep reflects live adoption %.
       </div>
 
@@ -596,7 +630,15 @@ export function MosaicPulse() {
       )}
 
       <Drawer open={selected !== null} onClose={() => setSelected(null)} title={selectedConfig?.label}>
-        {selectedConfig && <CapabilityDrawerBody config={selectedConfig} rows={rows} sortLabel={sortLabel} loading={loading} />}
+        {selectedConfig && (
+          <CapabilityDrawerBody
+            config={selectedConfig}
+            rows={rows}
+            sortLabel={sortLabel}
+            loading={loading}
+            entityLabel={entityLabelFor(selected)}
+          />
+        )}
       </Drawer>
     </div>
   );

@@ -32,8 +32,10 @@ from app.models.mosaic import (
     GenieMessageResponse,
     MammoScreeningTrendPoint,
     MosaicIntelligenceSnapshot,
+    MoversDecomposition,
     MvpProgramContext,
     MvpRadiologistItem,
+    NextBestActionList,
     PopulationEfficiency,
     RadiologistRosterItem,
     RadSummaryStat,
@@ -51,8 +53,10 @@ from app.models.mosaic import (
     VolumeTrendPoint,
 )
 from app.db import postgres_client
+from app.semantics import registry
 from app.services import (
     ai_context_service,
+    ask_service,
     baseline_overrides,
     cache_service,
     genie_service,
@@ -68,6 +72,28 @@ router = APIRouter(prefix="/api/mosaic", tags=["mosaic"])
 # were observed to take anywhere from ~2s to 800+s depending on warehouse-side conditions
 # outside this app's control, which is unworkable for an interactively-loaded dashboard.
 # The cache is populated by a background refresh loop plus the manual /refresh endpoint.
+#
+# /registry is the one exception, and it is an exception in the safe direction: it reads neither
+# EDW nor the cache. app/semantics/registry.py is frozen dataclasses and strings, so the whole
+# payload is assembled in memory from module constants.
+
+
+@router.get("/registry")
+async def registry_snapshot():
+    """Every metric definition, dimension note, and coverage threshold in the product.
+
+    This exists so a definition is declared exactly once. Before it, the same methodology was
+    written out in `mosaic_service` (as the threshold that actually suppresses a value), again
+    as prose in `ai_context_service`, again in a TSX string literal, and again in an EDW column
+    comment - four copies with nothing keeping them equal. The frontend fetches this once and
+    renders from it; `ai_context_service` grounds its prompts on it.
+
+    No `response_model`: the payload is deliberately open at the edges because Waves 2 and 3 add
+    whole sections to it, and a Pydantic model here would have to be edited in lockstep with the
+    registry - i.e. it would be a fifth copy of the same schema. `registry.snapshot()` is the
+    declaration; `tests/test_registry_parity.py` asserts its shape instead.
+    """
+    return registry.snapshot()
 
 
 @router.get("/mosaic-intelligence", response_model=MosaicIntelligenceSnapshot)
@@ -160,6 +186,27 @@ async def efficiency_population(
     )
 
 
+@router.get("/efficiency/movers", response_model=MoversDecomposition)
+async def efficiency_movers(
+    group_col: str = Query(..., description="practice | npi | subspecialty | modality_code | parent_procedure_name | exam_category"),
+    group_value: str = Query(...),
+    decompose_by: str = Query("exam_category"),
+    mode: str = Query("full_mosaic"),
+    comparison: str = Query("peers", description="peers | baseline"),
+):
+    """Split this group's efficiency gap into case-mix and within-bucket rate."""
+    try:
+        return cache_service.get_efficiency_movers(
+            group_col, group_value, decompose_by, mode, comparison
+        )
+    except ValueError as exc:
+        # The store's messages already name the valid alternatives. These values come from a
+        # UI dropdown, so an unknown one is a bug on our side, not a data condition - it gets
+        # a 400, not the `available: False` shape, which is reserved for "the data cannot
+        # answer this".
+        raise HTTPException(status_code=400, detail=str(exc))
+
+
 @router.get("/efficiency/filters", response_model=EfficiencyFilterOptions)
 async def efficiency_filters():
     return cache_service.get_efficiency_filter_options()
@@ -202,26 +249,42 @@ async def mvp_mammo_screening_trend_mvp_only():
     return cache_service.get_mvp_mammo_screening_trend()
 
 
+# Built from the scope registry rather than written out, so a scope added in
+# `mvp_weekly_report_service._SCOPES` is reachable the moment it exists and one removed stops
+# being accepted. The three routes below used to repeat `^(overview|mammo)$` verbatim, which is
+# how a new scope ends up 422-ing on two of three endpoints with no error that says why.
+_BRIEFING_SCOPES = "^(" + "|".join(mvp_weekly_report_service.scope_keys()) + ")$"
+
+
 @router.post("/mvp/weekly-report/generate")
-async def generate_mvp_weekly_report(scope: str = Query(..., pattern="^(overview|mammo)$")):
+async def generate_mvp_weekly_report(scope: str = Query(..., pattern=_BRIEFING_SCOPES)):
     # Synchronous LLM call inside (generate_weekly_report_narrative) - must not block the
     # single-threaded event loop, same reasoning as the existing /ai-context route above.
     return await run_in_threadpool(mvp_weekly_report_service.generate_snapshot, scope)
 
 
+# Both read through the service rather than straight off postgres_client, so a persisted row
+# comes back carrying the same scope-neutral `sections` view the POST above returns. Strictly
+# additive - the three slot columns are still on the row under their own names, which is what
+# MvpWeeklyReport.tsx has always read. A generic renderer reads `sections`; it cannot otherwise
+# know what a scope's three blocks are called, because the labels live in `_SCOPES` and were
+# never stored.
 @router.get("/mvp/weekly-report")
-async def get_mvp_weekly_report(scope: str = Query(..., pattern="^(overview|mammo)$")):
-    snapshots = postgres_client.get_weekly_snapshots(scope, limit=1)
+async def get_mvp_weekly_report(scope: str = Query(..., pattern=_BRIEFING_SCOPES)):
+    snapshots = mvp_weekly_report_service.read_snapshots(scope, limit=1)
     if not snapshots:
         raise HTTPException(status_code=404, detail=f"No weekly snapshot generated yet for scope={scope!r}")
     return snapshots[0]
 
 
 @router.get("/mvp/weekly-report/history")
-async def get_mvp_weekly_report_history(scope: str = Query(..., pattern="^(overview|mammo)$"), limit: int = Query(12, ge=1, le=52)):
-    return postgres_client.get_weekly_snapshots(scope, limit)
+async def get_mvp_weekly_report_history(scope: str = Query(..., pattern=_BRIEFING_SCOPES), limit: int = Query(12, ge=1, le=52)):
+    return mvp_weekly_report_service.read_snapshots(scope, limit)
 
 
+# Stays MVP-only on purpose, and is not a stale copy of the pattern above: this route checks the
+# two MVP *cohort* definitions against the program's published methodology. There is no cohort
+# string to check for an enterprise scope, so widening it would 200 on a question it never asked.
 @router.get("/mvp/methodology-check")
 async def mvp_methodology_check(scope: str = Query(..., pattern="^(overview|mammo)$")):
     return cache_service.get_mvp_methodology_check(scope)
@@ -304,6 +367,29 @@ async def undrafted_analysis(practice: str | None = None, exam_category: str | N
 @router.get("/undrafted-analysis/filters", response_model=UndraftedFilterOptions)
 async def undrafted_analysis_filters():
     return cache_service.get_undrafted_filter_options()
+
+
+@router.get("/next-best-actions", response_model=NextBestActionList)
+async def next_best_actions(
+    weeks: int = 8,
+    min_addressable_tbwu: float = 500.0,
+    benchmark_pctile: float = 0.75,
+    limit: int = 25,
+):
+    """Drafting leakage ranked by the TBWU an operator could realistically unlock (plan E-4).
+
+    Every parameter is a lever on the *benchmark*, not on the data: widen `weeks` for a steadier
+    peer frontier, raise `min_addressable_tbwu` to drop small books out of it, lower
+    `benchmark_pctile` for a frontier more teams already clear. They are query parameters rather
+    than constants precisely because the right answer is a judgement, and one buried in the
+    source is a judgement nobody can argue with.
+    """
+    return cache_service.get_next_best_actions(
+        weeks=weeks,
+        min_addressable_tbwu=min_addressable_tbwu,
+        benchmark_pctile=benchmark_pctile,
+        limit=limit,
+    )
 
 
 @router.get("/draft-insights/overview", response_model=DraftInsightOverview)
@@ -468,6 +554,72 @@ async def genie_ask(req: GenieAskRequest):
 async def genie_message(conversation_id: str, message_id: str):
     result = genie_service.get_message(conversation_id, message_id)
     return GenieMessageResponse(**result)
+
+
+class AskRequest(BaseModel):
+    question: str
+    # Whatever the surface the user is standing on already has filtered. A default, never an
+    # override: a term named in the question always wins, so "and how about Boca" on a Bethesda
+    # page asks about Boca.
+    #
+    # One key is written by the UI rather than the page: `entity_kind`, the Team/Practice switch
+    # on the answer's entity chip. It belongs here and not in its own field because it is scope
+    # the surface is carrying, which is what `page_scope` already means - and because it makes
+    # the switch a plain re-ask of the same question rather than a second endpoint.
+    page_scope: dict[str, str] | None = None
+
+
+class AskResponse(BaseModel):
+    question: str
+    resolved_by: str
+    # Open on purpose, for the same reason /registry has no response_model: `scope` is
+    # `ScopeSpec.as_dict()`, which embeds full registry descriptions for every metric and
+    # dimension it resolved. Typing it here would be a second copy of the registry schema that
+    # has to be edited in lockstep with Wave 3. `tests/test_scope.py` asserts its shape.
+    scope: dict
+    # Which column answers the named entity: `{kind, value, candidates, assumed}`. Open for the
+    # same reason as `scope` - `candidates` carries registry-shaped rows - and separate from
+    # `scope` because the resolver cannot produce it: `app/semantics` holds no roster.
+    #
+    # `assumed: true` means the name exists as both a Practice and a Team (which is the norm -
+    # 86 and 96 names that overlap almost entirely) and Practice was taken, matching the filter
+    # bar. That is a default to *show*, not a question to ask, so it deliberately does not set
+    # `needs_clarification`.
+    entity_match: dict
+    genie_prompt: str
+    needs_clarification: bool
+    # The governed drafting ranking, present only when the question asked *where to act* rather
+    # than what to measure - see `ask_service._ACTION_INTENT`. `None` means the question carried
+    # no action intent; a present payload with an empty `actions` list means it did and there is
+    # nothing to work, which is a different answer and has to stay distinguishable.
+    #
+    # Open-typed for the same reason `scope` is: the rows are `NextBestAction.model_dump()`, and
+    # re-declaring their 15 fields here would be a second copy of a model that already exists
+    # two modules away. `tests/test_ask_worklist.py` pins the shape.
+    worklist: dict | None = None
+
+
+@router.post("/ask", response_model=AskResponse)
+async def ask(req: AskRequest):
+    """English in, a *governed scope* out - never SQL.
+
+    This is the deliberate counterpart to `/genie/ask` above, not a replacement for it. Genie is
+    an open-ended query engine over the same warehouse, which makes it equally capable of
+    dividing by the wrong denominator: there are two deployed columns named `pct_mosaic` whose
+    denominators differ by roughly a quarter of all exams, and nothing in a natural-language
+    question distinguishes them. So here the model only ever proposes registry *keys*, and
+    `app/semantics/scope.py` decides whether the proposal stands. The answer path then runs
+    through Genie with the resolved definitions attached as grounding.
+
+    Refusals come back in the body with HTTP 200, not as an error. A question that named one
+    resolvable metric and one unsupported breakdown is two-thirds answerable, and the useful
+    response says so and names what was dropped - raising a 4xx would discard the part that
+    worked. `needs_clarification` is the flag a caller branches on.
+
+    Threadpool for the same reason as `/ai-context`: `ask_service.propose` calls a serving
+    endpoint synchronously, and blocking the event loop here would stall every other route.
+    """
+    return AskResponse(**await run_in_threadpool(ask_service.ask, req.question, req.page_scope))
 
 
 class NoteIn(BaseModel):

@@ -172,7 +172,7 @@ def _build_pool():
                     """
                     CREATE TABLE IF NOT EXISTS mosaic.mvp_weekly_snapshots (
                         id BIGSERIAL PRIMARY KEY,
-                        scope TEXT NOT NULL CHECK (scope IN ('overview', 'mammo')),
+                        scope TEXT NOT NULL,
                         week_ending DATE NOT NULL,
                         funnel TEXT NOT NULL,
                         impact TEXT NOT NULL,
@@ -183,6 +183,22 @@ def _build_pool():
                         UNIQUE (scope, week_ending)
                     )
                     """
+                )
+                # The scope column used to carry CHECK (scope IN ('overview', 'mammo')). Scopes
+                # are now declared in mvp_weekly_report_service._SCOPES and validated at the
+                # route, so the database copy of that list was a third place to keep in sync -
+                # and the one that failed last, as an opaque IntegrityError inside a user's
+                # button click rather than a 422 with the valid scopes in it.
+                #
+                # CREATE TABLE IF NOT EXISTS does nothing to the table that already exists in
+                # prod, so dropping the constraint is a real migration and has to run here. It is
+                # safe to repeat and safe to run on a fresh table: the name is the one Postgres
+                # generates for an unnamed column CHECK, IF EXISTS covers both the already-
+                # migrated case and the never-had-it case, and widening a CHECK cannot invalidate
+                # a row that already satisfied the narrower one.
+                cur.execute(
+                    "ALTER TABLE mosaic.mvp_weekly_snapshots "
+                    "DROP CONSTRAINT IF EXISTS mvp_weekly_snapshots_scope_check"
                 )
         return pool
     except Exception as exc:  # noqa: BLE001 - genuinely any connection/driver error is non-fatal here
