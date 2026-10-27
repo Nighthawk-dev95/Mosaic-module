@@ -7,7 +7,7 @@ CREATE OR REPLACE FUNCTION edw_test.enterprise_analytics.mosaic_eff_by_provider_
   end_date STRING COMMENT 'Last exam date of the window, YYYY-MM-DD (inclusive)'
 )
 RETURNS TABLE
-COMMENT 'Mosaic efficiency by Provider Practice (Team Rolled Up = the radiologist''s home practice), exactly as the PowerBI Mosaic Efficiency ''By Provider Practice'' table and the exec dashboard show it. One row per Mode x practice plus a ''Total'' row (company-wide efficiency change). Mode is one of: Full Mosaic, Reporting Only, Drafting Only, Capture Only, Drafting + Capture; filter on it. start_date / end_date are inclusive exam dates as ''YYYY-MM-DD'' strings (e.g. ''2026-09-01'', ''2026-09-30'' for September 2026); use complete months. Pct Change Vs Baseline is a fraction (0.12 = +12%).'
+COMMENT 'Mosaic efficiency by Provider Practice (Team Rolled Up = the radiologist''s home practice), exactly as the PowerBI Mosaic Efficiency ''By Provider Practice'' table and the exec dashboard show it. One row per Mode x practice plus the table''s ''Total'' row. Use for practice breakdowns and rankings only; for overall / company-wide efficiency change use MEASURE(`Full Mosaic Pct Change Vs Baseline`) in mosaic_efficiency_metric_view instead. Mode is one of: Full Mosaic, Reporting Only, Drafting Only, Capture Only, Drafting + Capture; filter on it. start_date / end_date are inclusive exam dates as ''YYYY-MM-DD'' strings (e.g. ''2026-09-01'', ''2026-09-30'' for September 2026); use complete months. Pct Change Vs Baseline is a fraction (0.12 = +12%).'
 RETURN
 WITH tri AS (
   SELECT team_rolled_up AS team, radiologist AS rad, parent_exam AS proc,

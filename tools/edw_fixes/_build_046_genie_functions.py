@@ -23,7 +23,9 @@ FUNCS = [
     ("mosaic_eff_by_provider_practice", "provider_practice_efficiency.sql", "practice_rows", False,
      "Mosaic efficiency by Provider Practice (Team Rolled Up = the radiologist's home practice), exactly as the "
      "PowerBI Mosaic Efficiency 'By Provider Practice' table and the exec dashboard show it. One row per Mode x "
-     "practice plus a 'Total' row (company-wide efficiency change). " + MODES + " " + PERIOD + " " + PCT),
+     "practice plus the table's 'Total' row. Use for practice breakdowns and rankings only; for overall / "
+     "company-wide efficiency change use MEASURE(`Full Mosaic Pct Change Vs Baseline`) in "
+     "mosaic_efficiency_metric_view instead. " + MODES + " " + PERIOD + " " + PCT),
     ("mosaic_eff_by_radiologist", "provider_practice_efficiency.sql", "radiologist_rows", False,
      "Mosaic efficiency by radiologist within Provider Practice (PowerBI 'By Provider Practice' radiologist level). "
      "Use for top / bottom radiologists or one radiologist's efficiency change. " + MODES + " " + PERIOD + " " + PCT),
