@@ -1,0 +1,618 @@
+{
+  "source": "edw_test.enterprise_analytics.mosaic_efficiency_exam_level_mv",
+  "view_comment": "MOSAIC EFFICIENCY SEMANTIC LAYER (draft, edw_test only). Governed replacement for the PowerBI \"Mosaic Efficiency Report\"'s Parameter/Timeline/Mode_Lines tables: TBWU-per-minute efficiency vs. each radiologist's own pre-Mosaic PowerScribe baseline, plus implied read-time savings, across 6 modes (Reporting/Drafting/Capture/Drafting+Capture/Full Mosaic/Both), with a qualification gate (min_exams threshold + has-both-baseline-and-mosaic) baked into every measure; outliers excluded. Source is mosaic_efficiency_exam_level_mv, a daily (7:30 AM CT) snapshot of tbl_efficiency_exam_level_vw used for speed, so figures reflect data as of the morning refresh. Use for company/region totals and trends; per-practice, per-radiologist and per-site breakdowns come from the mosaic_eff_* functions. Readtimeview's separate \"efficiency vs RP average\" semantic is NOT part of this view - see mosaic_efficiency_vs_rp_avg_metric_view and tools/pbi_semantic_extract/MIGRATION_PLAYBOOK.md.",
+  "dimensions": {
+    "NPI": {
+      "comment": "Radiologist's 10-digit National Provider Identifier; one per radiologist. Pair with Radiologist Name for per-radiologist breakdowns.",
+      "display_name": "Radiologist NPI",
+      "synonyms": [
+        "provider NPI",
+        "national provider identifier",
+        "rad NPI"
+      ]
+    },
+    "Radiologist Name": {
+      "comment": "Reading radiologist's name, formatted 'Last, First M' (e.g. 'Taha, Manuel R').",
+      "display_name": "Radiologist Name",
+      "synonyms": [
+        "radiologist",
+        "reading radiologist",
+        "doctor name",
+        "rad name"
+      ]
+    },
+    "Team": {
+      "comment": "The radiologist's own home pool, finer than Team Rolled Up (e.g. 'SEAL Team' is a float/cross-coverage pool, not a billing practice). NOT the same as Practice (the exam site's practice). For PowerBI 'Team Rolled up' / provider practice reporting, use Team Rolled Up.",
+      "display_name": "Radiologist Team",
+      "synonyms": [
+        "sub team",
+        "radiologist home pool",
+        "reading pool"
+      ],
+      "drop_synonyms": [
+        "Provider Practice"
+      ]
+    },
+    "Team Rolled Up": {
+      "comment": "Provider Practice: the radiologist's home practice, i.e. Team rolled up via the team_rollups lookup (= PowerBI 'Team Rolled up'). One value per radiologist; differs from Practice, which is the practice owning the exam site.",
+      "display_name": "Team Rolled Up (Provider Practice)",
+      "synonyms": [
+        "provider practice",
+        "home practice",
+        "rolled up team",
+        "radiologist home practice",
+        "provider group"
+      ]
+    },
+    "Local Region": {
+      "comment": "One of 6 fixed regions: Special Operations, Apex, Genesis, Maverick, Trailblazer, Matrix. Keyed on the radiologist's Team (matches PowerBI '0. Cur'[Local]).",
+      "display_name": "Local Region",
+      "synonyms": [
+        "region",
+        "local",
+        "regional group",
+        "team local"
+      ]
+    },
+    "Practice": {
+      "comment": "Managing Practice: the practice owning the exam site, whose exams are being read, regardless of the reading radiologist's Team (= PowerBI 'Practice'). The business-facing 'By Practice' grouping; one radiologist (e.g. SEAL Team) can read for many Practices.",
+      "display_name": "Managing Practice",
+      "synonyms": [
+        "site practice",
+        "exam site practice",
+        "owning practice",
+        "practice reading for"
+      ]
+    },
+    "Subspecialty": {
+      "comment": "Subspecialty grouping carried on each exam row (the reading specialty area). Use to compare Mosaic efficiency across specialties.",
+      "display_name": "Subspecialty",
+      "synonyms": [
+        "specialty",
+        "reading subspecialty",
+        "clinical subspecialty"
+      ]
+    },
+    "Modality": {
+      "comment": "Imaging modality code of the exam (e.g. CT, CR, US, BD). Drafting mode covers CR/CT; Capture covers US/BD.",
+      "display_name": "Modality",
+      "synonyms": [
+        "modality code",
+        "imaging modality",
+        "scan type"
+      ]
+    },
+    "Parent Procedure Name": {
+      "comment": "Standardized parent procedure (exam type) at which each radiologist's baseline is defined, e.g. 'Head CT'.",
+      "display_name": "Parent Procedure",
+      "synonyms": [
+        "parent exam",
+        "procedure",
+        "exam type",
+        "parent procedure name"
+      ]
+    },
+    "Exam Category": {
+      "comment": "Broad exam category assigned to the parent procedure via the canonical exam-category crosswalk.",
+      "display_name": "Exam Category",
+      "synonyms": [
+        "exam group",
+        "procedure category",
+        "study category"
+      ]
+    },
+    "Exam Month": {
+      "comment": "Month of the exam date (first day of the month). Trend-chart grain for the Efficiency Over Time / Efficiency Change Over Time pages; use for monthly trends.",
+      "display_name": "Exam Month",
+      "synonyms": [
+        "month of exam",
+        "read month",
+        "monthly trend month"
+      ]
+    },
+    "Exam Week": {
+      "comment": "Week of the exam date (week starting Monday). Weekly grain for the Efficiency Change Time Series page (= PowerBI Week_Date); finer-grained sibling of Exam Month.",
+      "display_name": "Exam Week",
+      "synonyms": [
+        "week of exam",
+        "read week",
+        "weekly trend week",
+        "week date"
+      ]
+    }
+  },
+  "measures": {
+    "Reporting Mosaic Exams": {
+      "comment": "Count of Reporting-period exams (read in Mosaic Reporting) for radiologists with an eligible baseline. Outliers excluded; min_exams gate (default 1 exam per rad in this mode). Slice by Exam Month or Exam Week. = PowerBI [mosaicexams_opt] (Mosaic Efficiency, Reporting Only).",
+      "display_name": "Reporting Mosaic Exams",
+      "synonyms": [
+        "reporting exam volume",
+        "reporting exams read",
+        "number of reporting exams"
+      ]
+    },
+    "Reporting Mosaic TBWU": {
+      "comment": "Building block: total TBWU workload units (same unit as RPWU) on Reporting-period exams (read in Mosaic Reporting). Outliers excluded; min_exams gate (default 1 exam per rad in this mode). Numerator of Reporting Mosaic Efficiency. = PowerBI [mosaictbwu_opt] (Mosaic Efficiency, Reporting Only).",
+      "display_name": "Reporting Mosaic TBWU",
+      "synonyms": [
+        "reporting workload units",
+        "reporting RPWU",
+        "reporting total TBWU"
+      ]
+    },
+    "Reporting Mosaic Time Sec": {
+      "comment": "Building block: total adjusted read time in seconds on Reporting exams. Outliers excluded; min_exams gate (default 1 exam per rad in this mode). Denominator of Reporting Mosaic Efficiency and Reporting Baseline Efficiency. = PowerBI [Base_Time_Mosaic_Opt] (Mosaic Efficiency, Reporting Only).",
+      "display_name": "Reporting Read Time (Seconds)",
+      "synonyms": [
+        "reporting read time seconds",
+        "reporting total read time",
+        "reporting reading time"
+      ]
+    },
+    "Reporting Baseline Exams": {
+      "comment": "Count of the same qualifying radiologists' pre-Mosaic Baseline-period exams (legacy VR/PowerScribe, not Mosaic-read or drafted), outliers excluded. All modalities, not limited to this mode's modalities. Context only; not used in the efficiency ratios. = PowerBI [baselineexams_opt] (Mosaic Efficiency, Reporting Only).",
+      "display_name": "Reporting Baseline Exams",
+      "synonyms": [
+        "reporting pre-Mosaic exams",
+        "reporting legacy VR exams",
+        "reporting PowerScribe baseline exams"
+      ]
+    },
+    "Reporting Baseline Contrib": {
+      "comment": "Building block: time-weighted baseline contribution = each radiologist's own baseline rate (TBWU/min) x each exam's own read time, over Reporting-period exams (read in Mosaic Reporting). Divide by Reporting Mosaic Time Sec to get Reporting Baseline Efficiency.",
+      "display_name": "Reporting Baseline Contribution (Helper)",
+      "synonyms": [
+        "reporting baseline numerator",
+        "reporting time weighted baseline contribution"
+      ]
+    },
+    "Reporting Mosaic Efficiency": {
+      "comment": "TBWU per minute on Reporting-period exams (read in Mosaic Reporting). Outliers excluded; min_exams gate (default 1 exam per rad in this mode). Slice by Exam Month or Exam Week. = PowerBI [Base_Mosaic_Eff_Opt] (Mosaic Efficiency, Reporting Only). Company/region trends here; practice, radiologist or site splits: mosaic_eff_* functions.",
+      "display_name": "Reporting Mosaic Efficiency",
+      "synonyms": [
+        "reporting TBWU per minute",
+        "reporting productivity on Mosaic",
+        "reporting efficiency on Mosaic"
+      ]
+    },
+    "Reporting Baseline Efficiency": {
+      "comment": "Pre-Mosaic baseline TBWU per minute, using each radiologist's own baseline rate, time-weighted by the read time of the same Reporting exams: the like-for-like comparison point for Reporting Mosaic Efficiency. Outliers excluded. = PowerBI [Base_Baseline_Eff_Opt] (Mosaic Efficiency, Reporting Only).",
+      "display_name": "Reporting Baseline Efficiency",
+      "synonyms": [
+        "reporting baseline TBWU per minute",
+        "reporting pre-Mosaic efficiency",
+        "reporting legacy VR efficiency"
+      ]
+    },
+    "Reporting Pct Change Vs Baseline": {
+      "comment": "Efficiency change vs baseline, Reporting exams: (Mosaic - baseline) / baseline. Fraction: 0.12 = 12% more TBWU per minute than pre-Mosaic; negative = slower. Outliers excluded; min_exams gate (default 1 exam per rad in this mode). = PowerBI [Pct_Change_Metric_Opt] (Mosaic Efficiency, Reporting Only).",
+      "display_name": "Reporting Efficiency Change vs Baseline",
+      "synonyms": [
+        "reporting efficiency gain vs baseline",
+        "reporting % change vs baseline",
+        "reporting productivity lift vs baseline"
+      ]
+    },
+    "Reporting Implied Read Time Savings Pct": {
+      "comment": "Implied read-time savings, Reporting exams: baseline / Mosaic efficiency - 1. Fraction; NEGATIVE = savings (-0.10 = 10% less read time per unit of work than baseline). Outliers excluded; min_exams gate (default 1 exam per rad in this mode). = PowerBI [Implied_RTS_Opt] (Mosaic Efficiency, Reporting Only).",
+      "display_name": "Reporting Implied Read Time Savings",
+      "synonyms": [
+        "reporting read time savings",
+        "reporting time saved vs baseline",
+        "reporting read time reduction"
+      ]
+    },
+    "Drafting Mosaic Exams": {
+      "comment": "Count of Mosaic Drafting exams (Drafting period, CR/CT only) for radiologists with an eligible baseline. Outliers excluded; min_exams gate (default 1 exam per rad in this mode). Slice by Exam Month or Exam Week. = PowerBI [mosaicexams_opt] (Mosaic Efficiency, Drafting Only).",
+      "display_name": "Drafting Mosaic Exams",
+      "synonyms": [
+        "drafting exam volume",
+        "drafting exams read",
+        "number of drafting exams"
+      ]
+    },
+    "Drafting Mosaic TBWU": {
+      "comment": "Building block: total TBWU workload units (same unit as RPWU) on Mosaic Drafting exams (Drafting period, CR/CT only). Outliers excluded; min_exams gate (default 1 exam per rad in this mode). Numerator of Drafting Mosaic Efficiency. = PowerBI [mosaictbwu_opt] (Mosaic Efficiency, Drafting Only).",
+      "display_name": "Drafting Mosaic TBWU",
+      "synonyms": [
+        "drafting workload units",
+        "drafting RPWU",
+        "drafting total TBWU"
+      ]
+    },
+    "Drafting Mosaic Time Sec": {
+      "comment": "Building block: total adjusted read time in seconds on Drafting (CR/CT) exams. Outliers excluded; min_exams gate (default 1 exam per rad in this mode). Denominator of Drafting Mosaic Efficiency and Drafting Baseline Efficiency. = PowerBI [Base_Time_Mosaic_Opt] (Mosaic Efficiency, Drafting Only).",
+      "display_name": "Drafting Read Time (Seconds)",
+      "synonyms": [
+        "drafting read time seconds",
+        "drafting total read time",
+        "drafting reading time"
+      ]
+    },
+    "Drafting Baseline Exams": {
+      "comment": "Count of the same qualifying radiologists' pre-Mosaic Baseline-period exams (legacy VR/PowerScribe, not Mosaic-read or drafted), outliers excluded. All modalities, not limited to this mode's modalities. Context only; not used in the efficiency ratios. = PowerBI [baselineexams_opt] (Mosaic Efficiency, Drafting Only).",
+      "display_name": "Drafting Baseline Exams",
+      "synonyms": [
+        "drafting pre-Mosaic exams",
+        "drafting legacy VR exams",
+        "drafting PowerScribe baseline exams"
+      ]
+    },
+    "Drafting Baseline Contrib": {
+      "comment": "Building block: time-weighted baseline contribution = each radiologist's own baseline rate (TBWU/min) x each exam's own read time, over Mosaic Drafting exams (Drafting period, CR/CT only). Divide by Drafting Mosaic Time Sec to get Drafting Baseline Efficiency.",
+      "display_name": "Drafting Baseline Contribution (Helper)",
+      "synonyms": [
+        "drafting baseline numerator",
+        "drafting time weighted baseline contribution"
+      ]
+    },
+    "Drafting Mosaic Efficiency": {
+      "comment": "TBWU per minute on Mosaic Drafting exams (Drafting period, CR/CT only). Outliers excluded; min_exams gate (default 1 exam per rad in this mode). Slice by Exam Month or Exam Week. = PowerBI [Base_Mosaic_Eff_Opt] (Mosaic Efficiency, Drafting Only). Company/region trends here; practice, radiologist or site splits: mosaic_eff_* functions.",
+      "display_name": "Drafting Mosaic Efficiency",
+      "synonyms": [
+        "drafting TBWU per minute",
+        "drafting productivity on Mosaic",
+        "drafting efficiency on Mosaic"
+      ]
+    },
+    "Drafting Baseline Efficiency": {
+      "comment": "Pre-Mosaic baseline TBWU per minute, using each radiologist's own baseline rate, time-weighted by the read time of the same Drafting (CR/CT) exams: the like-for-like comparison point for Drafting Mosaic Efficiency. Outliers excluded. = PowerBI [Base_Baseline_Eff_Opt] (Mosaic Efficiency, Drafting Only).",
+      "display_name": "Drafting Baseline Efficiency",
+      "synonyms": [
+        "drafting baseline TBWU per minute",
+        "drafting pre-Mosaic efficiency",
+        "drafting legacy VR efficiency"
+      ]
+    },
+    "Drafting Pct Change Vs Baseline": {
+      "comment": "Efficiency change vs baseline, Drafting (CR/CT) exams: (Mosaic - baseline) / baseline. Fraction: 0.12 = 12% more TBWU per minute than pre-Mosaic; negative = slower. Outliers excluded; min_exams gate (default 1 exam per rad in this mode). = PowerBI [Pct_Change_Metric_Opt] (Mosaic Efficiency, Drafting Only).",
+      "display_name": "Drafting Efficiency Change vs Baseline",
+      "synonyms": [
+        "drafting efficiency gain vs baseline",
+        "drafting % change vs baseline",
+        "drafting productivity lift vs baseline"
+      ]
+    },
+    "Drafting Implied Read Time Savings Pct": {
+      "comment": "Implied read-time savings, Drafting (CR/CT) exams: baseline / Mosaic efficiency - 1. Fraction; NEGATIVE = savings (-0.10 = 10% less read time per unit of work than baseline). Outliers excluded; min_exams gate (default 1 exam per rad in this mode). = PowerBI [Implied_RTS_Opt] (Mosaic Efficiency, Drafting Only).",
+      "display_name": "Drafting Implied Read Time Savings",
+      "synonyms": [
+        "drafting read time savings",
+        "drafting time saved vs baseline",
+        "drafting read time reduction"
+      ]
+    },
+    "Capture Mosaic Exams": {
+      "comment": "Count of Mosaic Capture exams (Drafting period, US/BD only) for radiologists with an eligible baseline. Outliers excluded; min_exams gate (default 1 exam per rad in this mode). Slice by Exam Month or Exam Week. = PowerBI [mosaicexams_opt] (Mosaic Efficiency, Capture Only).",
+      "display_name": "Capture Mosaic Exams",
+      "synonyms": [
+        "capture exam volume",
+        "capture exams read",
+        "number of capture exams"
+      ]
+    },
+    "Capture Mosaic TBWU": {
+      "comment": "Building block: total TBWU workload units (same unit as RPWU) on Mosaic Capture exams (Drafting period, US/BD only). Outliers excluded; min_exams gate (default 1 exam per rad in this mode). Numerator of Capture Mosaic Efficiency. = PowerBI [mosaictbwu_opt] (Mosaic Efficiency, Capture Only).",
+      "display_name": "Capture Mosaic TBWU",
+      "synonyms": [
+        "capture workload units",
+        "capture RPWU",
+        "capture total TBWU"
+      ]
+    },
+    "Capture Mosaic Time Sec": {
+      "comment": "Building block: total adjusted read time in seconds on Capture (US/BD) exams. Outliers excluded; min_exams gate (default 1 exam per rad in this mode). Denominator of Capture Mosaic Efficiency and Capture Baseline Efficiency. = PowerBI [Base_Time_Mosaic_Opt] (Mosaic Efficiency, Capture Only).",
+      "display_name": "Capture Read Time (Seconds)",
+      "synonyms": [
+        "capture read time seconds",
+        "capture total read time",
+        "capture reading time"
+      ]
+    },
+    "Capture Baseline Exams": {
+      "comment": "Count of the same qualifying radiologists' pre-Mosaic Baseline-period exams (legacy VR/PowerScribe, not Mosaic-read or drafted), outliers excluded. Limited to US/BD. Context only; not used in the efficiency ratios. = PowerBI [baselineexams_opt] (Mosaic Efficiency, Capture Only).",
+      "display_name": "Capture Baseline Exams",
+      "synonyms": [
+        "capture pre-Mosaic exams",
+        "capture legacy VR exams",
+        "capture PowerScribe baseline exams"
+      ]
+    },
+    "Capture Baseline Contrib": {
+      "comment": "Building block: time-weighted baseline contribution = the US/BD-specific baseline rate (TBWU/min) x each exam's own read time, over Mosaic Capture exams (Drafting period, US/BD only). Divide by Capture Mosaic Time Sec to get Capture Baseline Efficiency.",
+      "display_name": "Capture Baseline Contribution (Helper)",
+      "synonyms": [
+        "capture baseline numerator",
+        "capture time weighted baseline contribution"
+      ]
+    },
+    "Capture Mosaic Efficiency": {
+      "comment": "TBWU per minute on Mosaic Capture exams (Drafting period, US/BD only). Outliers excluded; min_exams gate (default 1 exam per rad in this mode). Slice by Exam Month or Exam Week. = PowerBI [Base_Mosaic_Eff_Opt] (Mosaic Efficiency, Capture Only). Company/region trends here; practice, radiologist or site splits: mosaic_eff_* functions.",
+      "display_name": "Capture Mosaic Efficiency",
+      "synonyms": [
+        "capture TBWU per minute",
+        "capture productivity on Mosaic",
+        "capture efficiency on Mosaic"
+      ]
+    },
+    "Capture Baseline Efficiency": {
+      "comment": "Pre-Mosaic baseline TBWU per minute, using the US/BD-specific baseline rate, time-weighted by the read time of the same Capture (US/BD) exams: the like-for-like comparison point for Capture Mosaic Efficiency. Outliers excluded. = PowerBI [Base_Baseline_Eff_Opt] (Mosaic Efficiency, Capture Only).",
+      "display_name": "Capture Baseline Efficiency",
+      "synonyms": [
+        "capture baseline TBWU per minute",
+        "capture pre-Mosaic efficiency",
+        "capture legacy VR efficiency"
+      ]
+    },
+    "Capture Pct Change Vs Baseline": {
+      "comment": "Efficiency change vs baseline, Capture (US/BD) exams: (Mosaic - baseline) / baseline. Fraction: 0.12 = 12% more TBWU per minute than pre-Mosaic; negative = slower. Outliers excluded; min_exams gate (default 1 exam per rad in this mode). = PowerBI [Pct_Change_Metric_Opt] (Mosaic Efficiency, Capture Only).",
+      "display_name": "Capture Efficiency Change vs Baseline",
+      "synonyms": [
+        "capture efficiency gain vs baseline",
+        "capture % change vs baseline",
+        "capture productivity lift vs baseline"
+      ]
+    },
+    "Capture Implied Read Time Savings Pct": {
+      "comment": "Implied read-time savings, Capture (US/BD) exams: baseline / Mosaic efficiency - 1. Fraction; NEGATIVE = savings (-0.10 = 10% less read time per unit of work than baseline). Outliers excluded; min_exams gate (default 1 exam per rad in this mode). = PowerBI [Implied_RTS_Opt] (Mosaic Efficiency, Capture Only).",
+      "display_name": "Capture Implied Read Time Savings",
+      "synonyms": [
+        "capture read time savings",
+        "capture time saved vs baseline",
+        "capture read time reduction"
+      ]
+    },
+    "Drafting Capture Mosaic Exams": {
+      "comment": "Count of Drafting-period CR/CT/US/BD exams (Drafting + Capture) for radiologists with an eligible baseline. Outliers excluded; min_exams gate (default 1 exam per rad in this mode). Slice by Exam Month or Exam Week. = PowerBI [mosaicexams_opt] (Mosaic Efficiency, Drafting + Capture).",
+      "display_name": "Drafting + Capture Mosaic Exams",
+      "synonyms": [
+        "drafting plus capture exam volume",
+        "drafting plus capture exams read",
+        "number of drafting plus capture exams"
+      ]
+    },
+    "Drafting Capture Mosaic TBWU": {
+      "comment": "Building block: total TBWU workload units (same unit as RPWU) on Drafting-period CR/CT/US/BD exams (Drafting + Capture). Outliers excluded; min_exams gate (default 1 exam per rad in this mode). Numerator of Drafting Capture Mosaic Efficiency. = PowerBI [mosaictbwu_opt] (Mosaic Efficiency, Drafting + Capture).",
+      "display_name": "Drafting + Capture Mosaic TBWU",
+      "synonyms": [
+        "drafting plus capture workload units",
+        "drafting plus capture RPWU",
+        "drafting plus capture total TBWU"
+      ]
+    },
+    "Drafting Capture Mosaic Time Sec": {
+      "comment": "Building block: total adjusted read time in seconds on Drafting + Capture (CR/CT/US/BD) exams. Outliers excluded; min_exams gate (default 1 exam per rad in this mode). Denominator of Drafting Capture Mosaic Efficiency and Drafting Capture Baseline Efficiency. = PowerBI [Base_Time_Mosaic_Opt] (Mosaic Efficiency, Drafting + Capture).",
+      "display_name": "Drafting + Capture Read Time (Seconds)",
+      "synonyms": [
+        "drafting plus capture read time seconds",
+        "drafting plus capture total read time",
+        "drafting plus capture reading time"
+      ]
+    },
+    "Drafting Capture Baseline Exams": {
+      "comment": "Count of the same qualifying radiologists' pre-Mosaic Baseline-period exams (legacy VR/PowerScribe, not Mosaic-read or drafted), outliers excluded. All modalities, not limited to this mode's modalities. Context only; not used in the efficiency ratios. = PowerBI [baselineexams_opt] (Mosaic Efficiency, Drafting + Capture).",
+      "display_name": "Drafting + Capture Baseline Exams",
+      "synonyms": [
+        "drafting plus capture pre-Mosaic exams",
+        "drafting plus capture legacy VR exams",
+        "drafting plus capture PowerScribe baseline exams"
+      ]
+    },
+    "Drafting Capture Baseline Contrib": {
+      "comment": "Building block: time-weighted baseline contribution = the standard all-modality blended baseline (TBWU/min) x each exam's own read time, over Drafting-period CR/CT/US/BD exams (Drafting + Capture). Divide by Drafting Capture Mosaic Time Sec to get Drafting Capture Baseline Efficiency.",
+      "display_name": "Drafting + Capture Baseline Contribution (Helper)",
+      "synonyms": [
+        "drafting plus capture baseline numerator",
+        "drafting plus capture time weighted baseline contribution"
+      ]
+    },
+    "Drafting Capture Mosaic Efficiency": {
+      "comment": "TBWU per minute on Drafting-period CR/CT/US/BD exams (Drafting + Capture). Outliers excluded; min_exams gate (default 1 exam per rad in this mode). Slice by Exam Month or Exam Week. = PowerBI [Base_Mosaic_Eff_Opt] (Mosaic Efficiency, Drafting + Capture).",
+      "display_name": "Drafting + Capture Mosaic Efficiency",
+      "synonyms": [
+        "drafting plus capture TBWU per minute",
+        "drafting plus capture productivity on Mosaic",
+        "drafting plus capture efficiency on Mosaic"
+      ]
+    },
+    "Drafting Capture Baseline Efficiency": {
+      "comment": "Pre-Mosaic baseline TBWU per minute, using the standard all-modality blended baseline, time-weighted by the read time of the same Drafting + Capture (CR/CT/US/BD) exams: the like-for-like comparison point for Drafting Capture Mosaic Efficiency. Outliers excluded. = PowerBI [Base_Baseline_Eff_Opt] (Mosaic Efficiency, Drafting + Capture).",
+      "display_name": "Drafting + Capture Baseline Efficiency",
+      "synonyms": [
+        "drafting plus capture baseline TBWU per minute",
+        "drafting plus capture pre-Mosaic efficiency",
+        "drafting plus capture legacy VR efficiency"
+      ]
+    },
+    "Drafting Capture Pct Change Vs Baseline": {
+      "comment": "Efficiency change vs baseline, Drafting + Capture (CR/CT/US/BD) exams: (Mosaic - baseline) / baseline. Fraction: 0.12 = 12% more TBWU per minute than pre-Mosaic; negative = slower. Outliers excluded; min_exams gate (default 1 exam per rad in this mode). = PowerBI [Pct_Change_Metric_Opt] (Mosaic Efficiency, Drafting + Capture).",
+      "display_name": "Drafting + Capture Efficiency Change vs Baseline",
+      "synonyms": [
+        "drafting plus capture efficiency gain vs baseline",
+        "drafting plus capture % change vs baseline",
+        "drafting plus capture productivity lift vs baseline"
+      ]
+    },
+    "Drafting Capture Implied Read Time Savings Pct": {
+      "comment": "Implied read-time savings, Drafting + Capture (CR/CT/US/BD) exams: baseline / Mosaic efficiency - 1. Fraction; NEGATIVE = savings (-0.10 = 10% less read time per unit of work than baseline). Outliers excluded; min_exams gate (default 1 exam per rad in this mode). = PowerBI [Implied_RTS_Opt] (Mosaic Efficiency, Drafting + Capture).",
+      "display_name": "Drafting + Capture Implied Read Time Savings",
+      "synonyms": [
+        "drafting plus capture read time savings",
+        "drafting plus capture time saved vs baseline",
+        "drafting plus capture read time reduction"
+      ]
+    },
+    "Full Mosaic Mosaic Exams": {
+      "comment": "Count of all Mosaic exams (Reporting + Drafting) for radiologists with an eligible baseline. Outliers excluded; min_exams gate (default 1 exam per rad in this mode). Slice by Exam Month or Exam Week. = PowerBI [mosaicexams_opt] (Mosaic Efficiency, Full Mosaic).",
+      "display_name": "Full Mosaic Exams",
+      "synonyms": [
+        "full mosaic exam volume",
+        "full mosaic exams read",
+        "number of full mosaic exams",
+        "Mosaic exam volume",
+        "overall Mosaic exams"
+      ]
+    },
+    "Full Mosaic Mosaic TBWU": {
+      "comment": "Building block: total TBWU workload units (same unit as RPWU) on all Mosaic exams (Reporting + Drafting). Outliers excluded; min_exams gate (default 1 exam per rad in this mode). Numerator of Full Mosaic Mosaic Efficiency. = PowerBI [mosaictbwu_opt] (Mosaic Efficiency, Full Mosaic).",
+      "display_name": "Full Mosaic TBWU",
+      "synonyms": [
+        "full mosaic workload units",
+        "full mosaic RPWU",
+        "full mosaic total TBWU"
+      ]
+    },
+    "Full Mosaic Mosaic Time Sec": {
+      "comment": "Building block: total adjusted read time in seconds on Full Mosaic (Reporting + Drafting) exams. Outliers excluded; min_exams gate (default 1 exam per rad in this mode). Denominator of Full Mosaic Mosaic Efficiency and Full Mosaic Baseline Efficiency. = PowerBI [Base_Time_Mosaic_Opt] (Mosaic Efficiency, Full Mosaic).",
+      "display_name": "Full Mosaic Read Time (Seconds)",
+      "synonyms": [
+        "full mosaic read time seconds",
+        "full mosaic total read time",
+        "full mosaic reading time"
+      ]
+    },
+    "Full Mosaic Baseline Exams": {
+      "comment": "Count of the same qualifying radiologists' pre-Mosaic Baseline-period exams (legacy VR/PowerScribe, not Mosaic-read or drafted), outliers excluded. All modalities, not limited to this mode's modalities. Context only; not used in the efficiency ratios. = PowerBI [baselineexams_opt] (Mosaic Efficiency, Full Mosaic).",
+      "display_name": "Full Mosaic Baseline Exams",
+      "synonyms": [
+        "full mosaic pre-Mosaic exams",
+        "full mosaic legacy VR exams",
+        "full mosaic PowerScribe baseline exams"
+      ]
+    },
+    "Full Mosaic Baseline Contrib": {
+      "comment": "Building block: time-weighted baseline contribution = each radiologist's own baseline rate (TBWU/min) x each exam's own read time, over all Mosaic exams (Reporting + Drafting). Divide by Full Mosaic Mosaic Time Sec to get Full Mosaic Baseline Efficiency.",
+      "display_name": "Full Mosaic Baseline Contribution (Helper)",
+      "synonyms": [
+        "full mosaic baseline numerator",
+        "full mosaic time weighted baseline contribution"
+      ]
+    },
+    "Full Mosaic Mosaic Efficiency": {
+      "comment": "Headline 'overall' Mosaic efficiency: TBWU per minute on all Mosaic exams (Reporting + Drafting); ungrouped = the app's 'RP Benchmark' tile. Outliers excluded; min_exams gate (default 1). = PowerBI [Base_Mosaic_Eff_Opt] (Mosaic Efficiency, Full Mosaic). Company/region here; practice/rad/site splits: mosaic_eff_* functions.",
+      "display_name": "Full Mosaic Efficiency",
+      "synonyms": [
+        "full mosaic TBWU per minute",
+        "full mosaic productivity on Mosaic",
+        "full mosaic efficiency on Mosaic",
+        "overall Mosaic efficiency",
+        "Mosaic productivity",
+        "Mosaic efficiency"
+      ]
+    },
+    "Full Mosaic Baseline Efficiency": {
+      "comment": "Pre-Mosaic baseline TBWU per minute, using each radiologist's own baseline rate, time-weighted by the read time of the same Full Mosaic (Reporting + Drafting) exams: the like-for-like comparison point for Full Mosaic Mosaic Efficiency. Outliers excluded. = PowerBI [Base_Baseline_Eff_Opt] (Mosaic Efficiency, Full Mosaic).",
+      "display_name": "Full Mosaic Baseline Efficiency",
+      "synonyms": [
+        "full mosaic baseline TBWU per minute",
+        "full mosaic pre-Mosaic efficiency",
+        "full mosaic legacy VR efficiency",
+        "overall baseline efficiency",
+        "PowerScribe baseline efficiency"
+      ]
+    },
+    "Full Mosaic Pct Change Vs Baseline": {
+      "comment": "Headline efficiency change vs baseline, all Mosaic exams (Reporting + Drafting): (Mosaic - baseline) / baseline. Fraction: 0.12 = 12% more TBWU/min than pre-Mosaic. Outliers excluded; min_exams gate. = PowerBI [Pct_Change_Metric_Opt] (Mosaic Efficiency, Full Mosaic). Company/region here; practice/rad/site splits: mosaic_eff_* functions.",
+      "display_name": "Full Mosaic Efficiency Change vs Baseline",
+      "synonyms": [
+        "full mosaic efficiency gain vs baseline",
+        "full mosaic % change vs baseline",
+        "full mosaic productivity lift vs baseline",
+        "Mosaic efficiency gain",
+        "overall efficiency change vs baseline",
+        "Mosaic productivity improvement"
+      ]
+    },
+    "Full Mosaic Implied Read Time Savings Pct": {
+      "comment": "Headline implied read-time savings, all Mosaic exams: baseline / Mosaic efficiency - 1. Fraction; NEGATIVE = savings (-0.10 = 10% less read time per unit of work). Outliers excluded; min_exams gate. = PowerBI [Implied_RTS_Opt] (Mosaic Efficiency, Full Mosaic). Company/region here; practice/rad/site splits: mosaic_eff_* functions.",
+      "display_name": "Full Mosaic Implied Read Time Savings",
+      "synonyms": [
+        "full mosaic read time savings",
+        "full mosaic time saved vs baseline",
+        "full mosaic read time reduction",
+        "Mosaic read time savings",
+        "overall read time savings"
+      ]
+    },
+    "Both Mosaic Exams": {
+      "comment": "Count of exams in all periods (Reporting + Drafting + pre-Mosaic Baseline) for radiologists with an eligible baseline. Outliers excluded; min_exams gate (default 1 exam per rad in this mode). Slice by Exam Month or Exam Week. = PowerBI [mosaicexams_opt] (Mosaic Efficiency, Both).",
+      "display_name": "Both (All Periods) Exams",
+      "synonyms": [
+        "both modes exam volume",
+        "both modes exams read",
+        "number of both modes exams"
+      ]
+    },
+    "Both Mosaic TBWU": {
+      "comment": "Building block: total TBWU workload units (same unit as RPWU) on exams in all periods (Reporting + Drafting + pre-Mosaic Baseline). Outliers excluded; min_exams gate (default 1 exam per rad in this mode). Numerator of Both Mosaic Efficiency. = PowerBI [mosaictbwu_opt] (Mosaic Efficiency, Both).",
+      "display_name": "Both (All Periods) TBWU",
+      "synonyms": [
+        "both modes workload units",
+        "both modes RPWU",
+        "both modes total TBWU"
+      ]
+    },
+    "Both Mosaic Time Sec": {
+      "comment": "Building block: total adjusted read time in seconds on all-period exams (incl. Baseline). Outliers excluded; min_exams gate (default 1 exam per rad in this mode). Denominator of Both Mosaic Efficiency and Both Baseline Efficiency. = PowerBI [Base_Time_Mosaic_Opt] (Mosaic Efficiency, Both).",
+      "display_name": "Both (All Periods) Read Time (Seconds)",
+      "synonyms": [
+        "both modes read time seconds",
+        "both modes total read time",
+        "both modes reading time"
+      ]
+    },
+    "Both Baseline Exams": {
+      "comment": "Count of the same qualifying radiologists' pre-Mosaic Baseline-period exams (legacy VR/PowerScribe, not Mosaic-read or drafted), outliers excluded. All modalities, not limited to this mode's modalities. Context only; not used in the efficiency ratios. = PowerBI [baselineexams_opt] (Mosaic Efficiency, Both).",
+      "display_name": "Both (All Periods) Baseline Exams",
+      "synonyms": [
+        "both modes pre-Mosaic exams",
+        "both modes legacy VR exams",
+        "both modes PowerScribe baseline exams"
+      ]
+    },
+    "Both Baseline Contrib": {
+      "comment": "Building block: time-weighted baseline contribution = each radiologist's own baseline rate (TBWU/min) x each exam's own read time, over exams in all periods (Reporting + Drafting + pre-Mosaic Baseline). Divide by Both Mosaic Time Sec to get Both Baseline Efficiency.",
+      "display_name": "Both (All Periods) Baseline Contribution (Helper)",
+      "synonyms": [
+        "both modes baseline numerator",
+        "both modes time weighted baseline contribution"
+      ]
+    },
+    "Both Mosaic Efficiency": {
+      "comment": "TBWU per minute on exams in all periods (Reporting + Drafting + pre-Mosaic Baseline). Includes Baseline-period exams, so it is an all-period figure, not Mosaic-only. Outliers excluded; min_exams gate (default 1 exam per rad in this mode). Slice by Exam Month or Exam Week. = PowerBI [Base_Mosaic_Eff_Opt] (Mosaic Efficiency, Both).",
+      "display_name": "Both (All Periods) Efficiency",
+      "synonyms": [
+        "both modes TBWU per minute",
+        "both modes productivity on Mosaic",
+        "both modes efficiency on Mosaic"
+      ]
+    },
+    "Both Baseline Efficiency": {
+      "comment": "Pre-Mosaic baseline TBWU per minute, using each radiologist's own baseline rate, time-weighted by the read time of the same all-period exams (incl. Baseline): the like-for-like comparison point for Both Mosaic Efficiency. Outliers excluded. = PowerBI [Base_Baseline_Eff_Opt] (Mosaic Efficiency, Both).",
+      "display_name": "Both (All Periods) Baseline Efficiency",
+      "synonyms": [
+        "both modes baseline TBWU per minute",
+        "both modes pre-Mosaic efficiency",
+        "both modes legacy VR efficiency"
+      ]
+    },
+    "Both Pct Change Vs Baseline": {
+      "comment": "Efficiency change vs baseline, all-period exams (incl. Baseline): (Mosaic - baseline) / baseline. Fraction: 0.12 = 12% more TBWU per minute than pre-Mosaic; negative = slower. Outliers excluded; min_exams gate (default 1 exam per rad in this mode). = PowerBI [Pct_Change_Metric_Opt] (Mosaic Efficiency, Both).",
+      "display_name": "Both (All Periods) Efficiency Change vs Baseline",
+      "synonyms": [
+        "both modes efficiency gain vs baseline",
+        "both modes % change vs baseline",
+        "both modes productivity lift vs baseline"
+      ]
+    },
+    "Both Implied Read Time Savings Pct": {
+      "comment": "Implied read-time savings, all-period exams (incl. Baseline): baseline / Mosaic efficiency - 1. Fraction; NEGATIVE = savings (-0.10 = 10% less read time per unit of work than baseline). Outliers excluded; min_exams gate (default 1 exam per rad in this mode). = PowerBI [Implied_RTS_Opt] (Mosaic Efficiency, Both).",
+      "display_name": "Both (All Periods) Implied Read Time Savings",
+      "synonyms": [
+        "both modes read time savings",
+        "both modes time saved vs baseline",
+        "both modes read time reduction"
+      ]
+    }
+  }
+}

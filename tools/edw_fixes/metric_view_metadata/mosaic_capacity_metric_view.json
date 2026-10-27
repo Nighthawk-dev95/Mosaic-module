@@ -1,0 +1,706 @@
+{
+  "view_comment": "MOSAIC CAPACITY DETAIL (draft, edw_test only). One row per radiologist shift (shifts from 2024-10-01): summed on-shift TBWU (RPWU) and RVU capacity vs each radiologist's own POS-adjusted TBWU 26 baseline (tbl_mosaic_baseline_master), hour-weighted utilization (reading time / shift time), efficiency per read-minute, and the full on-shift case mix (modality, priority, place of service, Mosaic use, assignment method, VRA). No PowerBI default filters are applied here (all shift lengths, shifts with and without a baseline). For exec added-capacity, capacity-per-shift and utilization numbers use the PowerBI-parity view mosaic_capacity_pbi_metric_view; use this view for case mix, per-hour normalisation and diagnostics. PowerBI mappings below are not yet parity-verified.",
+  "dimensions": {
+    "NPI": {
+      "comment": "Radiologist's National Provider Identifier (10-digit ID, text). Use to identify a radiologist unambiguously.",
+      "display_name": "Radiologist NPI",
+      "synonyms": [
+        "NPI number",
+        "provider ID",
+        "national provider identifier"
+      ]
+    },
+    "Radiologist Name": {
+      "comment": "Radiologist name, 'Last, First M'. Match partial names with ILIKE '%name%'.",
+      "display_name": "Radiologist Name",
+      "synonyms": [
+        "radiologist",
+        "rad",
+        "doctor",
+        "physician"
+      ]
+    },
+    "Team": {
+      "comment": "Radiologist's roster team, a sub-team finer than Team Rolled Up (Provider Practice), e.g. 'RAF Tampa'. For the radiologist's home practice use Team Rolled Up.",
+      "display_name": "Team",
+      "synonyms": [
+        "sub team",
+        "roster team"
+      ]
+    },
+    "Team Rolled Up": {
+      "comment": "Provider Practice = the radiologist's home practice (PowerBI 'Team Rolled up'): Team mapped to its parent grouping via the team_rollups lookup, same join as the Volume metric view. Not the exam site's practice - that is Practice.",
+      "display_name": "Provider Practice (Team Rolled Up)",
+      "synonyms": [
+        "provider practice",
+        "home practice",
+        "rolled up team",
+        "group"
+      ]
+    },
+    "Local Region": {
+      "comment": "One of 6 fixed regions keyed on Team: Special Operations, Apex, Genesis, Maverick, Trailblazer, Matrix (unmapped teams fall into Matrix here). Matches PowerBI '0. Cur'[Local], same mapping as the Volume and Efficiency views.",
+      "display_name": "Local Region",
+      "synonyms": [
+        "region",
+        "local",
+        "operating region"
+      ]
+    },
+    "Practice": {
+      "comment": "Managing Practice = the practice owning the exam SITE (PowerBI 'Practice'), one per shift (if a shift spans several sites the alphabetically highest is kept). Same Team-vs-Practice convention as the efficiency exam-level view; the home practice is Team Rolled Up.",
+      "display_name": "Managing Practice",
+      "synonyms": [
+        "site practice",
+        "exam site practice",
+        "practice of the shift"
+      ]
+    },
+    "Shift Name": {
+      "comment": "Name of the scheduled shift the radiologist worked (from the shift schedule); one row per radiologist, date, shift name and task.",
+      "display_name": "Shift Name",
+      "synonyms": [
+        "schedule shift",
+        "shift label",
+        "shift schedule name"
+      ]
+    },
+    "Shift Date": {
+      "comment": "Date of the radiologist's shift (shifts from 2024-10-01 onward). Bind date-range filters here.",
+      "display_name": "Shift Date",
+      "synonyms": [
+        "date of shift",
+        "shift day",
+        "date worked"
+      ]
+    },
+    "Shift Month": {
+      "comment": "Calendar month of the shift, as the first day of the month (e.g. 2026-09-01). Use for monthly trends; the current month is partial.",
+      "display_name": "Shift Month",
+      "synonyms": [
+        "month",
+        "shift calendar month",
+        "month of shift"
+      ]
+    },
+    "Baseline Type": {
+      "comment": "How the shift's TBWU 26 baseline was matched: Exact, Proxy or Manual Review; NULL = no baseline matched (from tbl_mosaic_baseline_master). Filter to NOT NULL for like-for-like capacity-vs-baseline comparisons.",
+      "display_name": "Baseline Type",
+      "synonyms": [
+        "baseline method",
+        "baseline match type",
+        "how baseline was matched"
+      ]
+    },
+    "Is RPCE Source": {
+      "comment": "TRUE if the shift has RPCE-sourced exams (rpceMidwest / rpceSouthwest). Usually means reliable dictation timestamps but NOT always (2026-10-22: RP Valley ~100% RPCE yet 88.7% missing timestamps). Use Pct Exams With Valid Read Time as the trust signal, not this flag.",
+      "display_name": "Is RPCE Source",
+      "synonyms": [
+        "RPCE flag",
+        "RPCE sourced shift",
+        "RPCE system"
+      ]
+    }
+  },
+  "measures": {
+    "On Shift Cases": {
+      "comment": "Total exams read during scheduled shifts (all shifts, with or without a baseline). Denominator for every 'Pct ... Of Shift' case-mix measure. = PowerBI [On-Shift Cases] (Mosaic Impact).",
+      "display_name": "On-Shift Cases",
+      "synonyms": [
+        "exams read on shift",
+        "shift case volume",
+        "cases read during shifts"
+      ]
+    },
+    "Total Hours": {
+      "comment": "Building block: total scheduled shift hours. Feeds the Per Hour / Per 9Hour capacity and baseline measures and On Shift Utilization Pct.",
+      "display_name": "Total Shift Hours",
+      "synonyms": [
+        "scheduled hours",
+        "hours worked on shift",
+        "shift hours total"
+      ]
+    },
+    "On Shift Capacity RPWU": {
+      "comment": "Total workload read on shift, in TBWU (RPWU), summed over all shifts in scope with or without a baseline. = PowerBI [On-Shift Capacity] (Mosaic Impact). For exec reporting use mosaic_capacity_pbi_metric_view [New Capacity] (average per shift).",
+      "display_name": "On-Shift Capacity (Total TBWU)",
+      "synonyms": [
+        "summed TBWU capacity",
+        "total TBWU read on shift",
+        "total RPWU on shift"
+      ]
+    },
+    "On Shift Capacity RVU": {
+      "comment": "Total workload read on shift in RVU (billing units), summed over all shifts in scope. RVU counterpart of On Shift Capacity RPWU. = PowerBI [On-Shift Capacity] (Mosaic Impact, RVU unit).",
+      "display_name": "On-Shift Capacity (Total RVU)",
+      "synonyms": [
+        "summed RVU capacity",
+        "total RVU read on shift",
+        "RVUs on shift"
+      ]
+    },
+    "On Shift Capacity RPWU Per Hour": {
+      "comment": "On-shift TBWU per scheduled shift hour (total TBWU / total hours, hour-weighted). All shifts in scope, with or without a baseline.",
+      "display_name": "On-Shift Capacity per Hour (TBWU)",
+      "synonyms": [
+        "TBWU per shift hour",
+        "hourly TBWU capacity",
+        "RPWU per hour"
+      ]
+    },
+    "On Shift Capacity RPWU Per 9Hour": {
+      "comment": "On-shift TBWU per hour scaled to a standard 9-hour shift. = PowerBI [New Capacity RPWU 9h(Top N)] (Mosaic Impact). For exec capacity per shift use mosaic_capacity_pbi_metric_view [New Capacity].",
+      "display_name": "On-Shift Capacity per 9-Hour Shift (TBWU)",
+      "synonyms": [
+        "TBWU per 9 hour shift",
+        "9-hour normalised TBWU capacity",
+        "RPWU per 9 hours"
+      ]
+    },
+    "On Shift Capacity RVU Per Hour": {
+      "comment": "On-shift RVU per scheduled shift hour (total RVU / total hours, hour-weighted).",
+      "display_name": "On-Shift Capacity per Hour (RVU)",
+      "synonyms": [
+        "RVU per shift hour",
+        "hourly RVU capacity"
+      ]
+    },
+    "On Shift Capacity RVU Per 9Hour": {
+      "comment": "On-shift RVU per hour scaled to a standard 9-hour shift.",
+      "display_name": "On-Shift Capacity per 9-Hour Shift (RVU)",
+      "synonyms": [
+        "RVU per 9 hour shift",
+        "9-hour normalised RVU capacity"
+      ]
+    },
+    "Shift Baseline RPWU": {
+      "comment": "Total pre-Mosaic baseline (TBWU 26, rescaled to shift hours), summed only over shifts with a matched baseline (Baseline Type not null; NULL-safe). = PowerBI [Shift Baseline] (Mosaic Impact). For exec reporting use mosaic_capacity_pbi_metric_view [Average Baseline].",
+      "display_name": "Shift Baseline (Total TBWU 26)",
+      "synonyms": [
+        "summed baseline TBWU",
+        "total baseline TBWU",
+        "baseline RPWU total"
+      ]
+    },
+    "Shift Baseline RPWU Per Hour": {
+      "comment": "Baseline TBWU per scheduled hour. Caveat: divides baselined-shift baseline by the hours of ALL shifts, so it is understated unless filtered to Baseline Type not null.",
+      "display_name": "Shift Baseline per Hour (TBWU 26)",
+      "synonyms": [
+        "baseline TBWU per hour",
+        "hourly baseline"
+      ]
+    },
+    "Shift Baseline RPWU Per 9Hour": {
+      "comment": "Baseline TBWU per hour scaled to a standard 9-hour shift. Same caveat as the per-hour baseline: filter to Baseline Type not null for a like-for-like figure.",
+      "display_name": "Shift Baseline per 9-Hour Shift (TBWU 26)",
+      "synonyms": [
+        "baseline TBWU per 9 hour shift",
+        "9-hour normalised baseline"
+      ]
+    },
+    "Shifts With Baseline": {
+      "comment": "Building block: number of shifts with a matched TBWU 26 baseline (Baseline Type not null). Feeds Pct Shifts With Baseline.",
+      "display_name": "Shifts With a Baseline",
+      "synonyms": [
+        "baselined shifts",
+        "shifts with matched baseline"
+      ]
+    },
+    "Pct Shifts With Baseline": {
+      "comment": "Share of shifts that have a matched baseline, a fraction 0-1. Low coverage means capacity-vs-baseline measures describe only part of the work.",
+      "display_name": "% Shifts With a Baseline",
+      "synonyms": [
+        "baseline coverage",
+        "share of shifts baselined",
+        "baseline match rate"
+      ]
+    },
+    "On Shift Capacity Vs Baseline RPWU": {
+      "comment": "Total on-shift TBWU minus total baseline TBWU (positive = above baseline). Caveat: capacity includes all shifts, baseline only baselined ones - filter Baseline Type not null. = PowerBI [On-Shift Capacity v. BL] (Mosaic Impact). Exec: mosaic_capacity_pbi_metric_view [Pct Addl Capacity].",
+      "display_name": "On-Shift Capacity vs Baseline (Total TBWU)",
+      "synonyms": [
+        "summed TBWU above baseline",
+        "total capacity gain vs baseline",
+        "net TBWU vs baseline"
+      ]
+    },
+    "On Shift Capacity Vs Baseline RPWU Per Hour": {
+      "comment": "On-shift TBWU per hour minus baseline TBWU per hour (positive = above baseline). Filter Baseline Type not null for like-for-like. For exec added capacity use mosaic_capacity_pbi_metric_view [Addl Capacity Per Shift].",
+      "display_name": "On-Shift Capacity vs Baseline per Hour (TBWU)",
+      "synonyms": [
+        "hourly TBWU gain vs baseline",
+        "TBWU per hour above baseline"
+      ]
+    },
+    "On Shift Above Baseline RPWU": {
+      "comment": "Portion of on-shift TBWU above each shift's baseline, summed (0 for shifts at/under baseline or with no baseline). Stacks with On Shift Up To Baseline RPWU to total capacity. = PowerBI [On-Shift Capacity Above BL(Unit)] (Mosaic Impact).",
+      "display_name": "On-Shift Capacity Above Baseline (TBWU)",
+      "synonyms": [
+        "TBWU above baseline",
+        "capacity exceeding baseline",
+        "above-baseline workload"
+      ]
+    },
+    "On Shift Up To Baseline RPWU": {
+      "comment": "Portion of on-shift TBWU at/under each shift's baseline, summed; shifts with no baseline count fully here. Pairs with On Shift Above Baseline RPWU for a stacked view (together = total capacity). = PowerBI [On-Shift Capacity Up to BL(Unit)] (Mosaic Impact).",
+      "display_name": "On-Shift Capacity Up to Baseline (TBWU)",
+      "synonyms": [
+        "TBWU up to baseline",
+        "capacity within baseline",
+        "at-or-below-baseline workload"
+      ]
+    },
+    "Read Minutes": {
+      "comment": "Building block: total reading (dictation) minutes on shift, from exams with valid timestamps only, each exam capped at 60 minutes. Feeds On Shift Utilization Pct and On Shift Efficiency.",
+      "display_name": "Reading Minutes on Shift",
+      "synonyms": [
+        "dictation minutes",
+        "reading time minutes",
+        "read time on shift"
+      ]
+    },
+    "Exams With Valid Read Time": {
+      "comment": "Building block: exams with usable dictation timestamps (start, end and final all present) - the population Read Minutes, efficiency and utilization are actually computed over. Feeds Pct Exams With Valid Read Time.",
+      "display_name": "Exams With Valid Read Time",
+      "synonyms": [
+        "exams with dictation timestamps",
+        "timed exams",
+        "exams with usable read time"
+      ]
+    },
+    "Pct Exams With Valid Read Time": {
+      "comment": "ALWAYS CHECK before trusting efficiency or utilization for a slice: share of on-shift exams with usable dictation timestamps, a fraction 0-1. Coverage varies enormously by practice (live: 0.03% to 66%+), independent of Is RPCE Source.",
+      "display_name": "% Exams With Valid Read Time",
+      "synonyms": [
+        "read time coverage",
+        "timestamp coverage",
+        "dictation timestamp coverage"
+      ]
+    },
+    "On Shift Utilization Pct": {
+      "comment": "Hour-weighted utilization: total reading minutes / total shift minutes, a fraction 0-1, capped at 1 (100%). Check Pct Exams With Valid Read Time alongside it. = PowerBI [On-Shift Utilization]. Exec: mosaic_capacity_pbi_metric_view [New Utilization].",
+      "display_name": "On-Shift Utilization (Hour-Weighted)",
+      "synonyms": [
+        "hour-weighted utilization",
+        "pooled reading time share",
+        "read minutes over shift minutes"
+      ]
+    },
+    "On Shift Efficiency RPWU": {
+      "comment": "TBWU read per reading minute (total TBWU / total read minutes). Capacity counts all cases but read minutes only exams with valid timestamps - check Pct Exams With Valid Read Time. = PowerBI [On-Shift Efficiency] (Mosaic Impact). Exec: mosaic_capacity_pbi_metric_view [New Efficiency].",
+      "display_name": "On-Shift Efficiency (TBWU per Read Minute)",
+      "synonyms": [
+        "TBWU per read minute",
+        "pooled shift efficiency",
+        "RPWU per reading minute"
+      ]
+    },
+    "On Shift Efficiency RVU": {
+      "comment": "RVU read per reading minute (total RVU / total read minutes); same read-time coverage caveat as the TBWU version. = PowerBI [On-Shift Efficiency] (Mosaic Impact, RVU unit).",
+      "display_name": "On-Shift Efficiency (RVU per Read Minute)",
+      "synonyms": [
+        "RVU per read minute",
+        "RVU efficiency on shift"
+      ]
+    },
+    "CT Cases": {
+      "comment": "Building block: number of CT exams read during shifts. Feeds Pct CT Of Shift (share of On Shift Cases).",
+      "display_name": "CT Cases on Shift",
+      "synonyms": [
+        "CT exams on shift",
+        "CT volume on shift"
+      ]
+    },
+    "Pct CT Of Shift": {
+      "comment": "Share of on-shift exams that are CT exams, a fraction 0-1 (= CT Cases / On Shift Cases). = PowerBI [% CT] (Mosaic Impact).",
+      "display_name": "% of Shift Cases: CT",
+      "synonyms": [
+        "CT share of shift cases",
+        "% CT on shift",
+        "CT mix on shift"
+      ]
+    },
+    "XR Cases": {
+      "comment": "Building block: number of X-ray exams (source modality code CR) read during shifts. Feeds Pct XR Of Shift (share of On Shift Cases).",
+      "display_name": "XR Cases on Shift",
+      "synonyms": [
+        "X-ray exams on shift",
+        "XR volume on shift"
+      ]
+    },
+    "Pct XR Of Shift": {
+      "comment": "Share of on-shift exams that are X-ray exams (source modality code CR), a fraction 0-1 (= XR Cases / On Shift Cases). = PowerBI [% XR] (Mosaic Impact).",
+      "display_name": "% of Shift Cases: XR",
+      "synonyms": [
+        "X-ray share of shift cases",
+        "% XR on shift",
+        "XR mix on shift"
+      ]
+    },
+    "US Cases": {
+      "comment": "Building block: number of ultrasound exams read during shifts. Feeds Pct US Of Shift (share of On Shift Cases).",
+      "display_name": "US Cases on Shift",
+      "synonyms": [
+        "ultrasound exams on shift",
+        "US volume on shift"
+      ]
+    },
+    "Pct US Of Shift": {
+      "comment": "Share of on-shift exams that are ultrasound exams, a fraction 0-1 (= US Cases / On Shift Cases). = PowerBI [% US] (Mosaic Impact).",
+      "display_name": "% of Shift Cases: US",
+      "synonyms": [
+        "ultrasound share of shift cases",
+        "% US on shift",
+        "US mix on shift"
+      ]
+    },
+    "MR Cases": {
+      "comment": "Building block: number of MRI exams read during shifts. Feeds Pct MR Of Shift (share of On Shift Cases).",
+      "display_name": "MR Cases on Shift",
+      "synonyms": [
+        "MRI exams on shift",
+        "MR volume on shift"
+      ]
+    },
+    "Pct MR Of Shift": {
+      "comment": "Share of on-shift exams that are MRI exams, a fraction 0-1 (= MR Cases / On Shift Cases). = PowerBI [% MR] (Mosaic Impact).",
+      "display_name": "% of Shift Cases: MR",
+      "synonyms": [
+        "MRI share of shift cases",
+        "% MR on shift",
+        "MR mix on shift"
+      ]
+    },
+    "NM Cases": {
+      "comment": "Building block: number of nuclear medicine exams read during shifts. Feeds Pct NM Of Shift (share of On Shift Cases).",
+      "display_name": "NM Cases on Shift",
+      "synonyms": [
+        "nuclear medicine exams on shift",
+        "NM volume on shift"
+      ]
+    },
+    "Pct NM Of Shift": {
+      "comment": "Share of on-shift exams that are nuclear medicine exams, a fraction 0-1 (= NM Cases / On Shift Cases). = PowerBI [% NM] (Mosaic Impact).",
+      "display_name": "% of Shift Cases: NM",
+      "synonyms": [
+        "nuclear medicine share of shift cases",
+        "% NM on shift"
+      ]
+    },
+    "PT Cases": {
+      "comment": "Building block: number of PET exams read during shifts. Feeds Pct PT Of Shift (share of On Shift Cases).",
+      "display_name": "PT Cases on Shift",
+      "synonyms": [
+        "PET exams on shift",
+        "PT volume on shift"
+      ]
+    },
+    "Pct PT Of Shift": {
+      "comment": "Share of on-shift exams that are PET exams, a fraction 0-1 (= PT Cases / On Shift Cases). = PowerBI [% PT] (Mosaic Impact).",
+      "display_name": "% of Shift Cases: PT",
+      "synonyms": [
+        "PET share of shift cases",
+        "% PT on shift"
+      ]
+    },
+    "MG Cases": {
+      "comment": "Building block: number of mammography exams read during shifts. Feeds Pct MG Of Shift (share of On Shift Cases).",
+      "display_name": "MG Cases on Shift",
+      "synonyms": [
+        "mammography exams on shift",
+        "MG volume on shift"
+      ]
+    },
+    "Pct MG Of Shift": {
+      "comment": "Share of on-shift exams that are mammography exams, a fraction 0-1 (= MG Cases / On Shift Cases). = PowerBI [% MG] (Mosaic Impact).",
+      "display_name": "% of Shift Cases: MG",
+      "synonyms": [
+        "mammography share of shift cases",
+        "% MG on shift"
+      ]
+    },
+    "IR Cases": {
+      "comment": "Building block: number of interventional radiology exams read during shifts. Feeds Pct IR Of Shift (share of On Shift Cases).",
+      "display_name": "IR Cases on Shift",
+      "synonyms": [
+        "IR exams on shift",
+        "IR volume on shift"
+      ]
+    },
+    "Pct IR Of Shift": {
+      "comment": "Share of on-shift exams that are interventional radiology exams, a fraction 0-1 (= IR Cases / On Shift Cases). = PowerBI [% IR] (Mosaic Impact).",
+      "display_name": "% of Shift Cases: IR",
+      "synonyms": [
+        "IR share of shift cases",
+        "% IR on shift"
+      ]
+    },
+    "Other Modality Cases": {
+      "comment": "Building block: number of exams in modalities other than CT/XR/US/MR/NM/PT/MG/IR read during shifts. Feeds Pct Other Modality Of Shift (share of On Shift Cases).",
+      "display_name": "Other Modality Cases on Shift",
+      "synonyms": [
+        "other modality exams on shift",
+        "other modality volume on shift"
+      ]
+    },
+    "Pct Other Modality Of Shift": {
+      "comment": "Share of on-shift exams that are exams in modalities other than CT/XR/US/MR/NM/PT/MG/IR, a fraction 0-1 (= Other Modality Cases / On Shift Cases). = PowerBI [% Other Modality] (Mosaic Impact).",
+      "display_name": "% of Shift Cases: Other Modality",
+      "synonyms": [
+        "other modality share of shift cases",
+        "% other modality on shift"
+      ]
+    },
+    "Routine Cases": {
+      "comment": "Building block: number of Routine-priority exams read during shifts. Feeds Pct Routine Of Shift (share of On Shift Cases).",
+      "display_name": "Routine Cases on Shift",
+      "synonyms": [
+        "routine exams on shift",
+        "routine priority volume on shift"
+      ]
+    },
+    "Pct Routine Of Shift": {
+      "comment": "Share of on-shift exams that are Routine-priority exams, a fraction 0-1 (= Routine Cases / On Shift Cases). = PowerBI [% Routine] (Mosaic Impact).",
+      "display_name": "% of Shift Cases: Routine",
+      "synonyms": [
+        "routine share of shift cases",
+        "% routine on shift"
+      ]
+    },
+    "Stat Cases": {
+      "comment": "Building block: number of Stat-priority exams read during shifts. Feeds Pct Stat Of Shift (share of On Shift Cases).",
+      "display_name": "Stat Cases on Shift",
+      "synonyms": [
+        "stat exams on shift",
+        "stat priority volume on shift"
+      ]
+    },
+    "Pct Stat Of Shift": {
+      "comment": "Share of on-shift exams that are Stat-priority exams, a fraction 0-1 (= Stat Cases / On Shift Cases). = PowerBI [% Stat] (Mosaic Impact).",
+      "display_name": "% of Shift Cases: Stat",
+      "synonyms": [
+        "stat share of shift cases",
+        "% stat on shift"
+      ]
+    },
+    "Stroke Cases": {
+      "comment": "Building block: number of Stroke-priority exams read during shifts. Feeds Pct Stroke Of Shift (share of On Shift Cases).",
+      "display_name": "Stroke Cases on Shift",
+      "synonyms": [
+        "stroke exams on shift",
+        "stroke priority volume on shift"
+      ]
+    },
+    "Pct Stroke Of Shift": {
+      "comment": "Share of on-shift exams that are Stroke-priority exams, a fraction 0-1 (= Stroke Cases / On Shift Cases). = PowerBI [% Stroke] (Mosaic Impact).",
+      "display_name": "% of Shift Cases: Stroke",
+      "synonyms": [
+        "stroke share of shift cases",
+        "% stroke on shift"
+      ]
+    },
+    "Trauma Cases": {
+      "comment": "Building block: number of Trauma-priority exams read during shifts. Feeds Pct Trauma Of Shift (share of On Shift Cases).",
+      "display_name": "Trauma Cases on Shift",
+      "synonyms": [
+        "trauma exams on shift",
+        "trauma priority volume on shift"
+      ]
+    },
+    "Pct Trauma Of Shift": {
+      "comment": "Share of on-shift exams that are Trauma-priority exams, a fraction 0-1 (= Trauma Cases / On Shift Cases). = PowerBI [% Trauma] (Mosaic Impact).",
+      "display_name": "% of Shift Cases: Trauma",
+      "synonyms": [
+        "trauma share of shift cases",
+        "% trauma on shift"
+      ]
+    },
+    "OtherP Cases": {
+      "comment": "Building block: number of exams with a priority outside Routine/Stat/Stroke/Trauma read during shifts. Feeds Pct OtherP Of Shift (share of On Shift Cases).",
+      "display_name": "Other Priority Cases on Shift",
+      "synonyms": [
+        "other priority exams on shift",
+        "other priority volume on shift"
+      ]
+    },
+    "Pct OtherP Of Shift": {
+      "comment": "Share of on-shift exams that are exams with a priority outside Routine/Stat/Stroke/Trauma, a fraction 0-1 (= OtherP Cases / On Shift Cases). = PowerBI [% OtherP] (Mosaic Impact).",
+      "display_name": "% of Shift Cases: Other Priority",
+      "synonyms": [
+        "other priority share of shift cases",
+        "% other priority on shift"
+      ]
+    },
+    "ER Cases": {
+      "comment": "Building block: number of emergency (ED care setting) exams read during shifts. Feeds Pct ER Of Shift (share of On Shift Cases).",
+      "display_name": "ER Cases on Shift",
+      "synonyms": [
+        "ER exams on shift",
+        "emergency volume on shift"
+      ]
+    },
+    "Pct ER Of Shift": {
+      "comment": "Share of on-shift exams that are emergency (ED care setting) exams, a fraction 0-1 (= ER Cases / On Shift Cases). = PowerBI [% ER] (Mosaic Impact).",
+      "display_name": "% of Shift Cases: ER",
+      "synonyms": [
+        "ER share of shift cases",
+        "% ER on shift",
+        "emergency share on shift"
+      ]
+    },
+    "Inpatient Cases": {
+      "comment": "Building block: number of inpatient exams read during shifts. Feeds Pct Inpatient Of Shift (share of On Shift Cases).",
+      "display_name": "Inpatient Cases on Shift",
+      "synonyms": [
+        "inpatient exams on shift",
+        "inpatient volume on shift"
+      ]
+    },
+    "Pct Inpatient Of Shift": {
+      "comment": "Share of on-shift exams that are inpatient exams, a fraction 0-1 (= Inpatient Cases / On Shift Cases). = PowerBI [% Inpatient] (Mosaic Impact).",
+      "display_name": "% of Shift Cases: Inpatient",
+      "synonyms": [
+        "inpatient share of shift cases",
+        "% inpatient on shift"
+      ]
+    },
+    "Outpatient Cases": {
+      "comment": "Building block: number of outpatient exams read during shifts. Feeds Pct Outpatient Of Shift (share of On Shift Cases).",
+      "display_name": "Outpatient Cases on Shift",
+      "synonyms": [
+        "outpatient exams on shift",
+        "outpatient volume on shift"
+      ]
+    },
+    "Pct Outpatient Of Shift": {
+      "comment": "Share of on-shift exams that are outpatient exams, a fraction 0-1 (= Outpatient Cases / On Shift Cases). = PowerBI [% Outpatient] (Mosaic Impact).",
+      "display_name": "% of Shift Cases: Outpatient",
+      "synonyms": [
+        "outpatient share of shift cases",
+        "% outpatient on shift"
+      ]
+    },
+    "Mosaic Cases": {
+      "comment": "Building block: number of exams read in Mosaic read during shifts. Feeds Pct Mosaic Of Shift (share of On Shift Cases).",
+      "display_name": "Mosaic Cases on Shift",
+      "synonyms": [
+        "Mosaic exams on shift",
+        "shift exams read in Mosaic"
+      ]
+    },
+    "Pct Mosaic Of Shift": {
+      "comment": "Share of on-shift exams that are exams read in Mosaic, a fraction 0-1 (= Mosaic Cases / On Shift Cases). = PowerBI [% Mosaic] (Mosaic Impact). For exec reporting use mosaic_capacity_pbi_metric_view [Pct Mosaic].",
+      "display_name": "% of Shift Cases: Mosaic",
+      "synonyms": [
+        "Mosaic share of shift case mix",
+        "% of shift cases in Mosaic (case mix)"
+      ]
+    },
+    "Mosaic Drafting Cases": {
+      "comment": "Building block: number of exams drafted in Mosaic (AI Drafting) read during shifts. Feeds Pct Mosaic Drafting Of Shift (share of On Shift Cases).",
+      "display_name": "Mosaic Drafting Cases on Shift",
+      "synonyms": [
+        "drafted exams on shift",
+        "shift exams drafted in Mosaic"
+      ]
+    },
+    "Pct Mosaic Drafting Of Shift": {
+      "comment": "Share of on-shift exams that are exams drafted in Mosaic (AI Drafting), a fraction 0-1 (= Mosaic Drafting Cases / On Shift Cases). = PowerBI [% Mosaic Drafting] (Mosaic Impact). For exec reporting use mosaic_capacity_pbi_metric_view [Pct Mosaic Drafting].",
+      "display_name": "% of Shift Cases: Mosaic Drafting",
+      "synonyms": [
+        "drafting share of shift case mix",
+        "% of shift cases drafted (case mix)"
+      ]
+    },
+    "Captured US In Mosaic Cases": {
+      "comment": "Building block: number of ultrasound exams captured in Mosaic (Mosaic draft flag) read during shifts. Feeds Pct Captured US In Mosaic Of Shift (share of On Shift Cases).",
+      "display_name": "Captured US in Mosaic Cases on Shift",
+      "synonyms": [
+        "Mosaic-captured ultrasound on shift",
+        "captured US exams on shift"
+      ]
+    },
+    "Pct Captured US In Mosaic Of Shift": {
+      "comment": "Share of on-shift exams that are ultrasound exams captured in Mosaic (Mosaic draft flag), a fraction 0-1 (= Captured US In Mosaic Cases / On Shift Cases). = PowerBI [% Mosaic Capture] (Mosaic Impact).",
+      "display_name": "% of Shift Cases: Captured US in Mosaic",
+      "synonyms": [
+        "% Mosaic capture",
+        "ultrasound capture share on shift",
+        "Mosaic US capture rate"
+      ]
+    },
+    "Assigned Cases": {
+      "comment": "Building block: number of exams self-assigned by the radiologist read during shifts. Feeds Pct Assigned Of Shift (share of On Shift Cases). Assigned + Pool + Autonext = On Shift Cases.",
+      "display_name": "Assigned Cases on Shift",
+      "synonyms": [
+        "self-assigned exams on shift",
+        "assigned volume on shift"
+      ]
+    },
+    "Pct Assigned Of Shift": {
+      "comment": "Share of on-shift exams that are exams self-assigned by the radiologist, a fraction 0-1 (= Assigned Cases / On Shift Cases). = PowerBI [% Assigned] (Mosaic Impact).",
+      "display_name": "% of Shift Cases: Assigned",
+      "synonyms": [
+        "self-assigned share of shift cases",
+        "% assigned on shift"
+      ]
+    },
+    "Pool Cases": {
+      "comment": "Building block: number of exams taken from the shared worklist pool (neither self-assigned nor Autonext) read during shifts. Feeds Pct Pool Of Shift (share of On Shift Cases). Assigned + Pool + Autonext = On Shift Cases.",
+      "display_name": "Pool Cases on Shift",
+      "synonyms": [
+        "pool exams on shift",
+        "worklist pool volume on shift"
+      ]
+    },
+    "Pct Pool Of Shift": {
+      "comment": "Share of on-shift exams that are exams taken from the shared worklist pool (neither self-assigned nor Autonext), a fraction 0-1 (= Pool Cases / On Shift Cases). = PowerBI [% Pool] (Mosaic Impact).",
+      "display_name": "% of Shift Cases: Pool",
+      "synonyms": [
+        "pool share of shift cases",
+        "% pool on shift"
+      ]
+    },
+    "Autonext Cases": {
+      "comment": "Building block: number of exams served by Autonext read during shifts. Feeds Pct Autonext Of Shift (share of On Shift Cases). Assigned + Pool + Autonext = On Shift Cases.",
+      "display_name": "Autonext Cases on Shift",
+      "synonyms": [
+        "Autonext exams on shift",
+        "Autonext volume on shift"
+      ]
+    },
+    "Pct Autonext Of Shift": {
+      "comment": "Share of on-shift exams that are exams served by Autonext, a fraction 0-1 (= Autonext Cases / On Shift Cases). = PowerBI [% Autonext] (Mosaic Impact).",
+      "display_name": "% of Shift Cases: Autonext",
+      "synonyms": [
+        "Autonext share of shift cases",
+        "% Autonext on shift"
+      ]
+    },
+    "VRA Assisted Cases": {
+      "comment": "Building block: on-shift exams assisted by VRA (VRA flag). Feeds Pct VRA Assisted. = PowerBI [On-Shift Assisted Cases] (Mosaic Impact).",
+      "display_name": "VRA-Assisted Cases on Shift",
+      "synonyms": [
+        "VRA assisted exams",
+        "assisted exams on shift"
+      ]
+    },
+    "Non IR Stroke Trauma Cases": {
+      "comment": "Building block: on-shift exams excluding IR and Stroke/Trauma priority - the denominator for Pct VRA Assisted, matching the PowerBI DAX exactly (not On Shift Cases).",
+      "display_name": "VRA-Eligible Cases on Shift",
+      "synonyms": [
+        "VRA eligible exams",
+        "non-IR non-stroke non-trauma exams"
+      ]
+    },
+    "Pct VRA Assisted": {
+      "comment": "Share of VRA-eligible on-shift exams (excluding IR, Stroke and Trauma) that were VRA-assisted, a fraction 0-1. = PowerBI [% VRA Assisted] / [% Assisted] (Mosaic Impact).",
+      "display_name": "% VRA-Assisted Cases",
+      "synonyms": [
+        "VRA assist rate",
+        "% assisted by VRA",
+        "VRA usage on shift"
+      ]
+    }
+  }
+}

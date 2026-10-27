@@ -1,0 +1,560 @@
+CREATE VIEW edw_test.enterprise_analytics.mosaic_draftable_metric_view (
+  Calendar Date COMMENT 'Exam calendar date (daily) - bind period filters here, e.g. Calendar Date between \'2026-09-01\' and \'2026-09-30\'. The snapshot keeps completed Mon-Sun weeks only.',
+  Week Start COMMENT 'Monday that starts the Mon-Sun week. The legacy/PowerBI column holding this is (mis)named week_end; PowerBI\'s own [Week Start] calc column (= week_end - 6) is a further 6 days earlier.',
+  Month COMMENT 'Calendar month of the exam date (first day of month, e.g. 2026-09-01). Use for monthly trends; PowerBI month visuals bucket by week instead - see PBI Month (by week).',
+  PBI Month (by week) COMMENT 'Month bucket PowerBI uses (Draftable[Month Start] = month of week_end). Only for reproducing PowerBI month visuals: a week spanning a month boundary lands wholly in the month of its Monday.',
+  Category COMMENT 'Why a draftable exam was or was not drafted, e.g. \'Drafted\', \'RAD not enabled - Rad declined\', \'Exam never opened, not drafted\'. First match wins: Drafted > Rad declined > Ops declined > Incomplete process > PRACTICE not enabled > never opened > opened <5 min > opened >5 min. Sort by Category Sort Order.',
+  Category Sort Order COMMENT 'Numeric sort key for Category: 0 = Drafted, 1 = Rad declined, 2 = Ops declined, 3 = Incomplete process, 4 = Practice not enabled, 5 = opened <5 min, 6 = opened >5 min, 7 = Exam never opened.',
+  Category Group COMMENT 'Owner-level roll-up of Category: \'Drafted\', \'Radiologist not enabled\' (consent / ops / enablement, categories 1-3), \'Practice not enabled\' (model roll-out, 4), \'Enabled, draft not used\' (workflow / product, 5-7).',
+  Is Drafted COMMENT 'TRUE if the exam was drafted (Category = \'Drafted\'); FALSE = undrafted (categories 1-7).',
+  Team COMMENT 'Radiologist\'s roster team, finer than Team Rolled Up (a sub-team of the Provider Practice, the rad\'s home practice). = PowerBI Draftable[Team].',
+  Team Rolled Up COMMENT 'Provider Practice = the radiologist\'s home practice, rolled up via tbl_team_rollups (= PowerBI \'Team Rolled up\'). This view has no Managing Practice (exam-site practice); use this or Local Region for practice cuts.',
+  Local Region COMMENT 'One of 6 regions (Special Operations, Apex, Genesis, Maverick, Trailblazer, Matrix), exact copy of PowerBI Draftable[Localdraf] keyed on Team. Differs from other views\' Local Region for a few teams (e.g. RP Florida West, RAA, Lakefront Imaging). Filter with equality.',
+  Local Practice COMMENT 'Exam\'s local practice short name (legacy local_practice = local_practice_short_name), a short site-group code. NOT Managing Practice and not Provider Practice - prefer Team Rolled Up or Local Region for practice questions.',
+  Site COMMENT 'Exam location - the imaging site / facility where the draftable exam was performed.',
+  Radiologist Name COMMENT 'Reading radiologist, \'Last, First M\' (e.g. \'Taha, Manuel R\'). Match partial names with ILIKE \'%lastname%\' and say which radiologist(s) matched.',
+  NPI COMMENT 'Reading radiologist\'s NPI (National Provider Identifier), as text.',
+  Exam Category COMMENT 'Exam category from exam_category_lookup_xwalk (ParentRpt) - the canonical grouping of procedure codes.',
+  Drafting Model COMMENT 'Declared AI drafting model / capturable category for the RPID: \'XR/MSK\', \'CT Chest\', \'CT Abd/Pel\', \'CT Spine\', \'CT Head\', \'US Capturable\', \'DEXA Capturable\'.',
+  Draftable Exam Count COMMENT 'Denominator of every Pct measure, and the headline draftable volume - use directly for exam counts (e.g. ranked by Category). All Mosaic exams on drafting-eligible RPIDs, all 8 categories incl. Drafted. = PowerBI Draftable[Exam Count] (Mosaic Volume Report).',
+  Draftable TBWU COMMENT 'Building block: denominator of Pct Undrafted TBWU. Workload (TBWU) of all draftable exams = PowerBI [Category Value] with Metric Selector = TBWU (Mosaic Volume Report).',
+  Radiologist Count COMMENT 'Distinct reading radiologists with draftable exams, counted by name (not NPI). = PowerBI Draftable[Rad Count] (DISTINCTCOUNT Radiologist, Mosaic Volume Report).',
+  Undrafted Exam Count COMMENT 'Numerator of Pct Undrafted; use directly for \'how many exams were not drafted\'. Draftable exams that were not drafted (categories 1-7).',
+  Undrafted TBWU COMMENT 'Building block: numerator of Pct Undrafted TBWU. Workload (TBWU) of draftable exams that were not drafted.',
+  Radiologists With Undrafted Exams COMMENT 'Distinct radiologists (by name) with at least one undrafted draftable exam in the slice.',
+  Drafted Exam Count COMMENT 'Numerator of Pct Drafted; use directly for drafted exam counts. Exams in category 0 \'Drafted\'.',
+  Rad Declined Exam Count COMMENT 'Numerator of Pct Rad Declined. Exams in category 1 \'RAD not enabled - Rad declined\' (the radiologist declined drafting).',
+  Ops Declined Exam Count COMMENT 'Numerator of Pct Ops Declined. Exams in category 2 \'RAD not enabled - Ops declined\' (operations declined enabling the radiologist).',
+  Incomplete Process Exam Count COMMENT 'Numerator of Pct Incomplete Process. Exams in category 3 \'RAD not enabled - Incomplete process\' (enablement / onboarding not finished - often the biggest single lever).',
+  Practice Not Enabled Exam Count COMMENT 'Numerator of Pct Practice Not Enabled. Exams in category 4 \'PRACTICE not enabled for model\' (model not yet rolled out to the practice).',
+  Opened Under 5 Min Exam Count COMMENT 'Numerator of Pct Opened Under 5 Min. Exams in category 5 \'DRAFT not available - Exam opened in <5 min\' (opened before the draft was likely ready - latency).',
+  Opened Over 5 Min Exam Count COMMENT 'Numerator of Pct Opened Over 5 Min. Exams in category 6 \'DRAFT not available - Exam opened in >5 min\' (draft had time to arrive but was not used - adoption / workflow).',
+  Never Opened Exam Count COMMENT 'Numerator of Pct Never Opened. Exams in category 7 \'Exam never opened, not drafted\'.',
+  Pct Drafted COMMENT 'Headline drafting coverage: share of draftable exams that were drafted, a fraction (0.42 = 42%). = PowerBI [Category % of Draftable] for Drafted (Mosaic Volume Report). Slice by Calendar Date / Month.',
+  Pct Undrafted COMMENT 'Share of draftable exams not drafted, a fraction (= 1 - Pct Drafted).',
+  Pct Rad Declined COMMENT 'Share of draftable exams in \'RAD not enabled - Rad declined\', a fraction. = PowerBI [Category % of Draftable] for that category (denominator = all 8 categories incl. Drafted).',
+  Pct Ops Declined COMMENT 'Share of draftable exams in \'RAD not enabled - Ops declined\', a fraction. = PowerBI [Category % of Draftable] for that category (denominator = all 8 categories incl. Drafted).',
+  Pct Incomplete Process COMMENT 'Share of draftable exams in \'RAD not enabled - Incomplete process\', a fraction. = PowerBI [Category % of Draftable] for that category (denominator = all 8 categories incl. Drafted).',
+  Pct Practice Not Enabled COMMENT 'Share of draftable exams in \'PRACTICE not enabled for model\', a fraction. = PowerBI [Category % of Draftable] for that category (denominator = all 8 categories incl. Drafted).',
+  Pct Opened Under 5 Min COMMENT 'Share of draftable exams in \'DRAFT not available - Exam opened in <5 min\', a fraction. = PowerBI [Category % of Draftable] for that category (denominator = all 8 categories incl. Drafted).',
+  Pct Opened Over 5 Min COMMENT 'Share of draftable exams in \'DRAFT not available - Exam opened in >5 min\', a fraction. = PowerBI [Category % of Draftable] for that category (denominator = all 8 categories incl. Drafted).',
+  Pct Never Opened COMMENT 'Share of draftable exams in \'Exam never opened, not drafted\', a fraction. = PowerBI [Category % of Draftable] for that category (denominator = all 8 categories incl. Drafted).',
+  Rad Not Enabled Exam Count COMMENT 'Numerator of Pct Rad Not Enabled. Rad declined + Ops declined + Incomplete process exams (rad drafted <10% of the model\'s exams that week).',
+  Draft Not Used Exam Count COMMENT 'Numerator of Pct Draft Not Used. Rad and practice enabled but no draft used: opened <5 min, opened >5 min, or never opened - the workflow / product bucket.',
+  Pct Rad Not Enabled COMMENT 'Share of draftable exams lost to radiologist enablement (Rad declined / Ops declined / Incomplete process), a fraction of all draftable exams incl. Drafted.',
+  Pct Draft Not Used COMMENT 'Share of draftable exams where rad and practice were enabled but no draft was used (opened <5 min, >5 min, never opened), a fraction of all draftable exams incl. Drafted.',
+  Pct Undrafted TBWU COMMENT 'Workload-weighted undrafted share: undrafted TBWU / draftable TBWU, a fraction (= 1 - PowerBI [Category % of Draftable] for Drafted with Metric Selector = TBWU).',
+  Data Through Date COMMENT 'Last calendar date in the snapshot (daily snapshot; the legacy view keeps completed Mon-Sun weeks only) - quote it as the as-of date.')
+COMMENT 'MOSAIC DRAFTABLE / UNDRAFTED SEMANTIC LAYER (draft, edw_test only). Every Mosaic exam on a drafting-eligible RPID, classified into the PBI 8-category waterfall explaining why it was or was not drafted. Source = daily snapshot of the PBI Draftable table (examsnotdraftedbutdraftable_vw).'
+WITH METRICS
+LANGUAGE YAML
+AS
+$$
+version: 1.1
+
+source: edw_test.enterprise_analytics.mosaic_draftable_snapshot_mv
+
+comment: "MOSAIC DRAFTABLE / UNDRAFTED SEMANTIC LAYER (draft, edw_test only). Every\
+  \ Mosaic exam on a drafting-eligible RPID, classified into the PBI 8-category waterfall\
+  \ explaining why it was or was not drafted. Source = daily snapshot of the PBI Draftable\
+  \ table (examsnotdraftedbutdraftable_vw)."
+
+dimensions:
+  - name: Calendar Date
+    expr: source.calendar_date
+    comment: "Exam calendar date (daily) - bind period filters here, e.g. Calendar\
+      \ Date between '2026-09-01' and '2026-09-30'. The snapshot keeps completed Mon-Sun\
+      \ weeks only."
+    display_name: Exam Date
+    synonyms:
+      - day of exam
+      - draftable exam date
+      - calendar day
+
+  - name: Week Start
+    expr: source.week_start_monday
+    comment: "Monday that starts the Mon-Sun week. The legacy/PowerBI column holding\
+      \ this is (mis)named week_end; PowerBI's own [Week Start] calc column (= week_end\
+      \ - 6) is a further 6 days earlier."
+    display_name: Week Start (Monday)
+    synonyms:
+      - week
+      - week of
+      - week beginning
+
+  - name: Month
+    expr: "DATE_TRUNC('MONTH', source.calendar_date)"
+    comment: "Calendar month of the exam date (first day of month, e.g. 2026-09-01).\
+      \ Use for monthly trends; PowerBI month visuals bucket by week instead - see\
+      \ PBI Month (by week)."
+    display_name: Exam Month
+    synonyms:
+      - month of exam
+      - calendar month
+      - monthly
+
+  - name: PBI Month (by week)
+    expr: "DATE_TRUNC('MONTH', source.week_start_monday)"
+    comment: "Month bucket PowerBI uses (Draftable[Month Start] = month of week_end).\
+      \ Only for reproducing PowerBI month visuals: a week spanning a month boundary\
+      \ lands wholly in the month of its Monday."
+    display_name: PowerBI Month (By Week)
+    synonyms:
+      - pbi month
+      - powerbi month bucket
+      - week-based month
+
+  - name: Category
+    expr: source.category
+    comment: "Why a draftable exam was or was not drafted, e.g. 'Drafted', 'RAD not\
+      \ enabled - Rad declined', 'Exam never opened, not drafted'. First match wins:\
+      \ Drafted > Rad declined > Ops declined > Incomplete process > PRACTICE not\
+      \ enabled > never opened > opened <5 min > opened >5 min. Sort by Category Sort\
+      \ Order."
+    display_name: Drafting Category
+    synonyms:
+      - reason not drafted
+      - undrafted reason
+      - why not drafted
+
+  - name: Category Sort Order
+    expr: source.category_sort_order
+    comment: "Numeric sort key for Category: 0 = Drafted, 1 = Rad declined, 2 = Ops\
+      \ declined, 3 = Incomplete process, 4 = Practice not enabled, 5 = opened <5\
+      \ min, 6 = opened >5 min, 7 = Exam never opened."
+    display_name: Category Sort Order
+    synonyms:
+      - category order
+      - category number
+      - waterfall position
+
+  - name: Category Group
+    expr: "CASE WHEN source.category = 'Drafted' THEN 'Drafted' WHEN source.category\
+      \ LIKE 'RAD not enabled%' THEN 'Radiologist not enabled' WHEN source.category\
+      \ = 'PRACTICE not enabled for model' THEN 'Practice not enabled' ELSE 'Enabled,\
+      \ draft not used' END"
+    comment: "Owner-level roll-up of Category: 'Drafted', 'Radiologist not enabled'\
+      \ (consent / ops / enablement, categories 1-3), 'Practice not enabled' (model\
+      \ roll-out, 4), 'Enabled, draft not used' (workflow / product, 5-7)."
+    display_name: Drafting Category Group
+    synonyms:
+      - owner group
+      - reason group
+      - undrafted bucket
+
+  - name: Is Drafted
+    expr: source.category = 'Drafted'
+    comment: TRUE if the exam was drafted (Category = 'Drafted'); FALSE = undrafted
+      (categories 1-7).
+    display_name: Drafted Flag
+    synonyms:
+      - was drafted
+      - draft used
+      - drafted or not
+
+  - name: Team
+    expr: source.Team
+    comment: "Radiologist's roster team, finer than Team Rolled Up (a sub-team of\
+      \ the Provider Practice, the rad's home practice). = PowerBI Draftable[Team]."
+    display_name: Team
+    synonyms:
+      - sub team
+      - roster team
+      - rad team
+
+  - name: Team Rolled Up
+    expr: source.team_rolled_up
+    comment: "Provider Practice = the radiologist's home practice, rolled up via tbl_team_rollups\
+      \ (= PowerBI 'Team Rolled up'). This view has no Managing Practice (exam-site\
+      \ practice); use this or Local Region for practice cuts."
+    display_name: Provider Practice
+    synonyms:
+      - home practice
+      - rolled up team
+      - practice
+      - group
+
+  - name: Local Region
+    expr: source.local_region
+    comment: "One of 6 regions (Special Operations, Apex, Genesis, Maverick, Trailblazer,\
+      \ Matrix), exact copy of PowerBI Draftable[Localdraf] keyed on Team. Differs\
+      \ from other views' Local Region for a few teams (e.g. RP Florida West, RAA,\
+      \ Lakefront Imaging). Filter with equality."
+    display_name: Local Region
+    synonyms:
+      - region
+      - local
+      - regional group
+
+  - name: Local Practice
+    expr: source.local_practice
+    comment: "Exam's local practice short name (legacy local_practice = local_practice_short_name),\
+      \ a short site-group code. NOT Managing Practice and not Provider Practice -\
+      \ prefer Team Rolled Up or Local Region for practice questions."
+    display_name: Local Practice Code
+    synonyms:
+      - site group code
+      - local practice short name
+
+  - name: Site
+    expr: source.site
+    comment: Exam location - the imaging site / facility where the draftable exam
+      was performed.
+    display_name: Exam Site
+    synonyms:
+      - facility
+      - imaging site
+      - location
+      - hospital
+
+  - name: Radiologist Name
+    expr: source.Radiologist
+    comment: "Reading radiologist, 'Last, First M' (e.g. 'Taha, Manuel R'). Match\
+      \ partial names with ILIKE '%lastname%' and say which radiologist(s) matched."
+    display_name: Radiologist Name
+    synonyms:
+      - radiologist
+      - rad
+      - doctor
+      - physician
+      - reading radiologist
+
+  - name: NPI
+    expr: CAST(source.npi AS STRING)
+    comment: "Reading radiologist's NPI (National Provider Identifier), as text."
+    display_name: Radiologist NPI
+    synonyms:
+      - provider npi
+      - npi number
+
+  - name: Exam Category
+    expr: source.exam_category
+    comment: Exam category from exam_category_lookup_xwalk (ParentRpt) - the canonical
+      grouping of procedure codes.
+    display_name: Exam Category
+    synonyms:
+      - procedure category
+      - exam type
+      - study type
+
+  - name: Drafting Model
+    expr: source.drafting_model
+    comment: "Declared AI drafting model / capturable category for the RPID: 'XR/MSK',\
+      \ 'CT Chest', 'CT Abd/Pel', 'CT Spine', 'CT Head', 'US Capturable', 'DEXA Capturable'."
+    display_name: Drafting Model
+    synonyms:
+      - ai model
+      - draft model
+      - model category
+
+measures:
+  - name: Draftable Exam Count
+    expr: SUM(source.exam_count)
+    comment: "Denominator of every Pct measure, and the headline draftable volume\
+      \ - use directly for exam counts (e.g. ranked by Category). All Mosaic exams\
+      \ on drafting-eligible RPIDs, all 8 categories incl. Drafted. = PowerBI Draftable[Exam\
+      \ Count] (Mosaic Volume Report)."
+    display_name: Draftable Exams
+    synonyms:
+      - draftable volume
+      - drafting opportunity
+      - total draftable
+      - exams eligible for drafting
+
+  - name: Draftable TBWU
+    expr: SUM(source.tbwu)
+    comment: "Building block: denominator of Pct Undrafted TBWU. Workload (TBWU) of\
+      \ all draftable exams = PowerBI [Category Value] with Metric Selector = TBWU\
+      \ (Mosaic Volume Report)."
+    display_name: Draftable Workload (TBWU)
+    synonyms:
+      - draftable workload
+      - draftable rpwu
+      - draftable work units
+
+  - name: Radiologist Count
+    expr: COUNT(DISTINCT source.Radiologist)
+    comment: "Distinct reading radiologists with draftable exams, counted by name\
+      \ (not NPI). = PowerBI Draftable[Rad Count] (DISTINCTCOUNT Radiologist, Mosaic\
+      \ Volume Report)."
+    display_name: Radiologists With Draftable Exams
+    synonyms:
+      - rad count
+      - number of radiologists
+      - how many rads
+
+  - name: Undrafted Exam Count
+    expr: SUM(source.exam_count) FILTER (WHERE source.category <> 'Drafted')
+    comment: Numerator of Pct Undrafted; use directly for 'how many exams were not
+      drafted'. Draftable exams that were not drafted (categories 1-7).
+    display_name: Undrafted Exams
+    synonyms:
+      - not drafted exams
+      - missed drafts
+      - exams without a draft
+
+  - name: Undrafted TBWU
+    expr: SUM(source.tbwu) FILTER (WHERE source.category <> 'Drafted')
+    comment: "Building block: numerator of Pct Undrafted TBWU. Workload (TBWU) of\
+      \ draftable exams that were not drafted."
+    display_name: Undrafted Workload (TBWU)
+    synonyms:
+      - undrafted workload
+      - missed drafting workload
+
+  - name: Radiologists With Undrafted Exams
+    expr: COUNT(DISTINCT source.Radiologist) FILTER (WHERE source.category <> 'Drafted')
+    comment: Distinct radiologists (by name) with at least one undrafted draftable
+      exam in the slice.
+    display_name: Radiologists With Undrafted Exams
+    synonyms:
+      - rads with undrafted exams
+      - rads missing drafts
+
+  - name: Drafted Exam Count
+    expr: SUM(source.exam_count) FILTER (WHERE source.category = 'Drafted')
+    comment: Numerator of Pct Drafted; use directly for drafted exam counts. Exams
+      in category 0 'Drafted'.
+    display_name: Drafted Exams
+    synonyms:
+      - exams drafted
+      - drafted volume
+      - number drafted
+
+  - name: Rad Declined Exam Count
+    expr: SUM(source.exam_count) FILTER (WHERE source.category = 'RAD not enabled
+      - Rad declined')
+    comment: Numerator of Pct Rad Declined. Exams in category 1 'RAD not enabled -
+      Rad declined' (the radiologist declined drafting).
+    display_name: Rad Declined Exams
+    synonyms:
+      - rad declined count
+      - radiologist declined drafting
+
+  - name: Ops Declined Exam Count
+    expr: SUM(source.exam_count) FILTER (WHERE source.category = 'RAD not enabled
+      - Ops declined')
+    comment: Numerator of Pct Ops Declined. Exams in category 2 'RAD not enabled -
+      Ops declined' (operations declined enabling the radiologist).
+    display_name: Ops Declined Exams
+    synonyms:
+      - ops declined count
+      - operations declined
+
+  - name: Incomplete Process Exam Count
+    expr: SUM(source.exam_count) FILTER (WHERE source.category = 'RAD not enabled
+      - Incomplete process')
+    comment: Numerator of Pct Incomplete Process. Exams in category 3 'RAD not enabled
+      - Incomplete process' (enablement / onboarding not finished - often the biggest
+      single lever).
+    display_name: Incomplete Process Exams
+    synonyms:
+      - incomplete enablement
+      - onboarding not finished
+
+  - name: Practice Not Enabled Exam Count
+    expr: SUM(source.exam_count) FILTER (WHERE source.category = 'PRACTICE not enabled
+      for model')
+    comment: Numerator of Pct Practice Not Enabled. Exams in category 4 'PRACTICE
+      not enabled for model' (model not yet rolled out to the practice).
+    display_name: Practice Not Enabled Exams
+    synonyms:
+      - model not rolled out
+      - practice not live for model
+
+  - name: Opened Under 5 Min Exam Count
+    expr: SUM(source.exam_count) FILTER (WHERE source.category = 'DRAFT not available
+      - Exam opened in <5 min')
+    comment: Numerator of Pct Opened Under 5 Min. Exams in category 5 'DRAFT not available
+      - Exam opened in <5 min' (opened before the draft was likely ready - latency).
+    display_name: Opened Under 5 Min Exams
+    synonyms:
+      - draft not ready
+      - opened too early
+      - latency misses
+
+  - name: Opened Over 5 Min Exam Count
+    expr: SUM(source.exam_count) FILTER (WHERE source.category = 'DRAFT not available
+      - Exam opened in >5 min')
+    comment: Numerator of Pct Opened Over 5 Min. Exams in category 6 'DRAFT not available
+      - Exam opened in >5 min' (draft had time to arrive but was not used - adoption
+      / workflow).
+    display_name: Opened Over 5 Min Exams
+    synonyms:
+      - opened after 5 minutes
+      - workflow misses
+
+  - name: Never Opened Exam Count
+    expr: "SUM(source.exam_count) FILTER (WHERE source.category = 'Exam never opened,\
+      \ not drafted')"
+    comment: "Numerator of Pct Never Opened. Exams in category 7 'Exam never opened,\
+      \ not drafted'."
+    display_name: Never Opened Exams
+    synonyms:
+      - exams never opened
+      - unopened exams
+
+  - name: Pct Drafted
+    expr: "MEASURE(`Drafted Exam Count`) / NULLIF(MEASURE(`Draftable Exam Count`),\
+      \ 0)"
+    comment: "Headline drafting coverage: share of draftable exams that were drafted,\
+      \ a fraction (0.42 = 42%). = PowerBI [Category % of Draftable] for Drafted (Mosaic\
+      \ Volume Report). Slice by Calendar Date / Month."
+    display_name: Drafting Coverage Pct
+    synonyms:
+      - '% drafted'
+      - drafting coverage
+      - coverage
+      - draft rate
+
+  - name: Pct Undrafted
+    expr: "MEASURE(`Undrafted Exam Count`) / NULLIF(MEASURE(`Draftable Exam Count`),\
+      \ 0)"
+    comment: "Share of draftable exams not drafted, a fraction (= 1 - Pct Drafted)."
+    display_name: Undrafted Pct
+    synonyms:
+      - '% undrafted'
+      - '% not drafted'
+      - missed drafting rate
+
+  - name: Pct Rad Declined
+    expr: "MEASURE(`Rad Declined Exam Count`) / NULLIF(MEASURE(`Draftable Exam Count`),\
+      \ 0)"
+    comment: "Share of draftable exams in 'RAD not enabled - Rad declined', a fraction.\
+      \ = PowerBI [Category % of Draftable] for that category (denominator = all 8\
+      \ categories incl. Drafted)."
+    display_name: Rad Declined Pct
+    synonyms:
+      - '% rad declined'
+      - rad declined share
+
+  - name: Pct Ops Declined
+    expr: "MEASURE(`Ops Declined Exam Count`) / NULLIF(MEASURE(`Draftable Exam Count`),\
+      \ 0)"
+    comment: "Share of draftable exams in 'RAD not enabled - Ops declined', a fraction.\
+      \ = PowerBI [Category % of Draftable] for that category (denominator = all 8\
+      \ categories incl. Drafted)."
+    display_name: Ops Declined Pct
+    synonyms:
+      - '% ops declined'
+      - ops declined share
+
+  - name: Pct Incomplete Process
+    expr: "MEASURE(`Incomplete Process Exam Count`) / NULLIF(MEASURE(`Draftable Exam\
+      \ Count`), 0)"
+    comment: "Share of draftable exams in 'RAD not enabled - Incomplete process',\
+      \ a fraction. = PowerBI [Category % of Draftable] for that category (denominator\
+      \ = all 8 categories incl. Drafted)."
+    display_name: Incomplete Process Pct
+    synonyms:
+      - '% incomplete process'
+      - incomplete process share
+
+  - name: Pct Practice Not Enabled
+    expr: "MEASURE(`Practice Not Enabled Exam Count`) / NULLIF(MEASURE(`Draftable\
+      \ Exam Count`), 0)"
+    comment: "Share of draftable exams in 'PRACTICE not enabled for model', a fraction.\
+      \ = PowerBI [Category % of Draftable] for that category (denominator = all 8\
+      \ categories incl. Drafted)."
+    display_name: Practice Not Enabled Pct
+    synonyms:
+      - '% practice not enabled'
+      - practice not enabled share
+
+  - name: Pct Opened Under 5 Min
+    expr: "MEASURE(`Opened Under 5 Min Exam Count`) / NULLIF(MEASURE(`Draftable Exam\
+      \ Count`), 0)"
+    comment: "Share of draftable exams in 'DRAFT not available - Exam opened in <5\
+      \ min', a fraction. = PowerBI [Category % of Draftable] for that category (denominator\
+      \ = all 8 categories incl. Drafted)."
+    display_name: Opened Under 5 Min Pct
+    synonyms:
+      - '% opened under 5 min'
+      - draft latency share
+
+  - name: Pct Opened Over 5 Min
+    expr: "MEASURE(`Opened Over 5 Min Exam Count`) / NULLIF(MEASURE(`Draftable Exam\
+      \ Count`), 0)"
+    comment: "Share of draftable exams in 'DRAFT not available - Exam opened in >5\
+      \ min', a fraction. = PowerBI [Category % of Draftable] for that category (denominator\
+      \ = all 8 categories incl. Drafted)."
+    display_name: Opened Over 5 Min Pct
+    synonyms:
+      - '% opened over 5 min'
+      - available draft unused share
+
+  - name: Pct Never Opened
+    expr: "MEASURE(`Never Opened Exam Count`) / NULLIF(MEASURE(`Draftable Exam Count`),\
+      \ 0)"
+    comment: "Share of draftable exams in 'Exam never opened, not drafted', a fraction.\
+      \ = PowerBI [Category % of Draftable] for that category (denominator = all 8\
+      \ categories incl. Drafted)."
+    display_name: Never Opened Pct
+    synonyms:
+      - '% never opened'
+      - never opened share
+
+  - name: Rad Not Enabled Exam Count
+    expr: SUM(source.exam_count) FILTER (WHERE source.category LIKE 'RAD not enabled%')
+    comment: Numerator of Pct Rad Not Enabled. Rad declined + Ops declined + Incomplete
+      process exams (rad drafted <10% of the model's exams that week).
+    display_name: Rad Not Enabled Exams
+    synonyms:
+      - radiologist not enabled exams
+      - enablement losses
+
+  - name: Draft Not Used Exam Count
+    expr: "SUM(source.exam_count) FILTER (WHERE source.category LIKE 'DRAFT not available%'\
+      \ OR source.category = 'Exam never opened, not drafted')"
+    comment: "Numerator of Pct Draft Not Used. Rad and practice enabled but no draft\
+      \ used: opened <5 min, opened >5 min, or never opened - the workflow / product\
+      \ bucket."
+    display_name: Draft Not Used Exams
+    synonyms:
+      - enabled but not drafted
+      - workflow bucket exams
+
+  - name: Pct Rad Not Enabled
+    expr: "MEASURE(`Rad Not Enabled Exam Count`) / NULLIF(MEASURE(`Draftable Exam\
+      \ Count`), 0)"
+    comment: "Share of draftable exams lost to radiologist enablement (Rad declined\
+      \ / Ops declined / Incomplete process), a fraction of all draftable exams incl.\
+      \ Drafted."
+    display_name: Rad Not Enabled Pct
+    synonyms:
+      - '% rad not enabled'
+      - enablement gap
+      - '% lost to enablement'
+
+  - name: Pct Draft Not Used
+    expr: "MEASURE(`Draft Not Used Exam Count`) / NULLIF(MEASURE(`Draftable Exam Count`),\
+      \ 0)"
+    comment: "Share of draftable exams where rad and practice were enabled but no\
+      \ draft was used (opened <5 min, >5 min, never opened), a fraction of all draftable\
+      \ exams incl. Drafted."
+    display_name: Draft Not Used Pct
+    synonyms:
+      - '% draft not used'
+      - workflow gap
+      - '% enabled but undrafted'
+
+  - name: Pct Undrafted TBWU
+    expr: "MEASURE(`Undrafted TBWU`) / NULLIF(MEASURE(`Draftable TBWU`), 0)"
+    comment: "Workload-weighted undrafted share: undrafted TBWU / draftable TBWU,\
+      \ a fraction (= 1 - PowerBI [Category % of Draftable] for Drafted with Metric\
+      \ Selector = TBWU)."
+    display_name: Undrafted Workload Pct (TBWU)
+    synonyms:
+      - '% undrafted workload'
+      - tbwu weighted undrafted share
+
+  - name: Data Through Date
+    expr: MAX(source.calendar_date)
+    comment: Last calendar date in the snapshot (daily snapshot; the legacy view keeps
+      completed Mon-Sun weeks only) - quote it as the as-of date.
+    display_name: Data Through Date
+    synonyms:
+      - as of date
+      - last data date
+      - data freshness
+$$

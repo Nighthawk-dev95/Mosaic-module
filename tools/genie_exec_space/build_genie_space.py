@@ -76,7 +76,9 @@ RULES -- these keep answers identical to the dashboard and PowerBI
    shift, shifts with baselines, report shift-length filter); do not filter `Baseline Type`. To match
    PowerBI, keep only practice-months that have a TBWU 26 baseline: when grouping by `Local Practice` add
    HAVING MEASURE(`Has TBWU26 Baseline`) = 1; for totals or other groupings first select the qualifying
-   (`Local Practice`, `Month`) pairs in a CTE and filter on them (see the capacity examples).
+   (`Local Practice`, `Month`) pairs in a CTE and filter on them (see the capacity examples). This applies
+   to EVERY capacity measure, company totals included (`Pct Mosaic`, `Pct Mosaic Drafting`, `New Utilization`,
+   `Pct Addl Capacity`, ...); skipping it changes the answer by ~1 point.
 5. Efficiency: outlier exams are already excluded inside the view; do not filter for them.
 6. "% of RPCE exams" measures (Pct RPCE Reporting / Drafting / Capture) already include the PowerBI
    +0.02 adjustment. Report them as returned.
@@ -85,6 +87,9 @@ RULES -- these keep answers identical to the dashboard and PowerBI
    ratio between 0 and 1 (efficiency changes can be negative). Always present them to the user as
    percentages with one decimal (0.742 -> 74.2%). Show counts with thousands separators.
 9. Filter Local Region with equality (`Local Region` = 'Apex'), not LIKE; the 6 values are exact.
+10. 'Matrix' is BOTH a Local Region and a Provider Practice (different populations). If the user says
+   "region", use `Local Region`; otherwise treat "Matrix" / "Matrix's" as the Provider Practice. Always
+   state which one you used and that the other exists.
 
 TERMINOLOGY
 - Provider Practice = `Team Rolled Up` (PowerBI "Team Rolled up"). Team = the finer `Team` column.
@@ -132,7 +137,9 @@ How to call: SELECT ... FROM {FN_PP}('2026-09-01', '2026-09-30') WHERE `Mode` = 
   (one fast call returns every Mode). Do not put more than 2 efficiency metric-view measures in one query:
   each measure rescans the exam-level source and the query becomes very slow.
 - Rows are already aggregated: never SUM or AVG `Pct Change Vs Baseline`, `Mosaic Efficiency` or `Vs RP Avg`
-  across rows; filter to the row you need. Exclude the 'Total' row when ranking practices.
+  across rows; filter to the row you need.
+- 'Total' is a ROW of {FN_PP}, {FN_MP} and {FN_AVG_PP} and always has the most exams. For any top / most /
+  largest / smallest / rank / "which practice" question you MUST add `<> 'Total'` (else the answer is 'Total').
 - `Pct Change Vs Baseline` is a fraction (0.127 -> 12.7%). The functions have no read-time-savings column;
   derive it per row as `Baseline Efficiency` / `Mosaic Efficiency` - 1 (negative = less read time per exam).
   `Vs RP Avg` is a ratio to the average (0.92 -> 8% below average, 1.10 -> 10% above). `Mosaic Efficiency`
@@ -142,8 +149,14 @@ How to call: SELECT ... FROM {FN_PP}('2026-09-01', '2026-09-30') WHERE `Mode` = 
   gives a threshold (tiny volumes give extreme ratios) and say you did so. The vs-average functions already
   apply min_exams.
 - Find a radiologist with `Radiologist` ILIKE '%lastname%'.
+- A practice named on its own ("PRA's efficiency", "RP Florida", "for CRC") is a PROVIDER practice: use
+  {FN_PP} / `Provider Practice`. Use {FN_MP} / {FN_SITE} only when the user says "managing practice",
+  "site", "location" or "where the exams were read". Many names exist as both; say which one you used.
+- Never SELECT * from a function: always filter `Mode` and the row(s) the user asked about.
 Use the METRIC VIEWS (not the functions) for company-wide or Local Region efficiency, mode KPIs and
-month-by-month trends. The functions have no region or month column; call once per window if needed.
+month-by-month trends. "Overall" / "company-wide" / "total" efficiency change for a period is ONE number:
+MEASURE(`Full Mosaic Pct Change Vs Baseline`) from mosaic_efficiency_metric_view, not a function.
+The functions have no region or month column; call once per window if needed.
 
 SYNONYMS
 - adoption, usage, penetration, "% read in Mosaic" -> `Pct RPCE Reporting` (volume view)
@@ -265,6 +278,15 @@ ORDER BY `Mosaic Exams` DESC LIMIT 20"""),
 FROM {FN_MP}({LM_WINDOW})
 WHERE `Mode` = 'Full Mosaic'
 ORDER BY sort_key, `Mosaic Exams` DESC"""),
+    ("What was overall Mosaic efficiency change vs baseline last month?",
+     f"""SELECT MEASURE(`Full Mosaic Pct Change Vs Baseline`) AS full_mosaic_pct_change
+FROM {EFF}
+WHERE `Exam Month` = {LAST_MONTH}"""),
+    ("Which managing practice read the most Mosaic exams last month?",
+     f"""SELECT `Managing Practice`, `Mosaic Exams`, `Pct Change Vs Baseline`
+FROM {FN_MP}({LM_WINDOW})
+WHERE `Mode` = 'Full Mosaic' AND `Managing Practice` <> 'Total'
+ORDER BY `Mosaic Exams` DESC LIMIT 1"""),
     ("Efficiency change by site for managing practice ESR last month",
      f"""SELECT `Site`, `Mosaic Exams`, `Pct Change Vs Baseline`
 FROM {FN_SITE}({LM_WINDOW})
@@ -420,7 +442,7 @@ WHERE `Funnel Stage` IS NOT NULL GROUP BY ALL ORDER BY `Funnel Stage`"""),
     ("What was PRA's Full Mosaic efficiency change vs baseline in September 2026?",
      f"""SELECT `Pct Change Vs Baseline` FROM {FN_PP}({SEP_WINDOW})
 WHERE `Mode` = 'Full Mosaic' AND `Provider Practice` = 'PRA'"""),
-    ("Show Matrix's efficiency change vs baseline for each Mosaic mode in September 2026",
+    ("Show the Matrix provider practice's efficiency change vs baseline for each Mosaic mode in September 2026",
      f"""SELECT `Mode`, `Pct Change Vs Baseline` FROM {FN_PP}({SEP_WINDOW})
 WHERE `Provider Practice` = 'Matrix'"""),
     ("Which 5 provider practices with at least 40,000 Mosaic exams had the highest Full Mosaic efficiency change in September 2026?",

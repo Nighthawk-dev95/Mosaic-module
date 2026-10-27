@@ -1,0 +1,522 @@
+{
+  "view_comment": "MOSAIC VOLUME & ADOPTION - governed replacement for the PowerBI 'Mosaic Volume Report'. One row per finalized exam reading (status Final / Final Addendum, excluded exams removed) from edw_prod.enterprise_analytics.tbl_exam_inventory. Answers: Mosaic adoption (headline KPI = Pct RPCE Reporting: exams read in Mosaic as a share of RPCE exams, including the intentional PowerBI +0.02 business adjustment), drafting and capture adoption, exam / RVU / TBWU volumes, radiologist counts, and the modality KPI tiles (mammo, IR, CT lung screening, US / DEXA capture). Slice by `Final Date`, `Final Week` or `Final Month`; if no period is given use the last complete month. Measures named '... In Window' use a rolling window of `days_back` days ending today (default 14; query mosaic_volume_metric_view(N) for N days) - do not also filter Final Date for them. Every Pct measure is a FRACTION 0-1 (0.74 = 74%); never multiply by 100 in SQL, never re-derive a percentage from counts. Practice columns: Team Rolled Up = Provider Practice (the radiologist's home practice rolled up, PowerBI 'Team Rolled up'); Practice and Team = the radiologist's own un-rolled local practice; Managing Practice = the practice that owns the exam SITE; Practice (PBI) = the exact PowerBI 'Practice' slicer value (exam site, coarser). Draftable / Drafted measures here are a simpler volume-report definition than mosaic_draftable_metric_view (no practice-in-program or radiologist-enrolled gate) and will not reconcile line-for-line; use that view for drafting coverage and reasons exams were not drafted. Allocated TBWU is deprecated - do not use. Not migrated by decision: the PowerBI 'Fully Utilizing' radiologist-threshold rollups, the 'Eligible Exam Count' family, and Adjusted-Best / Allocated RVU (no source column). Full PowerBI-to-measure mapping: tools/pbi_semantic_extract/mosaic_volume_measure_inventory.md.",
+  "dimensions": {
+    "Exam Id": {
+      "comment": "Unique ID of one finalized exam reading - the grain of this view (one row per exam reading). Use for drill-through or exam-level lookups, not for grouping.",
+      "display_name": "Exam ID",
+      "synonyms": ["exam identifier", "study id", "exam record id"]
+    },
+    "NPI": {
+      "comment": "10-digit National Provider Identifier of the reading radiologist (e.g. 1234567890). Identifies a radiologist uniquely when names repeat; pair with Radiologist Name for display.",
+      "display_name": "Radiologist NPI",
+      "synonyms": ["provider npi", "rad npi", "national provider identifier", "reading radiologist npi"]
+    },
+    "Radiologist Name": {
+      "comment": "Full name of the reading radiologist, formatted 'Last, First M' (e.g. 'Taha, Manuel R'). Match partial names with ILIKE '%lastname%' and say which radiologist(s) matched.",
+      "display_name": "Radiologist Name",
+      "synonyms": ["radiologist", "reading radiologist", "rad name", "physician name", "doctor name"]
+    },
+    "Practice": {
+      "comment": "The reading radiologist's own local practice (current), un-rolled - the same column as Team. NOT PowerBI 'Practice': for the practice owning the exam site use Managing Practice, or Practice (PBI) for exact PowerBI parity. For the rolled-up Provider Practice use Team Rolled Up.",
+      "display_name": "Radiologist Local Practice",
+      "synonyms": ["radiologist practice", "rad practice", "reading radiologist practice"]
+    },
+    "Managing Practice": {
+      "comment": "Local practice that manages the site where the exam was performed (current), e.g. 'RP Valley', 'RP Phoenix', 'ESR Metro Hudson'. The exam-SITE practice (PowerBI 'Practice' concept) and the column drafting-program eligibility keys on. Finer than Practice (PBI). For the radiologist's home practice use Team Rolled Up.",
+      "display_name": "Managing Practice",
+      "synonyms": ["site practice", "exam site practice", "managing local practice", "owning practice"]
+    },
+    "Practice (PBI)": {
+      "comment": "Exact PowerBI Mosaic Volume 'Practice' slicer value: location practice short name of the exam site, e.g. 'RP Arizona', 'ESR'. Coarser than Managing Practice (RP Arizona = RP Valley + RP Phoenix + RP Sol + RP Sun City + RP SMIL; ESR = ESR Metro Hudson + ESR Long Island). Use for PowerBI-parity cuts.",
+      "display_name": "Practice (PowerBI)",
+      "synonyms": ["powerbi practice", "pbi practice", "location practice", "site practice short name"]
+    },
+    "Modality": {
+      "comment": "Imaging modality code of the exam, e.g. 'CT', 'MR', 'US', 'MG' (mammo), 'BD' (bone density / DEXA), 'IR'. Plain film / X-ray is 'CR', never 'XR' - a filter on 'XR' matches zero rows.",
+      "display_name": "Modality",
+      "synonyms": ["imaging modality", "modality code", "scan type", "exam modality"]
+    },
+    "RPID Procedure Code": {
+      "comment": "Radiology Partners standardized procedure code (RPID) of the exam, e.g. 'RPID22' = CT Head without IV contrast. Determines drafting-model eligibility (see Drafting Model Category).",
+      "display_name": "RPID Procedure Code",
+      "synonyms": ["procedure code", "rpid code", "rpid", "exam procedure code"]
+    },
+    "RPID Parent Procedure Name": {
+      "comment": "Description of the exam's parent RPID procedure (the grouped procedure family the specific code rolls up to). Exam Category is mapped from this parent procedure.",
+      "display_name": "Parent Procedure Name",
+      "synonyms": ["parent exam", "parent procedure", "procedure description", "exam description"]
+    },
+    "Drafting Model Category": {
+      "comment": "Mosaic AI drafting model that covers the exam's procedure, one of 7: CT Abd/Pel, CT Chest, CT Head, CT Spine, DEXA Capturable, US Capturable, XR/MSK. Blank = procedure not covered by any current drafting model - NOT the same as not drafted.",
+      "display_name": "Drafting Model Category",
+      "synonyms": ["drafting model", "ai drafting model", "draft model"]
+    },
+    "Exam Category": {
+      "comment": "Broad clinical exam category (26 categories covering 969 procedure codes), mapped from the parent procedure. A different, wider vocabulary than Drafting Model Category - do not conflate the two.",
+      "display_name": "Exam Category",
+      "synonyms": ["clinical category", "exam group", "study category"]
+    },
+    "Source System Code": {
+      "comment": "Reporting / RIS source system the exam came from, e.g. 'rpceMidwest', 'rpceSouthwest' (the two RPCE Clario systems). Use Is RPCE Source for the simple RPCE yes/no split.",
+      "display_name": "Source System",
+      "synonyms": ["originating system", "ris source", "source system name"]
+    },
+    "Is RPCE Source": {
+      "comment": "TRUE when the exam came from one of the two RPCE (Clario) source systems, rpceMidwest or rpceSouthwest - the population behind the '% of RPCE' adoption measures. = PowerBI RPCE Exam Flag (Mosaic Volume).",
+      "display_name": "Is RPCE Exam",
+      "synonyms": ["rpce flag", "rpce exam flag", "on rpce", "clario exam"]
+    },
+    "Reporting Status": {
+      "comment": "How the exam was read: 'Drafting' (Mosaic AI drafted or captured it), 'Reporting' (read in Mosaic without an AI draft) or 'Baseline' (not read in Mosaic). Same Drafting > Reporting > Baseline vocabulary as the MER pipeline's Period_Type.",
+      "display_name": "Reporting Status",
+      "synonyms": ["mosaic usage type", "read mode", "mosaic read status"]
+    },
+    "Final Date": {
+      "comment": "Date the exam report was finalized (signed) - the main date for slicing this view, e.g. `Final Date` >= '2026-09-01' AND `Final Date` < '2026-10-01'. The '... In Window' measures use their own rolling window ending today; do not also filter Final Date for them.",
+      "display_name": "Final Date",
+      "synonyms": ["finalized date", "signed date", "report date", "exam date", "read date"]
+    },
+    "Final Week": {
+      "comment": "Week the exam was finalized, shown as the week-start date (weeks start Monday). Use for weekly adoption and volume trends.",
+      "display_name": "Final Week",
+      "synonyms": ["finalized week", "report week", "week of exam", "exam week"]
+    },
+    "Final Month": {
+      "comment": "Month the exam was finalized, shown as the first day of the month. The default month for adoption / volume trends; if no period is given use the last complete month (the current month is partial).",
+      "display_name": "Final Month",
+      "synonyms": ["finalized month", "report month", "exam month", "reporting month"]
+    },
+    "Care Setting": {
+      "comment": "Patient care setting of the exam: Outpatient, ED, Inpatient, Pre-Admit, Observation, Unknown or Recurring Patient. Closest equivalent to PowerBI Place_Of_Service_Name, but the values do not line up 1:1 - treat as a proxy pending confirmation.",
+      "display_name": "Care Setting",
+      "synonyms": ["place of service", "patient setting", "patient class", "encounter type"]
+    },
+    "VRA Flag": {
+      "comment": "TRUE when the exam was prepped by a Virtual Radiology Assistant (VRA). Stands in for PowerBI's assisted_flag = 1 AND (VRA name or comm-note timestamp present) - assumed equivalent, since those separate fields are not in the source table.",
+      "display_name": "VRA Prepped Flag",
+      "synonyms": ["vra prepped", "virtual radiology assistant", "vra assisted", "assisted exam"]
+    },
+    "AD Group Added Date": {
+      "comment": "Date the reading radiologist was added to a Mosaic drafting AD group (drafting enablement pipeline). One date per radiologist: the EARLIEST across ANY drafting category, not specific to this exam's category. Replaces PowerBI's 4 per-category 'AD Group XR / CT Head / CT AbdPel / CT Chest Date' columns.",
+      "display_name": "Drafting AD Group Added Date",
+      "synonyms": ["ad group date", "drafting pipeline date", "added to drafting group", "drafting onboarding date"]
+    },
+    "Training Sent Date": {
+      "comment": "Date Mosaic drafting training was sent to the reading radiologist, from the Dynamics drafting enablement pipeline (one value per radiologist across all drafting categories). Blank = not sent or not in the pipeline.",
+      "display_name": "Drafting Training Sent Date",
+      "synonyms": ["training sent", "training invite date", "drafting training sent"]
+    },
+    "Training Completed Date": {
+      "comment": "Date the reading radiologist completed Mosaic drafting training, from the Dynamics drafting enablement pipeline (one value per radiologist across all drafting categories). Blank = not completed or not in the pipeline.",
+      "display_name": "Drafting Training Completed Date",
+      "synonyms": ["training completed", "training finish date", "drafting training completed"]
+    },
+    "Rad Drafting Consent": {
+      "comment": "The reading radiologist's Mosaic AI drafting consent status from the Dynamics drafting enablement pipeline (one value per radiologist across all drafting categories). Blank = no consent record.",
+      "display_name": "Radiologist Drafting Consent",
+      "synonyms": ["drafting consent", "rad consent", "consented to drafting", "drafting opt in"]
+    },
+    "Rad Drafting Enabled Flag": {
+      "comment": "TRUE when the reading radiologist is formally enabled for Mosaic AI drafting (Dynamics enablement pipeline, one value per radiologist across categories). = PowerBI 'Drafting Enabled' column (Mosaic Volume). Filter on it for the AD-group-gated First Mosaic Drafting Exam Date.",
+      "display_name": "Radiologist Drafting Enabled",
+      "synonyms": ["drafting enabled", "rad enabled for drafting", "on drafting", "enabled for ai drafting"]
+    },
+    "Team": {
+      "comment": "The reading radiologist's own local practice / team (current) - identical column to Practice; PowerBI labels it 'Team' on some pages. Finer than Team Rolled Up (Provider Practice). Not the exam-site practice - see Managing Practice.",
+      "display_name": "Radiologist Team",
+      "synonyms": ["sub team", "rad team", "reading team"]
+    },
+    "Team Rolled Up": {
+      "comment": "Provider Practice: the reading radiologist's home practice rolled up to its canonical parent group via the team_rollups lookup = PowerBI 'Team Rolled up' (Mosaic Volume). The default cut for 'by practice / group' questions. For the practice owning the exam site use Managing Practice.",
+      "display_name": "Provider Practice (Team Rolled Up)",
+      "synonyms": ["provider practice", "rolled up team", "practice group", "radiologist group", "home practice group"]
+    },
+    "Local Region": {
+      "comment": "One of 6 fixed regions: Special Operations, Apex, Genesis, Maverick, Trailblazer, Matrix - mapped from the reading radiologist's PowerBI team = PowerBI 'Local' (Mosaic Volume). Unlisted teams and rads with no team (e.g. vRad) fall to Matrix, as in PowerBI. Filter with equality, not LIKE.",
+      "display_name": "Local Region",
+      "synonyms": ["region", "local", "regional bucket", "local team"]
+    },
+    "Site": {
+      "comment": "Physical imaging site / location where the exam was performed - finer grain than Managing Practice.",
+      "display_name": "Imaging Site",
+      "synonyms": ["site name", "facility", "imaging location", "exam location"]
+    },
+    "Day Type": {
+      "comment": "'Weekday' (Mon-Fri) or 'Weekend' (Sat-Sun), based on the date the exam was finalized. Matches PowerBI's daytype column (Mosaic Volume).",
+      "display_name": "Day Type",
+      "synonyms": ["weekday or weekend", "weekend flag", "day of week type"]
+    },
+    "Priority Description": {
+      "comment": "Exam priority / urgency level, e.g. 'STAT', 'Routine'. = PowerBI Priority_Description slicer (Mosaic Volume).",
+      "display_name": "Exam Priority",
+      "synonyms": ["priority", "stat level", "exam urgency", "urgency level"]
+    },
+    "Interventional Flag": {
+      "comment": "Indicates whether the exam is an interventional (procedural) exam. = PowerBI Interventional_Flag slicer (Mosaic Volume).",
+      "display_name": "Interventional Exam Flag",
+      "synonyms": ["interventional", "procedural exam", "interventional indicator"]
+    }
+  },
+  "measures": {
+    "Exam Count": {
+      "comment": "Number of finalized exam readings in scope (all exams, Mosaic or not). Slice by Final Date / Final Month. Denominator of Pct Mosaic Exams and Pct Drafting Exams. = PowerBI [Total Exam Ct] / [All Exam Ct] (Mosaic Volume).",
+      "display_name": "Exam Count",
+      "synonyms": ["exam volume", "number of exams", "total reads"]
+    },
+    "Mosaic Exam Count": {
+      "comment": "Number of exams read (reported) on the Mosaic platform. Slice by Final Date / Final Month. Numerator of Pct Mosaic Exams and Pct RPCE Reporting. = PowerBI [Mosaic Exam Ct] (Mosaic Volume).",
+      "display_name": "Mosaic Exam Count",
+      "synonyms": ["mosaic reads", "exams read in mosaic", "mosaic cases"]
+    },
+    "Pct Mosaic Exams": {
+      "comment": "Share of ALL exams read in Mosaic (Mosaic Exam Count / Exam Count), fraction 0-1, no adjustment. Filter Modality etc. for modality cuts. For the headline adoption KPI (share of RPCE exams) use Pct RPCE Reporting. = PowerBI [% Mosaic Exams] / [Mosaic Exam %] (Mosaic Volume).",
+      "display_name": "Mosaic Share of All Exams",
+      "synonyms": ["% mosaic exams", "mosaic exam percent", "share of exams in mosaic"]
+    },
+    "Drafting Exam Count": {
+      "comment": "Number of exams where Mosaic AI pre-populated the report (drafted OR captured), on any procedure - not limited to the 7 drafting-model categories (compare Drafted Exam Count). Slice by Final Date. = PowerBI [Mosaic Drafting Ct] (Mosaic Volume).",
+      "display_name": "Drafting Exam Count",
+      "synonyms": ["ai drafted exams", "drafted or captured exams", "mosaic drafting volume", "exams with ai draft"]
+    },
+    "Pct Drafting Exams": {
+      "comment": "Share of ALL exams AI-drafted or captured (Drafting Exam Count / Exam Count), fraction 0-1. For drafting adoption vs RPCE exams use Pct RPCE Drafting; for drafted share of draftable exams use Pct Drafted Of Draftable. = PowerBI [% drafting Exams] (Mosaic Volume).",
+      "display_name": "Drafting Share of All Exams",
+      "synonyms": ["% drafting exams", "drafting percent of exams", "share of exams drafted"]
+    },
+    "Exam Count In Window": {
+      "comment": "Exams finalized in the last `days_back` days through today (default 14; query mosaic_volume_metric_view(N) for N days). Rolling window anchored on today - do not also filter Final Date. = PowerBI [examslast14days] / [examslast7days] (Mosaic Volume).",
+      "display_name": "Exam Count (Last N Days)",
+      "synonyms": ["exams last 14 days", "recent exams", "rolling exam count", "exams last n days"]
+    },
+    "Mosaic Exam Count In Window": {
+      "comment": "Building block: exams read in Mosaic in the last `days_back` days through today (default 14); numerator of Pct Mosaic Exams In Window. = PowerBI [mosaiceamslast14days] / [mosaicexxamslast7days] (Mosaic Volume).",
+      "display_name": "Mosaic Exam Count (Last N Days)",
+      "synonyms": ["mosaic exams last 14 days", "recent mosaic exams", "mosaic exams last n days"]
+    },
+    "Pct Mosaic Exams In Window": {
+      "comment": "Share of exams read in Mosaic over the last `days_back` days through today (default 14; query mosaic_volume_metric_view(N)), fraction 0-1. Rolling window - do not also filter Final Date. = PowerBI [% Mosaic Exams Last N Days] (Mosaic Volume).",
+      "display_name": "Mosaic Share of Exams (Last N Days)",
+      "synonyms": ["% mosaic last 14 days", "recent mosaic percent", "mosaic share last n days"]
+    },
+    "Drafting Exam Count In Window": {
+      "comment": "Building block: AI-drafted or captured exams in the last `days_back` days through today (default 14); numerator of Pct Drafting In Window. = PowerBI [Draftingexamslat14days] (Mosaic Volume).",
+      "display_name": "Drafting Exam Count (Last N Days)",
+      "synonyms": ["drafted exams last 14 days", "recent drafting volume", "drafting exams last n days"]
+    },
+    "Pct Drafting In Window": {
+      "comment": "Share of exams AI-drafted or captured over the last `days_back` days through today (default 14; query mosaic_volume_metric_view(N)), fraction 0-1. Rolling window - do not also filter Final Date. = PowerBI [%Draftinglast 14days] (Mosaic Volume).",
+      "display_name": "Drafting Share of Exams (Last N Days)",
+      "synonyms": ["% drafting last 14 days", "recent drafting percent", "drafting share last n days"]
+    },
+    "Estimated RVU": {
+      "comment": "Total estimated work RVUs (billing work units) of exams in scope; RVU is a billing unit, different from TBWU. Slice by Final Date. Denominator of Pct Mosaic RVU and Pct Drafting RVU. = PowerBI [wRVU est] (Mosaic Volume).",
+      "display_name": "Estimated Work RVUs",
+      "synonyms": ["wrvu", "work rvus", "rvus", "total rvus", "estimated wrvu"]
+    },
+    "Mosaic RVU": {
+      "comment": "Building block: estimated work RVUs of exams read in Mosaic; feeds Pct Mosaic RVU. = PowerBI [rvu_mosaic] / [Mosaicreportingrvu] (Mosaic Volume).",
+      "display_name": "Mosaic Work RVUs",
+      "synonyms": ["rvus read in mosaic", "mosaic wrvu", "mosaic rvu volume"]
+    },
+    "Pct Mosaic RVU": {
+      "comment": "RVU-weighted share of work read in Mosaic (Mosaic RVU / Estimated RVU), fraction 0-1 - the RVU alternative to Pct Mosaic Exams; behind PowerBI's exam-count / RVU metric switch (clinicalofmosaicreporting, '% of Mosaic XR') in Mosaic Volume.",
+      "display_name": "Mosaic Share of RVUs",
+      "synonyms": ["% rvus in mosaic", "rvu weighted mosaic share", "mosaic rvu percent"]
+    },
+    "Drafting RVU": {
+      "comment": "Building block: estimated work RVUs of AI-drafted or captured exams; feeds Pct Drafting RVU. = PowerBI [rvu_mosaicdrafting] (Mosaic Volume).",
+      "display_name": "Drafting Work RVUs",
+      "synonyms": ["drafted rvus", "drafting wrvu", "rvus drafted by ai"]
+    },
+    "Pct Drafting RVU": {
+      "comment": "RVU-weighted share of work AI-drafted or captured (Drafting RVU / Estimated RVU), fraction 0-1 - the RVU alternative to Pct Drafting Exams.",
+      "display_name": "Drafting Share of RVUs",
+      "synonyms": ["% rvus drafted", "rvu weighted drafting share", "drafting rvu percent"]
+    },
+    "Best RVU": {
+      "comment": "Total 'best' work RVUs (source best_wrvu, the best available RVU value per exam) for exams in scope - an alternative RVU basis to Estimated RVU. = PowerBI [Best] (Mosaic Volume).",
+      "display_name": "Best Work RVUs",
+      "synonyms": ["best wrvu", "best rvus", "best available rvu"]
+    },
+    "TBWU": {
+      "comment": "Total workload in TBWU (time-based work units; same unit as RPWU) for exams in scope - the volume TBWU (final_TBWU), not the base / unassisted / allocated variants used for efficiency and capacity. Slice by Final Date. = PowerBI [WU] (Mosaic Volume).",
+      "display_name": "Total TBWU",
+      "synonyms": ["work units", "rpwu", "workload units", "total work units"]
+    },
+    "Allocated TBWU": {
+      "comment": "DEPRECATED - do not use; not on the dashboard. Sum of allocated TBWU (current variant), which differs from the plain allocated variant on 5.0% of rows (-0.44% net); no variant was chosen, so it is kept for lineage only. Use TBWU instead.",
+      "display_name": "Allocated TBWU (Deprecated)",
+      "synonyms": ["deprecated allocated work units", "legacy allocated tbwu"]
+    },
+    "Estimated RVU In Window": {
+      "comment": "Estimated work RVUs of exams finalized in the last `days_back` days through today (default 14; query mosaic_volume_metric_view(N)). Rolling window - do not also filter Final Date. Covers PowerBI's Total RVUs (Last 3 / 12 Months) family by choosing N (Mosaic Volume).",
+      "display_name": "Estimated Work RVUs (Last N Days)",
+      "synonyms": ["rvus last 14 days", "recent rvus", "rolling rvus", "rvus last n days"]
+    },
+    "TBWU In Window": {
+      "comment": "TBWU workload of exams finalized in the last `days_back` days through today (default 14; query mosaic_volume_metric_view(N)). Rolling window - do not also filter Final Date. Covers PowerBI's Total TBWU (Last 3 / 12 Months) family by choosing N (Mosaic Volume).",
+      "display_name": "TBWU (Last N Days)",
+      "synonyms": ["tbwu last 14 days", "recent work units", "rolling tbwu", "tbwu last n days"]
+    },
+    "RPCE Exam Count": {
+      "comment": "Number of exams from the two RPCE (Clario) source systems, rpceMidwest and rpceSouthwest - the denominator of the '% of RPCE' adoption measures. Slice by Final Date. = PowerBI [RPCEEXAMS] (Mosaic Volume).",
+      "display_name": "RPCE Exam Count",
+      "synonyms": ["rpce exams", "clario exams", "rpce volume", "rpce cases"]
+    },
+    "Pct RPCE Reporting": {
+      "comment": "HEADLINE MOSAIC ADOPTION: exams read in Mosaic as a share of RPCE (Clario) exams, PLUS a fixed +0.02 business adjustment (intentional, confirmed with the business owner). Fraction 0-1; report as returned, never re-derive. Slice by Final Date / Final Month. = PowerBI [% of RPCE] (Mosaic Volume).",
+      "display_name": "Mosaic Adoption (% of RPCE Exams)",
+      "synonyms": ["adoption", "adoption rate", "mosaic adoption", "% read in mosaic", "usage", "penetration"]
+    },
+    "Pct RPCE Drafting": {
+      "comment": "Drafting adoption: AI-drafted or captured exams as a share of RPCE (Clario) exams, PLUS the fixed +0.02 business adjustment. Fraction 0-1; report as returned, never re-derive. Slice by Final Date / Final Month. = PowerBI [% of RPCE_drafting] (Mosaic Volume).",
+      "display_name": "Drafting Adoption (% of RPCE Exams)",
+      "synonyms": ["drafting adoption", "draft usage", "drafting adoption rate", "% drafted of rpce"]
+    },
+    "Pct RPCE Of All Exams": {
+      "comment": "RPCE (Clario) exams as a share of ALL exams, fraction 0-1. No +0.02 adjustment - a different ratio from Pct RPCE Reporting / Drafting (Mosaic or drafting share of RPCE exams); do not confuse them. = PowerBI [RPCE as % of Clinical] (Mosaic Volume).",
+      "display_name": "RPCE Share of All Exams",
+      "synonyms": ["rpce as % of clinical", "rpce share", "rpce penetration of exams"]
+    },
+    "Distinct Radiologist Count": {
+      "comment": "Number of distinct reading radiologists (by NPI) with at least one exam in scope. Slice by Final Date / Final Week. = PowerBI [Totalproviders_week] when sliced by Final Week (Mosaic Volume).",
+      "display_name": "Radiologist Count",
+      "synonyms": ["number of radiologists", "rad count", "active radiologists", "radiologists reading"]
+    },
+    "Mosaic Radiologist Count": {
+      "comment": "Number of distinct radiologists with at least one exam read in Mosaic in scope. Numerator of Pct Mosaic Of RPCE Radiologists. = PowerBI [# of Mosaic Rads] (Mosaic Volume).",
+      "display_name": "Mosaic Radiologist Count",
+      "synonyms": ["# of mosaic rads", "rads on mosaic", "mosaic users", "radiologists using mosaic"]
+    },
+    "Drafting Radiologist Count": {
+      "comment": "Number of distinct radiologists with at least one AI-drafted or captured exam in scope (not gated on formal drafting enablement). = PowerBI [totalradslivedrafting] (Mosaic Volume).",
+      "display_name": "Drafting Radiologist Count",
+      "synonyms": ["rads live on drafting", "drafting users", "radiologists using drafting"]
+    },
+    "RPCE Radiologist Count": {
+      "comment": "Number of distinct radiologists with at least one RPCE (Clario) exam in scope; denominator of Pct Mosaic Of RPCE Radiologists. = PowerBI [# of RPCE Rads] (Mosaic Volume).",
+      "display_name": "RPCE Radiologist Count",
+      "synonyms": ["# of rpce rads", "rpce rads", "radiologists on rpce"]
+    },
+    "Pct Mosaic Of RPCE Radiologists": {
+      "comment": "Mosaic Radiologist Count / RPCE Radiologist Count, fraction 0-1 - an unusual ratio (Mosaic rads as a share of RPCE rads, not of all rads), kept faithful to PowerBI. The numerator is not restricted to RPCE rads. = PowerBI [% of Rads] (Mosaic Volume).",
+      "display_name": "Mosaic Rads as Share of RPCE Rads",
+      "synonyms": ["% of rads", "radiologist adoption", "% of rads on mosaic", "rad adoption rate"]
+    },
+    "First Mosaic Exam Date": {
+      "comment": "Earliest date an exam was read in Mosaic within the current filters - group by NPI / Radiologist Name for each radiologist's Mosaic go-live date (do not narrow Final Date if you want the true first case). = PowerBI [First Mosaic Case] (Mosaic Volume).",
+      "display_name": "First Mosaic Exam Date",
+      "synonyms": ["mosaic go live date", "first mosaic case", "first case date", "mosaic start date"]
+    },
+    "First Mosaic Drafting Exam Date": {
+      "comment": "Earliest date an exam was AI-drafted or captured within the current filters - group by radiologist for their first draft. Not gated on AD-group status (PowerBI's was); filter Rad Drafting Enabled Flag for the gated version. = PowerBI [firstdraft] (Mosaic Volume).",
+      "display_name": "First Mosaic Drafting Exam Date",
+      "synonyms": ["first draft date", "drafting go live date", "first drafted case"]
+    },
+    "Last Drafted Exam Date": {
+      "comment": "Most recent date an exam was AI-drafted or captured within the current filters; group by radiologist to spot who has stopped drafting. = PowerBI [Last Drafted Exam Date] (Mosaic Volume).",
+      "display_name": "Last Drafted Exam Date",
+      "synonyms": ["latest draft date", "most recent draft", "last draft case"]
+    },
+    "VRA Prepped Exam Count": {
+      "comment": "Building block: exams prepped by a Virtual Radiology Assistant (VRA Flag = TRUE); feeds Pct VRA Prepped Of Exams. = PowerBI [VRA Prepped Exams] (Mosaic Volume).",
+      "display_name": "VRA Prepped Exam Count",
+      "synonyms": ["vra prepped exams", "vra assisted exams", "exams prepped by vra"]
+    },
+    "VRA Prepped Mosaic Exam Count": {
+      "comment": "Building block: exams read in Mosaic that were also VRA-prepped; feeds Pct VRA Prepped Of Mosaic Exams. = PowerBI [VRA Prepped Mosaic Exams] (Mosaic Volume).",
+      "display_name": "VRA Prepped Mosaic Exam Count",
+      "synonyms": ["vra prepped mosaic exams", "mosaic exams prepped by vra"]
+    },
+    "Pct VRA Prepped Of Exams": {
+      "comment": "Share of all exams prepped by a Virtual Radiology Assistant (VRA Prepped Exam Count / Exam Count), fraction 0-1. = PowerBI [% VRA Prepped of Total Exams] (Mosaic Volume).",
+      "display_name": "VRA Prepped Share of All Exams",
+      "synonyms": ["% vra prepped", "vra prep rate", "vra coverage"]
+    },
+    "Pct VRA Prepped Of Mosaic Exams": {
+      "comment": "Share of Mosaic-read exams prepped by a Virtual Radiology Assistant (VRA Prepped Mosaic Exam Count / Mosaic Exam Count), fraction 0-1. = PowerBI [% VRA Prepped Mosaic Exams] (Mosaic Volume).",
+      "display_name": "VRA Prepped Share of Mosaic Exams",
+      "synonyms": ["% vra prepped mosaic", "vra prep rate in mosaic"]
+    },
+    "Draftable Exam Count": {
+      "comment": "Exams whose procedure is covered by one of the 7 drafting models (Drafting Model Category set). Simpler than mosaic_draftable_metric_view (no practice-in-program / rad-enrolled gate) - won't reconcile line-for-line. Filter Drafting Model Category for one model. = PowerBI [EligibleExams] / Draftable family (Mosaic Volume).",
+      "display_name": "Draftable Exam Count",
+      "synonyms": ["draftable exams", "drafting eligible exams", "exams eligible for drafting"]
+    },
+    "Drafted Exam Count": {
+      "comment": "Building block: draftable exams (in one of the 7 drafting-model categories) that were AI-drafted or captured; feeds Pct Drafted Of Draftable. = PowerBI [Total Drafted XR] / [Total Drafted CT] family (Mosaic Volume) - filter Drafting Model Category or Modality for one.",
+      "display_name": "Drafted Exam Count",
+      "synonyms": ["drafted exams", "ai drafted draftable exams", "drafted volume"]
+    },
+    "Pct Drafted Of Draftable": {
+      "comment": "Drafted Exam Count / Draftable Exam Count, fraction 0-1 (volume-report definition). Filter Drafting Model Category or Modality for one model, e.g. CT Chest. For the governed drafting-coverage KPI and reasons not drafted use mosaic_draftable_metric_view. = PowerBI [%Drafted of eligible exams] (Mosaic Volume).",
+      "display_name": "Drafted Share of Draftable Exams",
+      "synonyms": ["% drafted of draftable", "draftable drafted rate", "% xr drafted", "% ct drafted"]
+    },
+    "Capture Eligible Exam Count": {
+      "comment": "Building block: exams in the two capture categories (US Capturable + DEXA Capturable) combined, read in Mosaic or not; feeds Pct Capture Read. Filter Modality = 'US' or 'BD' for one. = PowerBI [US Capturable] (Mosaic Volume) when filtered to Modality = 'US'.",
+      "display_name": "Capture Eligible Exam Count",
+      "synonyms": ["capture eligible exams", "capturable exams", "exams eligible for capture"]
+    },
+    "Captured Exam Count": {
+      "comment": "Building block: capture-eligible (US / DEXA) exams that Mosaic captured (AI pre-populated the report); feeds Pct Capture Read and Pct RPCE Capture. = PowerBI [MosaicCaptureCt] (Mosaic Volume); filter Modality = 'US' for [Captured US].",
+      "display_name": "Captured Exam Count",
+      "synonyms": ["captured exams", "capture reads", "mosaic capture count"]
+    },
+    "Pct Capture Read": {
+      "comment": "Capture rate: Captured Exam Count / Capture Eligible Exam Count, fraction 0-1, US and DEXA combined (filter Modality = 'US' or 'BD' for one). Follows Final Date, not a rolling window. = PowerBI [% Captured] (Mosaic Volume) when filtered to US; PowerBI's '% Capture Read (Last 14d)' is a rolling, Mosaic-reads-only variant.",
+      "display_name": "Capture Rate",
+      "synonyms": ["% captured", "overall capture rate", "% capture read"]
+    },
+    "Pct RPCE Capture": {
+      "comment": "Capture adoption: Mosaic-captured (US / DEXA) exams as a share of RPCE (Clario) exams, PLUS the fixed +0.02 business adjustment (same convention as Pct RPCE Reporting / Drafting). Fraction 0-1; report as returned. = PowerBI [% of RPCE_capture] (Mosaic Volume).",
+      "display_name": "Capture Adoption (% of RPCE Exams)",
+      "synonyms": ["capture adoption", "capture usage", "% of rpce capture"]
+    },
+    "US Capture Eligible In Window": {
+      "comment": "Building block: US exams in the US Capturable category finalized in the last `days_back` days (default 14); denominator of Pct US Capture Read In Window. Unlike PowerBI it does not require the exam to be read in Mosaic, so it can run higher. = PowerBI [US Capture Eligible (Last 14d)] (Mosaic Volume).",
+      "display_name": "US Capture Eligible (Last N Days)",
+      "synonyms": ["us capture eligible last 14 days", "recent capturable ultrasounds", "us capturable last n days"]
+    },
+    "US Capture Read In Window": {
+      "comment": "Building block: capture-eligible US exams that Mosaic captured in the last `days_back` days (default 14); numerator of Pct US Capture Read In Window. = PowerBI [US Capture Read (Last 14d)] (Mosaic Volume).",
+      "display_name": "US Capture Read (Last N Days)",
+      "synonyms": ["us captured last 14 days", "recent ultrasound captures", "us capture reads last n days"]
+    },
+    "Pct US Capture Read In Window": {
+      "comment": "Ultrasound capture rate over the last `days_back` days through today (default 14): US Capture Read In Window / US Capture Eligible In Window, fraction 0-1. Denominator includes non-Mosaic reads (PowerBI's counts Mosaic reads only). = PowerBI [% US Capture Read (Last 14d)] (Mosaic Volume).",
+      "display_name": "US Capture Rate (Last N Days)",
+      "synonyms": ["% us capture read", "ultrasound capture rate", "us capture percent last 14 days"]
+    },
+    "BD Capture Eligible In Window": {
+      "comment": "Building block: bone density (BD / DEXA) exams in the DEXA Capturable category finalized in the last `days_back` days (default 14); denominator of Pct BD Capture Read In Window. Does not require a Mosaic read (PowerBI's does). = PowerBI [BD Capture Eligible (Last 14d)] (Mosaic Volume).",
+      "display_name": "DEXA Capture Eligible (Last N Days)",
+      "synonyms": ["dexa capture eligible last 14 days", "recent capturable bone density", "bd capturable last n days"]
+    },
+    "BD Capture Read In Window": {
+      "comment": "Building block: capture-eligible bone density (BD / DEXA) exams that Mosaic captured in the last `days_back` days (default 14); numerator of Pct BD Capture Read In Window. = PowerBI [Total DEXA Capture Read] (Mosaic Volume).",
+      "display_name": "DEXA Capture Read (Last N Days)",
+      "synonyms": ["dexa captured last 14 days", "recent bone density captures", "bd capture reads last n days"]
+    },
+    "Pct BD Capture Read In Window": {
+      "comment": "Bone density (DEXA) capture rate over the last `days_back` days through today (default 14): BD Capture Read In Window / BD Capture Eligible In Window, fraction 0-1. Denominator includes non-Mosaic reads. = PowerBI [% BD Capture Read (Last 14d)] (Mosaic Volume).",
+      "display_name": "DEXA Capture Rate (Last N Days)",
+      "synonyms": ["% bd capture read", "dexa capture rate", "bone density capture rate"]
+    },
+    "CA Lung Screener Exam Count In Window": {
+      "comment": "Building block: CT lung cancer screening exams (codes RPID6891, RPID6891-FU, RPID6891-WC, RAD2282) finalized in the last `days_back` days (default 14); denominator of Pct CA Lung Screener Read In Mosaic In Window. = PowerBI [Total CA Lung Screener Reads by Rad (Last 14d)] (Mosaic Volume).",
+      "display_name": "Lung Screening Exams (Last N Days)",
+      "synonyms": ["lung screener exams last 14 days", "recent lung cancer screenings", "ldct screenings last n days"]
+    },
+    "CA Lung Screener Mosaic Exam Count In Window": {
+      "comment": "Building block: CT lung cancer screening exams read in Mosaic in the last `days_back` days (default 14); numerator of Pct CA Lung Screener Read In Mosaic In Window. = PowerBI [Total CA Lung Screener Reads in Mosaic (Last 14d)] (Mosaic Volume).",
+      "display_name": "Lung Screening Mosaic Exams (Last N Days)",
+      "synonyms": ["lung screener mosaic reads last 14 days", "recent lung screenings read in mosaic"]
+    },
+    "Pct CA Lung Screener Read In Mosaic In Window": {
+      "comment": "Share of CT lung cancer screening exams read in Mosaic over the last `days_back` days through today (default 14), fraction 0-1. Rolling window - do not also filter Final Date. = PowerBI [CA Lung Screener % Reads in Mosaic (last 14d)] (Mosaic Volume).",
+      "display_name": "Lung Screening Mosaic Share (Last N Days)",
+      "synonyms": ["% lung screener in mosaic last 14 days", "recent lung screening mosaic adoption"]
+    },
+    "Mammo Exam Count In Window": {
+      "comment": "Building block: mammography exams (Modality = 'MG') finalized in the last `days_back` days (default 14); denominator of Pct Mammo Read In Mosaic In Window. PowerBI's mammo tiles were always window-scoped. = PowerBI [Total Mammo Reads by Rad (Last 14d)] (Mosaic Volume).",
+      "display_name": "Mammo Exams (Last N Days)",
+      "synonyms": ["mammo reads last 14 days", "recent mammograms", "mammography volume last n days"]
+    },
+    "Mammo Mosaic Exam Count In Window": {
+      "comment": "Building block: mammography exams (Modality = 'MG') read in Mosaic in the last `days_back` days (default 14); numerator of Pct Mammo Read In Mosaic In Window. = PowerBI [Total Mammo Reads in Mosaic (Last 14d)] (Mosaic Volume).",
+      "display_name": "Mammo Mosaic Exams (Last N Days)",
+      "synonyms": ["mammo reads in mosaic last 14 days", "recent mammograms read in mosaic"]
+    },
+    "Pct Mammo Read In Mosaic In Window": {
+      "comment": "Share of mammography exams read in Mosaic over the last `days_back` days through today (default 14), fraction 0-1. Rolling window - do not also filter Final Date. = PowerBI [% Mammo Reads in Mosaic (Last 14d)] (Mosaic Volume).",
+      "display_name": "Mammo Mosaic Share (Last N Days)",
+      "synonyms": ["% mammo in mosaic", "mammo mosaic adoption", "mammography mosaic percent"]
+    },
+    "IR Exam Count In Window": {
+      "comment": "Building block: interventional radiology exams (Modality = 'IR') finalized in the last `days_back` days (default 14 = PowerBI's 2 weeks; other values are a deliberate generalization); denominator of Pct IR In Mosaic In Window. = PowerBI [Total IR Cases (Last 2w)] (Mosaic Volume).",
+      "display_name": "IR Exams (Last N Days)",
+      "synonyms": ["ir cases last 2 weeks", "recent ir exams", "interventional volume last n days"]
+    },
+    "IR Mosaic Exam Count In Window": {
+      "comment": "Building block: interventional radiology exams (Modality = 'IR') read in Mosaic in the last `days_back` days (default 14); numerator of Pct IR In Mosaic In Window. = PowerBI [Total IR in Mosaic (Last 2w)] (Mosaic Volume).",
+      "display_name": "IR Mosaic Exams (Last N Days)",
+      "synonyms": ["ir in mosaic last 2 weeks", "recent ir cases read in mosaic"]
+    },
+    "Pct IR In Mosaic In Window": {
+      "comment": "Share of interventional radiology exams read in Mosaic over the last `days_back` days through today (default 14 = 2 weeks), fraction 0-1. = PowerBI [% IR in Mosaic (Last 2w)] / [% Practice IR in Mosaic (Last 2w)] (Mosaic Volume).",
+      "display_name": "IR Mosaic Share (Last N Days)",
+      "synonyms": ["% ir in mosaic", "ir mosaic adoption", "interventional mosaic percent"]
+    },
+    "Capture Eligible Radiologist Count": {
+      "comment": "Number of distinct radiologists who read at least one capture-eligible (US Capturable or DEXA Capturable) exam in scope - a plain distinct count. = PowerBI [Eligible Rads for Capture] (Mosaic Volume); filter Modality = 'BD' for [Eligible Rads for Capture BD].",
+      "display_name": "Capture Eligible Radiologist Count",
+      "synonyms": ["eligible rads for capture", "rads with capturable exams", "capture eligible rads"]
+    },
+    "Capture Radiologist Count": {
+      "comment": "Number of distinct radiologists with at least one Mosaic-captured (US / DEXA) exam in scope. = PowerBI [Capture Live] (Mosaic Volume).",
+      "display_name": "Radiologists Live on Capture",
+      "synonyms": ["capture live", "rads using capture", "capture users"]
+    },
+    "Head CT Exam Count": {
+      "comment": "Building block: Head CT exams - procedure RPID22 (CT head without IV contrast) with a source procedure code; denominator of Pct Head CT RPCE. A single code, narrower than Drafting Model Category 'CT Head'. = PowerBI [Total_headct] (Mosaic Volume).",
+      "display_name": "Head CT Exam Count",
+      "synonyms": ["head ct exams", "rpid22 exams", "ct head volume"]
+    },
+    "Head CT RPCE Exam Count": {
+      "comment": "Building block: Head CT (RPID22) exams from the RPCE (Clario) source systems; numerator of Pct Head CT RPCE. = PowerBI [rpce_Ct_head_co] (Mosaic Volume).",
+      "display_name": "Head CT RPCE Exam Count",
+      "synonyms": ["rpce head ct exams", "head ct on rpce"]
+    },
+    "Pct Head CT RPCE": {
+      "comment": "Share of Head CT (RPID22) exams that come from the RPCE (Clario) systems, fraction 0-1. No +0.02 adjustment - this is RPCE coverage of Head CT volume, not Mosaic adoption. = PowerBI [Pct_ct_head_rpce] (Mosaic Volume).",
+      "display_name": "RPCE Share of Head CT Exams",
+      "synonyms": ["% head ct on rpce", "head ct rpce coverage", "pct ct head rpce"]
+    },
+    "CT Exam Count": {
+      "comment": "Building block: CT exams (Modality = 'CT'); denominator of Pct CT RPCE. = PowerBI [Total_ct] (Mosaic Volume).",
+      "display_name": "CT Exam Count",
+      "synonyms": ["ct exams", "ct volume", "total ct"]
+    },
+    "CT RPCE Exam Count": {
+      "comment": "Building block: CT exams (Modality = 'CT') from the RPCE (Clario) source systems; numerator of Pct CT RPCE. Mirrors PowerBI's RPCE_CT_FLAG column sum (Mosaic Volume).",
+      "display_name": "CT RPCE Exam Count",
+      "synonyms": ["rpce ct exams", "ct on rpce"]
+    },
+    "Pct CT RPCE": {
+      "comment": "Share of CT exams that come from the RPCE (Clario) systems, fraction 0-1. No +0.02 adjustment - RPCE coverage of CT volume, not Mosaic adoption. = PowerBI [Pct_ct_rpce] (Mosaic Volume).",
+      "display_name": "RPCE Share of CT Exams",
+      "synonyms": ["% ct on rpce", "ct rpce coverage", "pct ct rpce"]
+    },
+    "CA Lung Screener Exam Count": {
+      "comment": "Building block: CT lung cancer screening exams (codes RPID6891, RPID6891-FU, RPID6891-WC, RAD2282) within the Final Date filter (not a rolling window); denominator of Pct CA Lung Screener Read In Mosaic.",
+      "display_name": "Lung Screening Exams",
+      "synonyms": ["lung screener exams", "lung cancer screenings", "ldct screenings"]
+    },
+    "CA Lung Screener Mosaic Exam Count": {
+      "comment": "Building block: CT lung cancer screening exams read in Mosaic, within the Final Date filter; numerator of Pct CA Lung Screener Read In Mosaic.",
+      "display_name": "Lung Screening Mosaic Exams",
+      "synonyms": ["lung screener mosaic reads", "lung screenings read in mosaic"]
+    },
+    "Pct CA Lung Screener Read In Mosaic": {
+      "comment": "Share of CT lung cancer screening exams read in Mosaic, fraction 0-1, over the Final Date filter (use the In Window version for PowerBI's rolling 14-day tile).",
+      "display_name": "Lung Screening Mosaic Share",
+      "synonyms": ["% lung screener in mosaic", "lung screening mosaic adoption"]
+    },
+    "In Drafting Pipeline Exam Count": {
+      "comment": "Exams whose reading radiologist has been added to a Mosaic drafting AD group in any category (AD Group Added Date present), regardless of consent, training or enablement status. = PowerBI [In Pipeline Table] (Mosaic Volume).",
+      "display_name": "Exams by Radiologists in Drafting Pipeline",
+      "synonyms": ["in pipeline table", "drafting pipeline exams", "exams by onboarding rads"]
+    },
+    "Drafted But Not Enabled Exam Count": {
+      "comment": "Draftable exams (7 drafting-model categories only) that were AI-drafted although the reading radiologist is not (or no longer) flagged as enabled for drafting - an enablement-data gap signal. Group by Modality / Drafting Model Category for PowerBI's breakdown. = PowerBI [Has Drafted But Not On Drafting] (Mosaic Volume).",
+      "display_name": "Drafted But Not Enabled Exam Count",
+      "synonyms": ["has drafted but not on drafting", "drafted without enablement", "unenabled drafting exams"]
+    },
+    "Drafted But Not Enabled Radiologist Count": {
+      "comment": "Number of distinct radiologists with at least one draftable exam AI-drafted while they are not flagged as enabled for drafting (same scope as Drafted But Not Enabled Exam Count). = PowerBI [Rads Not On Drafting With Drafted Exams] (Mosaic Volume).",
+      "display_name": "Radiologists Drafting But Not Enabled",
+      "synonyms": ["rads not on drafting with drafted exams", "unenabled drafting rads", "rads drafting without enablement"]
+    }
+  }
+}
