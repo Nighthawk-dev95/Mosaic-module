@@ -1,11 +1,14 @@
 # Mosaic Executive — sharing readiness (pilot / Genie Governance kickoff)
 
-Status as of 2026-10-26. Everything is in **edw_test.enterprise_analytics** (reads live edw_prod data). Nothing is in PROD.
+> Sharing follows the **Genie Space Best Practices & Certification Guide (Oct 2026)**. Certification status and
+> the 16-item checklist live in [CERTIFICATION_CHECKLIST.md](CERTIFICATION_CHECKLIST.md).
+
+Status as of 2026-10-27. Everything is in **edw_test.enterprise_analytics** (reads live edw_prod data). Nothing is in PROD.
 
 | Asset | ID / object | State |
 |---|---|---|
 | Lakeview dashboard "Mosaic Executive Dashboard" | `01f1d0089f5410359e87575975cb5dea` | Published, embedded credentials, 8 pages, PBI-parity |
-| Genie space "Mosaic Executive (Sandbox)" | `01f1d02c5dad1f359b76e45dc3920549` | Sandbox tier, linked to the dashboard |
+| Genie space "[DEV] Mosaic Executive" | `01f1d02c5dad1f359b76e45dc3920549` | Lifecycle stage **Development** (author-only), linked to the dashboard |
 | Metric views in Genie (6) | volume, efficiency, efficiency_vs_rp_avg, capacity_pbi, program, draftable | Every dimension + measure has a business comment, display name and synonyms (050) |
 | UC functions in Genie (8) | `mosaic_eff_*` | Per practice / rad / site efficiency, PBI-parity |
 | Efficiency speed fix | `mosaic_efficiency_exam_level_mv` (048) + repoint (049) | Daily 7:30 AM CT refresh; queries went from 7–10 min to ~5–10 s, values identical |
@@ -47,25 +50,30 @@ wide rollout.** If a function errors with a permission message, also grant SELEC
 
 Plus, in the workspace UI:
 - SQL warehouse `fe0ad987563c672a`: **CAN USE** for `<group>`.
-- Genie space: **CAN RUN** for `<group>`. Reviewers who curate it get **CAN EDIT**.
+- Genie space, by lifecycle stage (certification guide):
+  - **Development:** the author only (CAN MANAGE). This is the current stage.
+  - **Testing / Review:** named reviewers get **CAN EDIT** only. Never CAN RUN or CAN VIEW before certification,
+    and never All Users or broad groups. The title prefix changes from `[DEV]` to `[TEST]`.
+  - **Production:** after Genie Governance approves and EDW Dev applies the Certified tag, the target audience
+    gets **CAN RUN** through an AD group, not individuals.
 - Dashboard: **CAN VIEW** for `<group>`.
 
-`SEC-AZ-DBX-T-BIPA-RW` already holds SELECT on catalog `edw_test`, so its members can use Genie today once they have
-CAN RUN on the space and CAN USE on the warehouse.
+`SEC-AZ-DBX-T-BIPA-RW` already holds SELECT on catalog `edw_test`. It is a broad group, so it must **not** be
+given access to the space before certification.
 
-## Governance (Sandbox → Candidate)
-- **Tier:** Sandbox, since it lives in the creator's `/Genie-Sandbox` folder.
-- **Candidate criteria met:**
-  - Curated, governed data only: 6 metric views + 8 functions, and no raw tables.
-  - Benchmarks are in the space.
-  - Business glossary and routing instructions are in the space.
-  - Every field is documented.
-- **Promotion to Candidate** requires the committee's sign-off, plus a pilot group outside the creator.
+## Governance (certification guide lifecycle)
+- **Stage:** Development, titled `[DEV] Mosaic Executive`, in the author's `/Genie-Sandbox` folder.
+- **Next:** Testing / Review. Peer reviewers get CAN EDIT and the title becomes `[TEST] Mosaic Executive`.
+- **Then:** submit the completed checklist to the Genie Governance group. EDW Dev applies the Certified tag, and the
+  audience gets CAN RUN. The committee meets monthly; the deadline is Jan 31, 2027.
+- **Blockers before certification:** see [CERTIFICATION_CHECKLIST.md](CERTIFICATION_CHECKLIST.md). The main one is
+  that all assets are in `edw_test` and some upstream sources are in `edw_dev`, while the guide requires `edw_gold`
+  or downstream sources, for example `edw_prod.enterprise_analytics`.
 - **Change control:** the space is edited only through `tools/genie_exec_space/build_genie_space.py`, which is source
   controlled. Field metadata lives in `tools/edw_fixes/metric_view_metadata/*.json` and is applied with
   `_enrich_metric_view_metadata.py`, which asserts that metric logic is unchanged.
 
-## Pilot testers (2026-10-27)
+## Pilot testers / peer reviewers (2026-10-27): Testing stage, CAN EDIT only
 
 | Tester | Workspace login | Status |
 |---|---|---|
@@ -76,11 +84,11 @@ CAN RUN on the space and CAN USE on the warehouse.
 ### 1. Genie space + dashboard (the space/dashboard owner runs this; CLI profile mosaic-oauth)
 
 ```bash
-databricks permissions update genie 01f1d02c5dad1f359b76e45dc3920549 --profile mosaic-oauth --json '{"access_control_list":[{"user_name":"karin.sanders@radpartners.com","permission_level":"CAN_RUN"},{"user_name":"naomi.hoppel@radpartners.com","permission_level":"CAN_RUN"}]}'
+databricks permissions update genie 01f1d02c5dad1f359b76e45dc3920549 --profile mosaic-oauth --json '{"access_control_list":[{"user_name":"karin.sanders@radpartners.com","permission_level":"CAN_EDIT"},{"user_name":"naomi.hoppel@radpartners.com","permission_level":"CAN_EDIT"}]}'
 databricks permissions update dashboards 01f1d0089f5410359e87575975cb5dea --profile mosaic-oauth --json '{"access_control_list":[{"user_name":"karin.sanders@radpartners.com","permission_level":"CAN_READ"},{"user_name":"naomi.hoppel@radpartners.com","permission_level":"CAN_READ"}]}'
 ```
 
-You can also do this in the UI: open the space or dashboard and use **Share**. Give "Can Run" on the space and "Can View" on the dashboard.
+You can also do this in the UI: open the space or dashboard and use **Share**. Give **"Can Edit"** on the space (the certification guide does not allow "Can Run" before certification) and "Can View" on the dashboard. When you add them, rename the space to `[TEST] Mosaic Executive` by setting `TITLE` in `build_genie_space.py` and running `--update`.
 
 ### 2. Data access (Unity Catalog; the catalog/object owner runs this)
 

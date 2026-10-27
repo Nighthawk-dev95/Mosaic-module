@@ -1,0 +1,24 @@
+{
+  "_comment": "Payload for `databricks pipelines create --json @this_file.json --profile mosaic-app`. Fill in connection_name and source_table before running - see README.md Track 1. Smartsheet's source_schema is always the literal string 'default'; source_table is the sheet's 16-digit numeric ID (not the share-link URL token). Triggered-only (Lakeflow Connect has no continuous mode) - schedule with a Jobs pipeline_task after the first manual run succeeds.",
+  "name": "smartsheet_drafting_model_practice_sites",
+  "catalog": "edw_dev",
+  "schema": "enterprise_analytics",
+  "continuous": false,
+  "ingestion_definition": {
+    "connection_name": "TODO_fill_in_smartsheet_connection_name",
+    "objects": [
+      {
+        "table": {
+          "source_schema": "default",
+          "source_table": "2580220413431684",
+          "destination_catalog": "edw_dev",
+          "destination_schema": "enterprise_analytics",
+          "destination_table": "smartsheet_drafting_model_practice_sites",
+          "connector_options": {
+            "enforce_schema": true
+          }
+        }
+      }
+    ]
+  }
+}

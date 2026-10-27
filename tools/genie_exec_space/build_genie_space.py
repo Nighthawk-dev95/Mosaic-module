@@ -8,8 +8,10 @@ site / vs-average efficiency comes from the UC table functions in tools/edw_fixe
     python build_genie_space.py --create --profile mosaic-oauth   # create the space (Sandbox folder)
     python build_genie_space.py --update --profile mosaic-oauth   # push changes to the id in space_id.txt
 
-Governance (company 3-tier model): this is Tier 1 Sandbox -- personal Genie-Sandbox folder,
-creator-only. Promotion to Candidate/Bronze is a separate, deliberate step.
+Governance (Genie Space Best Practices & Certification Guide, Oct 2026): lifecycle stage Development --
+[DEV] title prefix, author-only (CAN MANAGE). Peer reviewers get CAN EDIT and the prefix becomes [TEST];
+only after Genie Governance approval does EDW apply the Certified tag and the audience get CAN RUN.
+Checklist status: CERTIFICATION_CHECKLIST.md.
 """
 import argparse
 import hashlib
@@ -23,7 +25,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 SPACE_ID_FILE = os.path.join(HERE, "space_id.txt")
 WAREHOUSE_ID = "fe0ad987563c672a"  # same warehouse as the exec dashboard
 PARENT_PATH = "/Users/bhargav.narasimhan@radpartners.com/Genie-Sandbox"
-TITLE = "Mosaic Executive (Sandbox)"
+TITLE = "[DEV] Mosaic Executive"  # [DEV] -> [TEST] at peer review -> no prefix once certified
 DESCRIPTION = ("Curated Q&A for the Mosaic Executive Dashboard: adoption, efficiency vs legacy VR, "
                "capacity & utilization, drafting coverage (why draftable exams are not drafted) and the "
                "MVP program. Same governed metric views as the dashboard and PowerBI.")
@@ -494,6 +496,21 @@ GROUP BY ALL ORDER BY `Exam Month`"""),
      f"""SELECT `Managing Practice`, MEASURE(`Pct RPCE Reporting`) AS pct_rpce_reporting FROM {VOLUME}
 WHERE `Local Region` = 'Apex' AND {SEP_RANGE}
 GROUP BY ALL ORDER BY `Managing Practice`"""),
+    # --- edge cases (certification guide: misspellings, synonyms, no period, date ranges, regions) ---
+    ("whats mosiac adoption for sept 2026",
+     f"""SELECT MEASURE(`Pct RPCE Reporting`) AS pct_rpce_reporting FROM {VOLUME} WHERE {SEP_RANGE}"""),
+    ("How many radiologists used Mosaic?",  # no period -> last complete month (rule 3)
+     f"""SELECT MEASURE(`Mosaic Radiologist Count`) AS mosaic_radiologists FROM {VOLUME}
+WHERE `Final Date` >= {LAST_MONTH} AND `Final Date` < {THIS_MONTH}"""),
+    ("How much capacity lift did Mosaic give us in September 2026?",
+     cap_total(SEP_2026, "MEASURE(`Pct Addl Capacity`) AS pct_addl_capacity")),
+    ("Mosaic adoption by month for Q3 2026",
+     f"""SELECT `Final Month`, MEASURE(`Pct RPCE Reporting`) AS pct_rpce_reporting FROM {VOLUME}
+WHERE `Final Date` >= DATE'2026-07-01' AND `Final Date` < DATE'2026-10-01'
+GROUP BY ALL ORDER BY `Final Month`"""),
+    ("What % of RPCE exams were drafted in Mosaic in the Maverick region in Sept 2026?",
+     f"""SELECT MEASURE(`Pct RPCE Drafting`) AS pct_rpce_drafting FROM {VOLUME}
+WHERE `Local Region` = 'Maverick' AND {SEP_RANGE}"""),
 ]
 
 # column_configs: descriptions / synonyms; entity matching only on low-cardinality business dimensions
@@ -545,6 +562,51 @@ def _column_configs(table):
         out.append(cfg)
     return out
 
+# SQL Expressions (certification guide: preferred over plain-text instructions). Measures stay governed in
+# the metric views, so only reusable filters / expressions live here. Columns must be qualified with the
+# view's last name segment. probe = a measure --check runs with the snippet to prove it executes.
+def _v(t):
+    return t.rsplit(".", 1)[1]
+
+_LM_EQ = f"= {LAST_MONTH}"
+SQL_FILTERS = [
+    # (display_name, sql, synonyms, view, probe measure)
+    ("Last complete month (adoption / volume)",
+     f"{_v(VOLUME)}.`Final Date` >= {LAST_MONTH} AND {_v(VOLUME)}.`Final Date` < {THIS_MONTH}",
+     ["last month adoption", "previous month volume", "last full month RPCE"], VOLUME, "Pct RPCE Reporting"),
+    ("Year to date, complete months (adoption / volume)",
+     f"{_v(VOLUME)}.`Final Date` >= date_trunc('YEAR', {LAST_MONTH}) AND {_v(VOLUME)}.`Final Date` < {THIS_MONTH}",
+     ["YTD adoption", "year to date volume", "this year so far"], VOLUME, "Pct RPCE Reporting"),
+    ("Last complete month (efficiency vs baseline)", f"{_v(EFF)}.`Exam Month` {_LM_EQ}",
+     ["last month efficiency", "previous month read time savings"], EFF, "Full Mosaic Pct Change Vs Baseline"),
+    ("Last complete month (efficiency vs RP average)", f"{_v(RP_AVG)}.`Exam Month` {_LM_EQ}",
+     ["last month vs RP average", "previous month peer benchmark"], RP_AVG, "Full Mosaic Efficiency Vs RP Avg"),
+    ("Last complete month (capacity / utilization)", f"{_v(CAP)}.`Month` {_LM_EQ}",
+     ["last month capacity", "previous month utilization"], CAP, "Selected Shift Count"),
+    ("Last complete month (drafting coverage)", f"{_v(DRAFTABLE)}.`Month` {_LM_EQ}",
+     ["last month drafting coverage", "previous month draftable exams"], DRAFTABLE, "Draftable Exam Count"),
+    ("Draftable but not drafted", f"{_v(DRAFTABLE)}.`Is Drafted` = false",
+     ["not drafted", "undrafted", "missed drafts", "drafting misses"], DRAFTABLE, "Draftable Exam Count"),
+    ("In an MVP cohort", f"{_v(PROGRAM)}.`Program Track` <> 'Not In A Cohort'",
+     ["in the MVP program", "enrolled in MVP", "MVP cohort"], PROGRAM, "Radiologists"),
+]
+SQL_EXPRESSIONS = [
+    # (alias, display_name, sql, view, probe measure)
+    ("final_quarter", "Quarter (adoption / volume)", f"date_trunc('QUARTER', {_v(VOLUME)}.`Final Date`)",
+     VOLUME, "Pct RPCE Reporting"),
+    ("exam_quarter", "Quarter (efficiency)", f"date_trunc('QUARTER', {_v(EFF)}.`Exam Month`)",
+     EFF, "Full Mosaic Pct Change Vs Baseline"),
+]
+
+
+def _snippet_checks():
+    """(label, sql) pairs proving each snippet runs against its view."""
+    out = [(f"filter: {d}", f"SELECT MEASURE(`{m}`) AS v FROM {t} WHERE {sql}") for d, sql, _, t, m in SQL_FILTERS]
+    out += [(f"expression: {d}", f"SELECT {sql} AS {a}, MEASURE(`{m}`) AS v FROM {t} GROUP BY ALL ORDER BY 1 DESC LIMIT 4")
+            for a, d, sql, t, m in SQL_EXPRESSIONS]
+    return out
+
+
 SAMPLE_QUESTIONS = [
     "What was Mosaic adoption last month?",
     "How much more efficient are radiologists on Mosaic than on legacy VR, by solution?",
@@ -584,6 +646,12 @@ def serialized_space():
             "example_question_sqls": examples,
             "sql_functions": sorted(({"id": _id("fn", f), "identifier": f} for f in FUNCTIONS),
                                     key=lambda e: e["id"]),
+            "sql_snippets": {
+                "filters": sorted(({"id": _id("sf", d), "display_name": d, "sql": [sql], "synonyms": syn}
+                                   for d, sql, syn, _, _ in SQL_FILTERS), key=lambda e: e["id"]),
+                "expressions": sorted(({"id": _id("se", a), "alias": a, "display_name": d, "sql": [sql]}
+                                       for a, d, sql, _, _ in SQL_EXPRESSIONS), key=lambda e: e["id"]),
+            },
         },
         "benchmarks": {"questions": benchmarks},
     }
@@ -606,7 +674,7 @@ def _body_file(body):
 
 def check(profile):
     bad = 0
-    for q, sql in EXAMPLES + BENCHMARKS:
+    for q, sql in EXAMPLES + BENCHMARKS + _snippet_checks():
         out = run(["databricks", "experimental", "aitools", "tools", "query", sql, "--profile", profile])
         rows = json.loads(out[out.find("["):]) if "[" in out else []
         ok = bool(rows) and any(v is not None for v in rows[0].values())

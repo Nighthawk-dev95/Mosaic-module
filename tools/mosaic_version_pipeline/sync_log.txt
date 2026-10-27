@@ -77,3 +77,16 @@ RuntimeError: databricks experimental aitools tools query --profile aws-dbx-work
 Error: A new access token could not be retrieved because the refresh token is invalid. To reauthenticate, run the following command:
   $ databricks auth login --profile aws-dbx-workspace01
 
+---- Mon 10/26/2026 20:15:01.53 ---- 
+Last loaded day: 2026-10-25. Pulling 2 day(s) (including 2 day(s) of refresh lookback): 2026-10-24 .. 2026-10-25.
+  2026-10-24: 54802 rows
+  2026-10-25: 55574 rows
+Combined 110376 rows across 2 day(s). Staging and merging...
+Merge result: {'num_affected_rows': '110272', 'num_deleted_rows': '0', 'num_inserted_rows': '0', 'num_updated_rows': '110272'}
+---- Tue 10/27/2026  8:15:01.87 ---- 
+Last loaded day: 2026-10-25. Pulling 3 day(s) (including 2 day(s) of refresh lookback): 2026-10-24 .. 2026-10-26.
+  2026-10-24: 54802 rows
+  2026-10-25: 55574 rows
+  2026-10-26: 92142 rows
+Combined 202518 rows across 3 day(s). Staging and merging...
+Merge result: {'num_affected_rows': '202252', 'num_deleted_rows': '0', 'num_inserted_rows': '91318', 'num_updated_rows': '110934'}
