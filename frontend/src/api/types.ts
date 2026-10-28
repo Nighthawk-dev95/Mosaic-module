@@ -736,8 +736,11 @@ export interface BaselineProxyDetail {
   npi: number;
   radiologist_name: string | null;
   practice: string | null;
+  // target_shift stays non-null because the service drops rows without one - it is the half
+  // of the (npi, target_shift) decision key. proxy_shift can legitimately be absent: that is a
+  // row the scorer found no acceptable match for, which is a reviewable state, not a bad row.
   target_shift: string;
-  proxy_shift: string;
+  proxy_shift: string | null;
   total_match_score: number | null;
   score_subspecialty: number | null;
   score_interventional: number | null;

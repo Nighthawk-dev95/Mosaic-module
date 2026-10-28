@@ -26,6 +26,12 @@ def _connect() -> sqlite3.Connection:
         )
         """
     )
+    # A covering index purely so freshness can be read without touching `payload`. Because
+    # refreshed_at is declared *after* a column holding up to ~120MB of JSON, SQLite has to walk
+    # that row's overflow pages to reach it - measured at 2.5s for a single-row timestamp read,
+    # which is absurd for a value callers use to decide whether they can skip the real work.
+    # With both columns in the index the query is answered from the index alone.
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_cache_name_refreshed ON cache (name, refreshed_at)")
     return conn
 
 

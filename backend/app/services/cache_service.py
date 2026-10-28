@@ -900,6 +900,61 @@ def get_undrafted_analysis(
     ]
 
 
+# Keyed by the cache entry's own `refreshed_at`, so a refresh invalidates it without anyone
+# having to remember to clear it, and only the newest fold is ever retained.
+_UNDRAFTED_FOLD: dict[str, tuple[list[dict], int]] = {}
+
+
+def _folded_undrafted_rows() -> tuple[list[dict], int]:
+    """`undrafted_analysis` folded to the only grain the worklist ranker reads.
+
+    Measured on prod the raw payload is 2.99M rows that take ~50 seconds to parse out of
+    SQLite, and the endpoint used to pay that on *every* request - so two concurrent loads
+    (the page mounts, React re-renders) plus a parameter change meant minutes of nothing,
+    which is exactly what the Cockpit worklist showed. `rank` sums tbwu and exam_count into
+    (week_start, team, category) and reads no other column, so folding to that key up front
+    is lossless for it and two orders of magnitude smaller. Every query parameter is a lever
+    on the benchmark, applied after the fold, so one fold serves all of them.
+    """
+    # The freshness probe has to come from `all_refresh_times`, which reads only the timestamp
+    # column, rather than from `load`, which returns the timestamp alongside a payload it has
+    # already spent ~50 seconds parsing. Checking the key after `load` would memoize the cheap
+    # half of the work and re-pay the expensive half on every single call.
+    key = str(cache_store.all_refresh_times().get("undrafted_analysis"))
+    cached = _UNDRAFTED_FOLD.get(key)
+    if cached is not None:
+        return cached
+
+    payload, _ = cache_store.load("undrafted_analysis")
+    rows = payload or []
+    folded: dict[tuple, dict] = {}
+    undated = 0
+    for row in rows:
+        week_start = row.get("week_start")
+        if not week_start or str(week_start) == "None":
+            # Counted, not folded. `rank` reports this as a count of *cached rows*, and the UI
+            # renders it as one, so it has to be taken before the grain changes under it.
+            undated += 1
+            continue
+        fold_key = (str(week_start), row.get("team"), row.get("category") or "")
+        acc = folded.get(fold_key)
+        if acc is None:
+            acc = folded[fold_key] = {
+                "week_start": fold_key[0],
+                "team": fold_key[1],
+                "category": fold_key[2],
+                "tbwu": 0.0,
+                "exam_count": 0.0,
+            }
+        acc["tbwu"] += float(row.get("tbwu") or 0.0)
+        acc["exam_count"] += float(row.get("exam_count") or 0.0)
+
+    result = (list(folded.values()), undated)
+    _UNDRAFTED_FOLD.clear()
+    _UNDRAFTED_FOLD[key] = result
+    return result
+
+
 def get_next_best_actions(
     weeks: int = 8, min_addressable_tbwu: float = 500.0, benchmark_pctile: float = 0.75, limit: int = 25
 ) -> NextBestActionList:
@@ -909,13 +964,14 @@ def get_next_best_actions(
     dataset, no EDW round trip - and hands it to the pure ranking function, which is where the
     arithmetic and its justification live.
     """
-    payload, _ = cache_store.load("undrafted_analysis")
+    rows, undated = _folded_undrafted_rows()
     result = next_best_action_service.rank(
-        payload or [],
+        rows,
         weeks=weeks,
         min_addressable_tbwu=min_addressable_tbwu,
         benchmark_pctile=benchmark_pctile,
         limit=limit,
+        undated_rows=undated,
     )
     return NextBestActionList(**result)
 
@@ -1089,6 +1145,11 @@ def get_baseline_proxy_detail(practice: str | None = None) -> list[BaselineProxy
     rows = payload or []
     if practice:
         rows = [r for r in rows if r.get("practice") == practice]
+    # A row is addressed by (npi, target_shift) - that pair is the key the review queue posts
+    # back when a reviewer accepts or rejects a borrowed baseline. Without a target_shift there
+    # is nothing to decide about and no key to record the decision under, so the row is dropped
+    # here rather than rendered as a reviewable item that silently cannot be reviewed.
+    rows = [r for r in rows if r.get("target_shift")]
     return [
         BaselineProxyDetail(
             npi=row["npi"],

@@ -111,6 +111,7 @@ def rank(
     min_addressable_tbwu: float = 500.0,
     benchmark_pctile: float = 0.75,
     limit: int = 25,
+    undated_rows: int | None = None,
 ) -> dict:
     """Rank teams by expected TBWU unlock. `rows` is `undrafted_analysis` at its cached grain.
 
@@ -118,6 +119,11 @@ def rank(
     ranking against a peer frontier is only readable if you can see how many peers, over what
     window, and at what rate - and a reader who disagrees with the frontier should be able to
     say so from the response alone.
+
+    `rows` may also arrive pre-folded to (week_start, team, category) - that is the entire grain
+    this function reads, so folding is lossless for everything below except the undated row
+    count, which would then count groups rather than cached rows. A caller that folds passes the
+    raw count as `undated_rows` so the sentence the UI renders from it keeps meaning what it says.
     """
     if not rows:
         return _empty(weeks, benchmark_pctile, min_addressable_tbwu)
@@ -131,7 +137,11 @@ def rank(
     # sorts after every ISO date they would otherwise have been admitted as the most recent
     # "week" in the window, quietly adding undated volume to every team's gap. They are counted
     # on the response instead of being silently swallowed.
-    undated = sum(1 for r in rows if not r.get("week_start") or str(r.get("week_start")) == "None")
+    undated = (
+        undated_rows
+        if undated_rows is not None
+        else sum(1 for r in rows if not r.get("week_start") or str(r.get("week_start")) == "None")
+    )
     all_weeks = sorted(
         {str(r["week_start"]) for r in rows if r.get("week_start") and str(r["week_start"]) != "None"}
     )

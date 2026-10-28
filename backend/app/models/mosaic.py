@@ -719,8 +719,13 @@ class BaselineProxyDetail(BaseModel):
     npi: int
     radiologist_name: str | None
     practice: str | None
-    target_shift: str
-    proxy_shift: str
+    # Nullable like every other field on this model, and for the same reason the plan gives
+    # for new cache-backed columns: these rows are rehydrated from the SQLite cache via **row,
+    # and a shift whose name never resolved upstream arrives as None. Declared as a bare `str`
+    # these two turned one missing name into a hard 500 for the entire Baseline decisions pane
+    # - the row that cannot be shown takes the ninety that can with it.
+    target_shift: str | None
+    proxy_shift: str | None
     total_match_score: float | None
     score_subspecialty: float | None
     score_interventional: float | None

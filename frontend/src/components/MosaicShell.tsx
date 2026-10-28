@@ -16,9 +16,9 @@ export function MosaicShell() {
           <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
             <TimeOfDayGreeting />
             <div>
-              <h1 style={{ margin: 0, fontSize: 22 }}>Mosaic Intelligence</h1>
+              <h1 style={{ margin: 0, fontSize: 22 }}>Mosaic</h1>
               <div style={{ color: "var(--text-muted)", fontSize: 13, marginTop: 2 }}>
-                Enterprise-wide Mosaic AI adoption, deployment, efficiency, capacity, and capture intelligence.
+                Reporting, AI Drafting and Capture — measured against the system they replaced.
               </div>
             </div>
           </div>

@@ -370,7 +370,13 @@ async def undrafted_analysis_filters():
 
 
 @router.get("/next-best-actions", response_model=NextBestActionList)
-async def next_best_actions(
+# Deliberately `def`, not `async def`, unlike its neighbours. The body is synchronous CPU work
+# over a large cached payload, and on the event loop it blocks every other request in the
+# process - including the refresh/status poll the shell runs on a timer, so a slow worklist
+# made the whole app look dead rather than slow. FastAPI runs a plain `def` handler in a
+# threadpool instead. The other 60-odd handlers here have the same shape and the same latent
+# problem; this is the one with a payload big enough to make it visible.
+def next_best_actions(
     weeks: int = 8,
     min_addressable_tbwu: float = 500.0,
     benchmark_pctile: float = 0.75,

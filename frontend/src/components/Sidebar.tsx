@@ -2,7 +2,7 @@ import { NavLink } from "react-router-dom";
 import { useTheme } from "../context/ThemeContext";
 
 const NAV_ITEMS = [
-  { to: "/", label: "Mosaic Intelligence" },
+  { to: "/", label: "Mosaic" },
   { to: "/draft-vs-final", label: "Draft vs Final" },
 ];
 
@@ -13,6 +13,11 @@ export function Sidebar() {
     <div
       style={{
         width: 220,
+        // A width alone does not hold here. This is a flex item next to a surface that can
+        // overflow sideways (Explore's grid, Command's chain), and the browser's first move
+        // when it needs room is to shrink the sibling that said it could - which squeezed the
+        // brand down to about 75px and broke "Mosaic Info Hub" across three lines.
+        flexShrink: 0,
         background: "var(--glass-fill-drawer)",
         backdropFilter: "blur(var(--glass-blur-md))",
         WebkitBackdropFilter: "blur(var(--glass-blur-md))",
