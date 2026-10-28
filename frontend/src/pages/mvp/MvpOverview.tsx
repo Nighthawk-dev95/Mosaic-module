@@ -174,6 +174,34 @@ export function MvpOverview() {
         </div>
       </div>
 
+      {/* The funnel above is a count of radiologists per status. This is what those statuses
+          mean operationally - the program's own five steps, in the program's own words. Without
+          it, "Solutioning" and "Monitoring" are just bar labels. */}
+      {context.data?.engagement_process_steps && context.data.engagement_process_steps.length > 0 && (
+        <div style={CARD_STYLE}>
+          <div style={{ color: "var(--text-muted)", fontSize: 11, marginBottom: 12, textTransform: "uppercase", letterSpacing: 0.5 }}>
+            The engagement process behind those statuses
+          </div>
+          <div style={{ display: "grid", gap: 10 }}>
+            {context.data.engagement_process_steps.map((step, i) => {
+              // Each step is authored as "Name - what happens". Splitting on the first " - "
+              // keeps the name and the detail distinct without restating either here; a step
+              // that ever ships without the separator renders whole rather than truncated.
+              const sep = step.indexOf(" - ");
+              const name = sep === -1 ? `Step ${i + 1}` : step.slice(0, sep);
+              const detail = sep === -1 ? step : step.slice(sep + 3);
+              return (
+                <div key={step} style={{ display: "flex", gap: 12, alignItems: "baseline" }}>
+                  <span style={{ color: "var(--text-muted)", fontSize: 12, fontWeight: 600, minWidth: 18 }}>{i + 1}</span>
+                  <span style={{ color: "var(--text-primary)", fontSize: 12, fontWeight: 600, minWidth: 72 }}>{name}</span>
+                  <span style={{ color: "var(--text-secondary)", fontSize: 12, lineHeight: 1.5 }}>{detail}</span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
       <div style={CARD_STYLE}>
         <AIHoverCard
           feature="mvp_impact"
@@ -199,13 +227,27 @@ export function MvpOverview() {
               ["insufficient_data", "Insufficient Data", "var(--text-muted)"],
             ] as [ImpactBucketKey, string, string][]
           ).map(([key, label, accent]) => (
-            <StatTile
+            // The section label above already carries one mvp_impact hover, but it explains the
+            // comparison as a whole. These four buckets are the part a reader actually asks
+            // about - "improving toward baseline" and "not improving" are only meaningful
+            // against the specific baseline each one is measured from.
+            <AIHoverCard
               key={key}
-              label={label}
+              feature="mvp_impact"
+              entityLabel="Enterprise-wide"
+              metricLabel={`${label} - radiologist count`}
               value={String(impact[key])}
-              accent={accent}
-              onClick={() => setDrawer({ title: label, rows: getImpactBucketRows(scoped, key) })}
-            />
+              extra={{ post_engagement_rads: String(impact.post_engagement_rads) }}
+              underline={false}
+              style={{ flex: "1 1 200px", minWidth: 180 }}
+            >
+              <StatTile
+                label={label}
+                value={String(impact[key])}
+                accent={accent}
+                onClick={() => setDrawer({ title: label, rows: getImpactBucketRows(scoped, key) })}
+              />
+            </AIHoverCard>
           ))}
         </div>
       </div>

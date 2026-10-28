@@ -111,6 +111,33 @@ _MVP_STATUS_FUNNEL_METHODOLOGY = (
     "or the radiologist/practice declined support partway through."
 )
 
+# The Command surface's four stage cards. Each card renders a different metric and names it in
+# `metricLabel`, so this text deliberately explains the chain rather than any one number - what
+# it has to prevent is the model treating a stage headline as a standalone KPI when its whole
+# meaning is the leakage between it and the stage before.
+_VALUE_CHAIN_METHODOLOGY = (
+    "Mosaic's value chain runs Deploy -> Use -> Perform -> Return, and each stage is only "
+    "meaningful against the one before it. Deploy counts radiologists live on the solution; "
+    "Use is the share of eligible work actually done on it; Perform is efficiency against each "
+    "radiologist's own pre-Mosaic baseline; Return is the change in read time that efficiency "
+    "buys back. A strong number at one stage does not carry forward - radiologists can be "
+    "deployed and not use it, or use it and not yet be faster - so the figure that matters is "
+    "the drop between consecutive stages, not any stage on its own. The metric label on this "
+    "card names which of the four is being shown."
+)
+
+# Built from ENGAGEMENT_PROCESS_STEPS rather than restating it, so the prose the model is
+# grounded in and the prose the UI renders are the same five sentences by construction.
+_MVP_JOURNEY_METHODOLOGY = (
+    "This is where one radiologist sits in the MVP's own five-step engagement process, read "
+    "directly off the program's mosaic_optimization_support_status field - the numeric status "
+    "prefixes are the steps. 1 Identified / 2 Confirmed are Identify; 3-4 Outreached and "
+    "5 Scheduled are Engage; 6-7 Solutioning is Address; 8 Monitoring is Monitor; 9 Closed is "
+    "Resolve. A radiologist with an exclusion reason is off the journey entirely, and one with "
+    "no recorded status has not been identified yet. The steps themselves:\n"
+    + "\n".join(f"{i}. {step}" for i, step in enumerate(mvp_context.ENGAGEMENT_PROCESS_STEPS, 1))
+)
+
 _MVP_IMPACT_METHODOLOGY = (
     "This compares each radiologist's fixed May-Jul 2026 baseline efficiency change against "
     "their current rolling 30-day figure, for radiologists who've reached Solutioning or later "
@@ -222,6 +249,7 @@ _FEATURE_GROUNDING: dict[str, str] = {
     "mvp_notes_summary": mvp_context.PROGRAM_NARRATIVE,
     "mvp_mentor_match": _MVP_MENTOR_MATCH_METHODOLOGY,
     "mvp_status_funnel": _MVP_STATUS_FUNNEL_METHODOLOGY,
+    "mvp_journey": _MVP_JOURNEY_METHODOLOGY,
     "mvp_impact": _MVP_IMPACT_METHODOLOGY,
     "mvp_weekly_trend": _MVP_WEEKLY_TREND_METHODOLOGY,
     "mammo_screening_trend": _MAMMO_SCREENING_TREND_METHODOLOGY,
@@ -240,6 +268,7 @@ _FEATURE_GROUNDING: dict[str, str] = {
     "sentiment": _SENTIMENT_METHODOLOGY,
     "non_drafted_reason": _NON_DRAFTED_METHODOLOGY,
     "shift_utilization": _SHIFT_UTILIZATION_METHODOLOGY,
+    "value_chain": _VALUE_CHAIN_METHODOLOGY,
     # The worklist rows reused `non_drafted_reason`, which is the right grounding for *what the
     # six categories mean* and the wrong grounding for *why this team is ranked first*. The
     # expected-unlock figure is the one number on that page someone will challenge out loud, and

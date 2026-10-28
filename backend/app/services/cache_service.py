@@ -6,6 +6,8 @@ since the underlying EDW queries in app.services.mosaic_service are no longer ca
 per-request - only by the background/manual refresh job.
 """
 
+from datetime import date, datetime, timedelta
+
 from app.data import capture_enablement, local_region, mvp_context, mvp_dashboard_stats, mvp_mentor_matching, mvp_methodology_checks, rad_survey
 from app.db import cache_store, efficiency_store
 from app.services import movers_service, next_best_action_service
@@ -67,6 +69,72 @@ def _pct_change(current: float | None, baseline: float | None) -> float | None:
     if current is None or baseline is None or baseline == 0:
         return None
     return (current - baseline) / baseline
+
+
+def _pp_change(current: float | None, baseline: float | None) -> float | None:
+    """Absolute change between two rates, as a fraction (0.0376 = +3.76 percentage points).
+
+    The honest ranking key for any period-over-period comparison of a rate. _pct_change
+    divides by the base, so a practice moving 0.04% -> 0.86% reports +2294% and outranks one
+    that moved +37 points - the ranking comes out inverted, and -100% is a hard floor that
+    dozens of entities tie at. Subtraction has neither property.
+    """
+    if current is None or baseline is None:
+        return None
+    return current - baseline
+
+
+_PERIOD_FMT = "%Y-%m-%d"
+
+
+def _period_bounds(period: str, granularity: str) -> tuple[date, date] | None:
+    """(start, end-exclusive) of a bucket key, or None if the key isn't a date.
+
+    Bucket keys are `DATE_TRUNC('WEEK'|'MONTH', final_datetime)` cast to a string, so the key
+    *is* the start of its own window - Monday for weeks, the 1st for months.
+    """
+    try:
+        start = datetime.strptime(period, _PERIOD_FMT).date()
+    except (TypeError, ValueError):
+        return None
+    if granularity == "week":
+        return start, start + timedelta(days=7)
+    if start.month == 12:
+        return start, date(start.year + 1, 1, 1)
+    return start, date(start.year, start.month + 1, 1)
+
+
+def _previous_period(period: str, granularity: str) -> str | None:
+    """The key of the calendar-prior bucket - which is not the same thing as the previous row.
+
+    The capture series has >100 mid-series gaps (a practice reads nothing in a given week), so
+    walking rows in order and calling the last one "previous" silently reports a five-week gap
+    as week-over-week. Deriving the key from the calendar and looking it up means a missing
+    prior bucket produces no delta at all, which is the correct answer.
+    """
+    bounds = _period_bounds(period, granularity)
+    if bounds is None:
+        return None
+    start, _ = bounds
+    if granularity == "week":
+        return (start - timedelta(days=7)).strftime(_PERIOD_FMT)
+    prev_month_end = start - timedelta(days=1)
+    return date(prev_month_end.year, prev_month_end.month, 1).strftime(_PERIOD_FMT)
+
+
+def _is_partial_period(period: str, granularity: str) -> bool:
+    """True while the bucket's own calendar window is still open.
+
+    Read on a Tuesday, the current weekly bucket holds ~1 day of volume against a 7-day prior -
+    measured at 16.6% of a normal week. The enterprise *rate* barely moves, which is why this
+    never showed up on the headline tiles, but every per-entity denominator shrinks ~6x and the
+    mover lists turn to noise. Calendar-derived rather than volume-derived on purpose: an
+    in-progress week is in progress whatever its volume happens to be.
+    """
+    bounds = _period_bounds(period, granularity)
+    if bounds is None:
+        return False
+    return date.today() < bounds[1]
 
 
 def _read_time_change(current: float | None, baseline: float | None) -> float | None:
@@ -633,33 +701,49 @@ def get_capture_utilization_trend_by_practice(
 
     points = []
     for prac, prac_rows in by_practice.items():
-        prac_rows.sort(key=lambda r: r["period"])
-        prev_pct_all = None
-        prev_pct_enabled = None
+        # Two passes: index every bucket's rates first, then emit comparing each bucket against
+        # its *calendar* predecessor. A single pass carrying `prev_pct` forward compares against
+        # the previous row instead, which is a different thing whenever the series has a gap.
+        indexed: dict[str, dict] = {}
         for row in prac_rows:
             capturable_all = row.get("capturable_exams_all") or 0
             captured_all = row.get("captured_exams_all") or 0
             capturable_enabled = row.get("capturable_exams_enabled") or 0
             captured_enabled = row.get("captured_exams_enabled") or 0
-            pct_all = (captured_all / capturable_all) if capturable_all else None
-            pct_enabled = (captured_enabled / capturable_enabled) if capturable_enabled else None
+            indexed[row["period"]] = {
+                "capturable_all": capturable_all,
+                "captured_all": captured_all,
+                "capturable_enabled": capturable_enabled,
+                "captured_enabled": captured_enabled,
+                "pct_all": (captured_all / capturable_all) if capturable_all else None,
+                "pct_enabled": (captured_enabled / capturable_enabled) if capturable_enabled else None,
+            }
+
+        for period in sorted(indexed):
+            cur = indexed[period]
+            prev_key = _previous_period(period, granularity)
+            prev = indexed.get(prev_key) if prev_key else None
             points.append(
                 CaptureUtilizationTrendPracticePoint(
-                    period=row["period"],
+                    period=period,
                     granularity=granularity,
                     practice=prac,
-                    capturable_exams_all=capturable_all,
-                    captured_exams_all=captured_all,
-                    pct_captured_all=pct_all,
-                    capturable_exams_enabled=capturable_enabled,
-                    captured_exams_enabled=captured_enabled,
-                    pct_captured_enabled=pct_enabled,
-                    pct_change_all=_pct_change(pct_all, prev_pct_all),
-                    pct_change_enabled=_pct_change(pct_enabled, prev_pct_enabled),
+                    capturable_exams_all=cur["capturable_all"],
+                    captured_exams_all=cur["captured_all"],
+                    pct_captured_all=cur["pct_all"],
+                    capturable_exams_enabled=cur["capturable_enabled"],
+                    captured_exams_enabled=cur["captured_enabled"],
+                    pct_captured_enabled=cur["pct_enabled"],
+                    pct_change_all=_pct_change(cur["pct_all"], prev["pct_all"] if prev else None),
+                    pct_change_enabled=_pct_change(cur["pct_enabled"], prev["pct_enabled"] if prev else None),
+                    pp_change_all=_pp_change(cur["pct_all"], prev["pct_all"] if prev else None),
+                    pp_change_enabled=_pp_change(cur["pct_enabled"], prev["pct_enabled"] if prev else None),
+                    prev_period=prev_key if prev else None,
+                    prev_capturable_exams_all=prev["capturable_all"] if prev else 0,
+                    prev_capturable_exams_enabled=prev["capturable_enabled"] if prev else 0,
+                    is_partial_period=_is_partial_period(period, granularity),
                 )
             )
-            prev_pct_all = pct_all
-            prev_pct_enabled = pct_enabled
     points.sort(key=lambda p: (p.practice or "", p.period))
     return points
 
@@ -689,28 +773,40 @@ def get_capture_utilization_trend_by_radiologist(
 
     points = []
     for rad_npi, npi_rows in by_npi.items():
-        npi_rows.sort(key=lambda r: r["period"])
         dim = dim_by_npi.get(rad_npi, {})
-        prev_pct = None
+        # Same two-pass, calendar-predecessor shape as the practice series above.
+        indexed: dict[str, dict] = {}
         for row in npi_rows:
             capturable = row.get("capturable_exams") or 0
             captured = row.get("captured_exams") or 0
-            pct = (captured / capturable) if capturable else None
+            indexed[row["period"]] = {
+                "capturable": capturable,
+                "captured": captured,
+                "pct": (captured / capturable) if capturable else None,
+            }
+
+        for period in sorted(indexed):
+            cur = indexed[period]
+            prev_key = _previous_period(period, granularity)
+            prev = indexed.get(prev_key) if prev_key else None
             points.append(
                 CaptureUtilizationTrendRadiologistPoint(
-                    period=row["period"],
+                    period=period,
                     granularity=granularity,
                     npi=rad_npi,
                     radiologist_name=dim.get("radiologist_name"),
                     practice=dim.get("practice"),
                     capture_enabled=dim.get("capture_enabled"),
-                    capturable_exams=capturable,
-                    captured_exams=captured,
-                    pct_captured=pct,
-                    pct_change=_pct_change(pct, prev_pct),
+                    capturable_exams=cur["capturable"],
+                    captured_exams=cur["captured"],
+                    pct_captured=cur["pct"],
+                    pct_change=_pct_change(cur["pct"], prev["pct"] if prev else None),
+                    pp_change=_pp_change(cur["pct"], prev["pct"] if prev else None),
+                    prev_period=prev_key if prev else None,
+                    prev_capturable_exams=prev["capturable"] if prev else 0,
+                    is_partial_period=_is_partial_period(period, granularity),
                 )
             )
-            prev_pct = pct
     points.sort(key=lambda p: (p.practice or "", p.radiologist_name or "", p.period))
     return points
 

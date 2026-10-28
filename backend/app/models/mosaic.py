@@ -429,8 +429,23 @@ class CaptureUtilizationTrendPracticePoint(BaseModel):
     capturable_exams_enabled: int
     captured_exams_enabled: int
     pct_captured_enabled: float | None
+    # Relative change in the rate - kept for the trend chart and for back-compat. It is NOT
+    # safe to rank on: a move off a near-zero base produces a four-digit percentage that
+    # outranks a genuine 37-point move. Rank on pp_change_* instead.
     pct_change_all: float | None
     pct_change_enabled: float | None
+    # Absolute change, as a fraction (0.0376 = +3.76 percentage points). This is the ranking key.
+    pp_change_all: float | None = None
+    pp_change_enabled: float | None = None
+    # The calendar-prior bucket this point was compared against, and its denominators. Null
+    # prev_period means the prior bucket is missing from the series entirely, so there is no
+    # honest week-over-week number for this point.
+    prev_period: str | None = None
+    prev_capturable_exams_all: int = 0
+    prev_capturable_exams_enabled: int = 0
+    # True while this bucket's own calendar window is still open - a Tuesday read of the
+    # current week holds one day of volume against a seven-day prior.
+    is_partial_period: bool = False
 
 
 class CaptureUtilizationTrendRadiologistPoint(BaseModel):
@@ -444,6 +459,10 @@ class CaptureUtilizationTrendRadiologistPoint(BaseModel):
     captured_exams: int
     pct_captured: float | None
     pct_change: float | None
+    pp_change: float | None = None
+    prev_period: str | None = None
+    prev_capturable_exams: int = 0
+    is_partial_period: bool = False
 
 
 class CaptureEfficiencyTrendPracticePoint(BaseModel):

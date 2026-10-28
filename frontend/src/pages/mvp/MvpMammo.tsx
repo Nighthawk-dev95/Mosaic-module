@@ -117,13 +117,26 @@ export function MvpMammo() {
               ["insufficient_data", "Insufficient Data", "var(--text-muted)"],
             ] as [ImpactBucketKey, string, string][]
           ).map(([key, label, accent]) => (
-            <StatTile
+            // Same four buckets as the Drafting/Capture overview, scoped to the mammo cohort -
+            // so the hover is wired the same way here. entityLabel is what keeps the two pages'
+            // explanations (and their hover cache entries) distinct.
+            <AIHoverCard
               key={key}
-              label={label}
+              feature="mvp_impact"
+              entityLabel="Mammo cohort"
+              metricLabel={`${label} - radiologist count`}
               value={String(impact[key])}
-              accent={accent}
-              onClick={() => setDrawer({ title: label, rows: getImpactBucketRows(scoped, key) })}
-            />
+              extra={{ post_engagement_rads: String(impact.post_engagement_rads) }}
+              underline={false}
+              style={{ flex: "1 1 200px", minWidth: 180 }}
+            >
+              <StatTile
+                label={label}
+                value={String(impact[key])}
+                accent={accent}
+                onClick={() => setDrawer({ title: label, rows: getImpactBucketRows(scoped, key) })}
+              />
+            </AIHoverCard>
           ))}
         </div>
       </div>

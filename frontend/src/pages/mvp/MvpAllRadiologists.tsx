@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { Fragment, useMemo, useState } from "react";
 import { mosaicApi } from "../../api/client";
 import { useFetch } from "../../hooks/useFetch";
 import { DataTable } from "../../components/DataTable";
@@ -10,6 +10,8 @@ import { Drawer } from "../../components/Drawer";
 import { CARD_STYLE } from "../../styles/glassCard";
 import { FilterBar } from "../../components/FilterBar";
 import { useFilters, matchesPractice, matchesRadiologistSearch } from "../../context/FilterContext";
+import { journeyPosition, journeyLabel, computeJourneyCounts } from "../../utils/mvpDashboardStats";
+import type { JourneyStage } from "../../utils/mvpDashboardStats";
 import type { MvpRadiologistItem } from "../../api/types";
 
 function fmtPctRaw(value: number | null | undefined): string {
@@ -54,6 +56,16 @@ const MENTOR_MATCH_COLORS: Record<string, string> = {
   "Mentorship Scheduled": "var(--domain-deployment)",
   "Post-Mentorship Monitoring": "var(--status-good)",
   Closed: "var(--text-muted)",
+};
+
+// Same reading as MENTOR_MATCH_COLORS above: progression, not severity. Step 1 is not a problem
+// and step 5 is not a reward - the ramp just says how far along the engagement is.
+const JOURNEY_COLORS: Record<JourneyStage, string> = {
+  Identify: "var(--text-muted)",
+  Engage: "var(--status-warning)",
+  Address: "var(--domain-deployment)",
+  Monitor: "var(--domain-capture)",
+  Resolve: "var(--status-good)",
 };
 
 // Derived approximation of the MVP deck's own qualitative Priority 1/2/3 definitions (see
@@ -221,6 +233,10 @@ export function MvpAllRadiologists() {
     return { counts, excluded };
   }, [radiologists.data]);
 
+  // Counted across the whole roster, not the filtered view, so the "N rads are also here"
+  // context on a hover means the same thing no matter which filters happen to be on.
+  const journeyCounts = useMemo(() => computeJourneyCounts(radiologists.data ?? []), [radiologists.data]);
+
   const columns: DataTableColumn<MvpRadiologistItem>[] = [
     { key: "radiologist_name", label: "Radiologist" },
     { key: "practice", label: "Practice" },
@@ -256,6 +272,15 @@ export function MvpAllRadiologists() {
             entityLabel={r.radiologist_name ?? `NPI ${r.npi}`}
             metricLabel="Exclusion reason"
             value={r.exclusion_reason}
+            // The glossary is the program's own wording for this reason code. Passing it as
+            // `extra` means the model explains the documented meaning rather than guessing one
+            // from a ten-character label; when the code isn't in the glossary we send nothing
+            // rather than a placeholder, so the hover degrades to the label alone.
+            extra={
+              context.data?.exclusion_reason_glossary?.[r.exclusion_reason]
+                ? { definition: context.data.exclusion_reason_glossary[r.exclusion_reason] }
+                : undefined
+            }
           >
             <Badge label={r.exclusion_reason} color="var(--text-muted)" />
           </AIHoverCard>
@@ -382,6 +407,30 @@ export function MvpAllRadiologists() {
     },
     { key: "mvp_target_outreach_week", label: "Target Outreach Week", render: (r) => r.mvp_target_outreach_week ?? "—" },
     { key: "mosaic_mentor", label: "Mentor", render: (r) => r.mosaic_mentor ?? "—" },
+    {
+      key: "journey",
+      label: "MVP Journey",
+      render: (r) => {
+        const pos = journeyPosition(r);
+        const label = journeyLabel(pos);
+        return (
+          <AIHoverCard
+            feature="mvp_journey"
+            entityLabel={r.radiologist_name ?? `NPI ${r.npi}`}
+            metricLabel="Position in the 5-step MVP engagement process"
+            value={label}
+            // The raw status is the evidence for the step, and the cohort size is the only
+            // thing that makes a step number mean anything on its own.
+            extra={{
+              support_status: pos.detail,
+              rads_at_this_step: pos.stage ? String(journeyCounts[pos.stage]) : "n/a",
+            }}
+          >
+            <Badge label={label} color={pos.stage ? JOURNEY_COLORS[pos.stage] : "var(--text-muted)"} />
+          </AIHoverCard>
+        );
+      },
+    },
     { key: "optimization_support_status", label: "Support Status", render: (r) => r.optimization_support_status ?? "—" },
     {
       key: "mentor_match",
@@ -452,6 +501,11 @@ export function MvpAllRadiologists() {
             entityLabel="Enterprise-wide"
             metricLabel={`${tier} - radiologist count`}
             value={String(priorityCounts[tier])}
+            extra={
+              context.data?.priority_tier_definitions?.[tier]
+                ? { deck_definition: context.data.priority_tier_definitions[tier] }
+                : undefined
+            }
             underline={false}
             style={{ flex: "1 1 200px", minWidth: 180 }}
           >
@@ -483,6 +537,31 @@ export function MvpAllRadiologists() {
           </button>
         )}
       </div>
+
+      {/* computePriorities() above is an approximation - the deck defined these three tiers in
+          words and never codified a formula. Printing the deck's own wording next to the counts
+          is what lets a reader see the gap instead of taking the tile at face value. */}
+      {context.data?.priority_tier_definitions && (
+        <div style={CARD_STYLE}>
+          <div style={{ color: "var(--text-muted)", fontSize: 11, marginBottom: 10, textTransform: "uppercase", letterSpacing: 0.5 }}>
+            How the program defines each priority
+          </div>
+          <div style={{ display: "grid", gap: 8 }}>
+            {Object.entries(context.data.priority_tier_definitions).map(([tier, definition]) => (
+              <div key={tier} style={{ display: "flex", gap: 10, alignItems: "baseline" }}>
+                <span style={{ color: PRIORITY_COLORS[tier] ?? "var(--text-secondary)", fontSize: 12, fontWeight: 600, minWidth: 72 }}>
+                  {tier}
+                </span>
+                <span style={{ color: "var(--text-secondary)", fontSize: 12, lineHeight: 1.5 }}>{definition}</span>
+              </div>
+            ))}
+          </div>
+          <div style={{ color: "var(--text-muted)", fontSize: 11, marginTop: 10, fontStyle: "italic" }}>
+            The tiles above apply a derived stand-in for these definitions, scored on the current roster rather than the
+            deck's fixed May–Jul 2026 window — so the counts move and the definitions don't.
+          </div>
+        </div>
+      )}
 
       <div style={{ display: "flex", gap: 16, flexWrap: "wrap" }}>
         <AIHoverCard
@@ -621,6 +700,25 @@ export function MvpAllRadiologists() {
               <div style={{ fontSize: 13, color: "var(--text-secondary)", marginBottom: 10 }}>{context.data.program_narrative}</div>
               <div style={{ fontSize: 12, color: "var(--text-muted)", marginBottom: 10 }}>{context.data.program_history}</div>
               <div style={{ fontSize: 12, color: "var(--text-secondary)", fontStyle: "italic" }}>{context.data.current_status_notes}</div>
+
+              {/* Every reason code observed live in rad_onboarding, in the program's own words.
+                  These codes are the whole explanation for why the denominator is 392 and not
+                  1,500, and until now they appeared only as a ten-character badge. */}
+              {context.data.exclusion_reason_glossary && (
+                <div style={{ marginTop: 16 }}>
+                  <div style={{ color: "var(--text-muted)", fontSize: 11, marginBottom: 8, textTransform: "uppercase", letterSpacing: 0.5 }}>
+                    Why a radiologist is excluded ({Object.keys(context.data.exclusion_reason_glossary).length} reason codes)
+                  </div>
+                  <div style={{ display: "grid", gridTemplateColumns: "minmax(170px, 220px) 1fr", gap: "6px 14px", alignItems: "baseline" }}>
+                    {Object.entries(context.data.exclusion_reason_glossary).map(([reason, definition]) => (
+                      <Fragment key={reason}>
+                        <span style={{ fontSize: 12, color: "var(--text-secondary)", fontWeight: 600 }}>{reason}</span>
+                        <span style={{ fontSize: 12, color: "var(--text-muted)", lineHeight: 1.5 }}>{definition}</span>
+                      </Fragment>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           )}
         </div>

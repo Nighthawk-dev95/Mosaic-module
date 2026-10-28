@@ -1671,6 +1671,20 @@ UNREGISTERED_FEATURES: dict[str, str] = {
         "`ai_context_service` gives it a summarization prompt rather than the explain-this-"
         "data-point framing. A MetricSpec would have nothing to put in `numerator`."
     ),
+    "value_chain": (
+        "One component rendering four different stage metrics - a head count at Deploy, an "
+        "adoption rate at Use, an efficiency change at Perform, a read-time change at Return. "
+        "Declaring the union under FEATURE_METRICS would attach all four definitions to every "
+        "card, which is the wrong-denominator failure this bridge exists to prevent, and the "
+        "Deploy head counts have no MetricSpec at all. Each card names its own metric in "
+        "`metricLabel`; the grounding explains the chain the four sit on."
+    ),
+    "mvp_journey": (
+        "A position in a five-step process, not a measurement - the value is a step number read "
+        "off the program's own mosaic_optimization_support_status vocabulary. There is no "
+        "num/den, and no coverage question: a radiologist either has a recorded status or does "
+        "not, which the position itself reports."
+    ),
 }
 
 

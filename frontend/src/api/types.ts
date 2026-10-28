@@ -69,8 +69,16 @@ export interface CaptureUtilizationTrendPracticePoint {
   capturable_exams_enabled: number;
   captured_exams_enabled: number;
   pct_captured_enabled: number | null;
+  // Relative change in the rate. Do not rank on it - see pp_change_* below.
   pct_change_all: number | null;
   pct_change_enabled: number | null;
+  // Absolute change as a fraction (0.0376 = +3.76 percentage points). The ranking key.
+  pp_change_all: number | null;
+  pp_change_enabled: number | null;
+  prev_period: string | null;
+  prev_capturable_exams_all: number;
+  prev_capturable_exams_enabled: number;
+  is_partial_period: boolean;
 }
 
 export interface CaptureUtilizationTrendRadiologistPoint {
@@ -84,6 +92,10 @@ export interface CaptureUtilizationTrendRadiologistPoint {
   captured_exams: number;
   pct_captured: number | null;
   pct_change: number | null;
+  pp_change: number | null;
+  prev_period: string | null;
+  prev_capturable_exams: number;
+  is_partial_period: boolean;
 }
 
 export interface CaptureEfficiencyTrendPracticePoint {

@@ -36,6 +36,86 @@ function isDeclinedOutcome(status: string): boolean {
   return ["Declined Support", "Resigning", "Mentor Declined", "Not Progressing"].some((kw) => status.includes(kw));
 }
 
+// ---------------------------------------------------------------------------------------------
+// Where a radiologist is on the MVP journey.
+//
+// UI-only - deliberately NOT mirrored into backend/app/data/mvp_dashboard_stats.py. That module
+// exists to ground the precomputed AI narrative in matching aggregate numbers; a per-radiologist
+// position has no narrative to ground, so mirroring it would add a sync obligation for nothing.
+//
+// The program's own five-step engagement process (mvp_context.ENGAGEMENT_PROCESS_STEPS, deck
+// slides 20-21) and rad_onboarding's mosaic_optimization_support_status vocabulary are the same
+// sequence under two names - the 1..9 status prefixes ARE the steps. Reading the journey off the
+// same field stageBucket() already parses means this column and the status funnel can never
+// disagree, and it surfaces the two pre-stages ("1 Identified", "2 Confirmed") that the funnel
+// deliberately drops because being on the list is not yet engagement.
+// ---------------------------------------------------------------------------------------------
+
+export type JourneyStage = "Identify" | "Engage" | "Address" | "Monitor" | "Resolve";
+export const JOURNEY_STAGES: JourneyStage[] = ["Identify", "Engage", "Address", "Monitor", "Resolve"];
+
+export type JourneyState = "on_journey" | "excluded" | "not_started" | "unrecognized";
+
+export interface JourneyPosition {
+  stage: JourneyStage | null;
+  /** 1-based position within JOURNEY_STAGES; null whenever the radiologist is not on the journey. */
+  step: number | null;
+  state: JourneyState;
+  /** The raw field this was read from, so the UI can always show its own evidence. */
+  detail: string;
+}
+
+// Vocabulary kept character-for-character identical to stageBucket() above. An unseen status
+// variant returns null here rather than being forced into the nearest step - "we don't recognise
+// this" is a true statement; a confidently wrong step is not.
+function stageOfStatus(status: string): JourneyStage | null {
+  if (status === "1 Identified" || status === "2 Confirmed") return "Identify";
+  if (status.startsWith("3 Outreached") || status.startsWith("4 Outreached") || status.startsWith("5 Scheduled")) {
+    return "Engage";
+  }
+  if (status.startsWith("6 Solutioning") || status.startsWith("7 Solutioning")) return "Address";
+  if (status.startsWith("8 Monitoring")) return "Monitor";
+  if (status.startsWith("9 Closed")) return "Resolve";
+  return null;
+}
+
+export function journeyPosition(r: MvpRadiologistItem): JourneyPosition {
+  if (r.exclusion_reason) {
+    return { stage: null, step: null, state: "excluded", detail: r.exclusion_reason };
+  }
+  const status = r.optimization_support_status;
+  if (!status) {
+    return { stage: null, step: null, state: "not_started", detail: "No support status recorded yet." };
+  }
+  const stage = stageOfStatus(status);
+  if (!stage) {
+    return { stage: null, step: null, state: "unrecognized", detail: status };
+  }
+  return { stage, step: JOURNEY_STAGES.indexOf(stage) + 1, state: "on_journey", detail: status };
+}
+
+export function journeyLabel(position: JourneyPosition): string {
+  switch (position.state) {
+    case "on_journey":
+      return `${position.step}. ${position.stage}`;
+    case "excluded":
+      return "Off journey";
+    case "not_started":
+      return "Not yet identified";
+    case "unrecognized":
+      return "Stage not mapped";
+  }
+}
+
+export function computeJourneyCounts(rows: MvpRadiologistItem[]): Record<JourneyStage, number> {
+  const counts: Record<JourneyStage, number> = { Identify: 0, Engage: 0, Address: 0, Monitor: 0, Resolve: 0 };
+  for (const r of rows) {
+    const stage = journeyPosition(r).stage;
+    if (stage) counts[stage] += 1;
+  }
+  return counts;
+}
+
 export function getEffLossPrograms(r: MvpRadiologistItem): string {
   const programs: string[] = [];
   if (r.xr_drafting_efficiency_change_pct != null && r.xr_drafting_efficiency_change_pct < 0) programs.push("XR");

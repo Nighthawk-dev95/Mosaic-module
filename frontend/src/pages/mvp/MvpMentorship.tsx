@@ -22,6 +22,7 @@ const MENTOR_MATCH_COLORS: Record<string, string> = {
 
 export function MvpMentorship() {
   const radiologists = useFetch(() => mosaicApi.getMvpRadiologists(), []);
+  const context = useFetch(() => mosaicApi.getMvpContext(), []);
   const [notesTarget, setNotesTarget] = useState<MvpRadiologistItem | null>(null);
   const [statusFilter, setStatusFilter] = useState<string | null>(null);
   const filters = useFilters();
@@ -90,6 +91,18 @@ export function MvpMentorship() {
 
       {radiologists.error && (
         <div style={{ color: "var(--status-critical)", fontSize: 13 }}>Couldn't reach the backend API. ({radiologists.error})</div>
+      )}
+
+      {/* This page has always shown the matching pipeline without saying what mentorship is for
+          or who moves a rad through it. Both are written down in the program's own summary, and
+          until now that string shipped in the API payload and rendered nowhere. */}
+      {context.data?.mentorship_program_summary && (
+        <div style={CARD_STYLE}>
+          <div style={{ color: "var(--text-muted)", fontSize: 11, marginBottom: 8, textTransform: "uppercase", letterSpacing: 0.5 }}>
+            When a radiologist gets a peer coach
+          </div>
+          <div style={{ fontSize: 13, color: "var(--text-secondary)", lineHeight: 1.5 }}>{context.data.mentorship_program_summary}</div>
+        </div>
       )}
 
       <div style={{ display: "grid", gridTemplateColumns: "1fr 2fr", gap: 20 }}>

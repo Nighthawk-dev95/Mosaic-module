@@ -13,12 +13,7 @@ import { SolutionPin } from "../components/SolutionAxis";
 import { TABLE_SECTION_STYLE, TABLE_SCROLL_STYLE } from "../styles/tableLayout";
 import { CARD_STYLE } from "../styles/glassCard";
 import { useFilters, matchesPractice, matchesRadiologistSearch } from "../context/FilterContext";
-import type {
-  CapturePracticeRollup,
-  CaptureRadiologistItem,
-  CaptureUtilizationTrendPracticePoint,
-  CaptureUtilizationTrendRadiologistPoint,
-} from "../api/types";
+import type { CapturePracticeRollup, CaptureRadiologistItem } from "../api/types";
 
 type Granularity = "week" | "month";
 
@@ -56,7 +51,154 @@ function ToggleGroup<T extends string>({
 
 function fmtDate(value: string | null): string {
   if (!value) return "—";
+  // A bare YYYY-MM-DD is parsed by Date() as UTC midnight, so west of Greenwich it renders as
+  // the day before - a Monday week-start showed up as the preceding Sunday. These are calendar
+  // dates with no time component, so build them in local time instead.
+  const ymd = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
+  if (ymd) {
+    return new Date(Number(ymd[1]), Number(ymd[2]) - 1, Number(ymd[3])).toLocaleDateString();
+  }
   return new Date(value).toLocaleDateString();
+}
+
+// Minimum capturable exams a mover needs in BOTH the current and the prior bucket to appear.
+// Without a floor, 22 of 70 practice deltas and 54% of radiologist deltas were computed on
+// denominators small enough that a single exam swings the rate by double digits - the lists
+// filled up with volumes of 1, 4, 5 and 6. The two numbers differ because a practice reads
+// roughly an order of magnitude more than one of its radiologists.
+const PRACTICE_MIN_CAPTURABLE = 50;
+const RAD_MIN_CAPTURABLE = 10;
+
+const MOVER_LIST_SIZE = 5;
+
+interface TrendPeriodPoint {
+  period: string;
+  is_partial_period: boolean;
+}
+
+interface MoverRow<T> {
+  row: T;
+  /** Absolute change in the capture rate, as a fraction. 0.0376 = +3.76 points. */
+  delta: number;
+  /** The rate itself at the comparison period, for context next to the delta. */
+  rate: number | null;
+  volume: number;
+}
+
+interface MoverResult<T> {
+  improving: MoverRow<T>[];
+  declining: MoverRow<T>[];
+  /** The single complete period every row in both lists is measured at. */
+  period: string | null;
+  /** The in-progress bucket that was held out, if there is one. */
+  excludedPartialPeriod: string | null;
+  /** How many entities had a usable delta at `period` after the volume floor. */
+  qualified: number;
+  /** How many had a delta at `period` before the floor - the difference is what we dropped. */
+  considered: number;
+}
+
+/**
+ * Rank entities by how far their capture rate moved between two adjacent calendar buckets.
+ *
+ * Four rules, each of which is a defect this card used to ship:
+ *  1. One period for the whole card - the latest *complete* one. Taking each entity's own max
+ *     period mixed an 18-month-old delta in beside this week's under a "Week over Week" label,
+ *     and including the in-progress bucket compared one day of volume against seven.
+ *  2. Rank on points, never on relative change. `pct_change` divides by the base, so a move
+ *     from 0.04% to 0.86% scores +2294% and outranks a genuine +37-point move, and -100% is a
+ *     hard floor that dozens of entities tie at. Subtraction has neither property.
+ *  3. Both denominators must clear the floor - a big current week against a 3-exam prior week
+ *     is just as noisy as the reverse.
+ *  4. Split by sign, not by slicing from both ends. `slice(0,5)` and `slice(-5)` overlap when
+ *     fewer than ten entities qualify, which put the same practice in both lists.
+ */
+function pickMovers<T extends TrendPeriodPoint>(
+  rows: T[],
+  opts: {
+    minVolume: number;
+    delta: (r: T) => number | null;
+    rate: (r: T) => number | null;
+    volume: (r: T) => number;
+    prevVolume: (r: T) => number;
+  }
+): MoverResult<T> {
+  const empty: MoverResult<T> = {
+    improving: [],
+    declining: [],
+    period: null,
+    excludedPartialPeriod: null,
+    qualified: 0,
+    considered: 0,
+  };
+  if (rows.length === 0) return empty;
+
+  let latestComplete: string | null = null;
+  let latestPartial: string | null = null;
+  for (const r of rows) {
+    if (r.is_partial_period) {
+      if (!latestPartial || r.period > latestPartial) latestPartial = r.period;
+    } else if (!latestComplete || r.period > latestComplete) {
+      latestComplete = r.period;
+    }
+  }
+  if (!latestComplete) return { ...empty, excludedPartialPeriod: latestPartial };
+
+  const atPeriod = rows.filter((r) => r.period === latestComplete && opts.delta(r) !== null);
+  const qualified: MoverRow<T>[] = [];
+  for (const r of atPeriod) {
+    if (opts.volume(r) < opts.minVolume) continue;
+    if (opts.prevVolume(r) < opts.minVolume) continue;
+    qualified.push({ row: r, delta: opts.delta(r) as number, rate: opts.rate(r), volume: opts.volume(r) });
+  }
+  qualified.sort((a, b) => b.delta - a.delta);
+
+  return {
+    improving: qualified.filter((m) => m.delta > 0).slice(0, MOVER_LIST_SIZE),
+    declining: qualified
+      .filter((m) => m.delta < 0)
+      .slice(-MOVER_LIST_SIZE)
+      .reverse(),
+    period: latestComplete,
+    excludedPartialPeriod: latestPartial,
+    qualified: qualified.length,
+    considered: atPeriod.length,
+  };
+}
+
+function MoverList<T>({
+  title,
+  movers,
+  label,
+}: {
+  title: string;
+  movers: MoverRow<T>[];
+  label: (row: T) => string;
+}) {
+  return (
+    <div style={{ flex: "1 1 300px" }}>
+      <div style={{ fontSize: 12, color: "var(--text-muted)", marginBottom: 8 }}>{title}</div>
+      {movers.length === 0 && (
+        <div style={{ fontSize: 13, color: "var(--text-muted)", padding: "4px 0" }}>
+          None above the volume floor.
+        </div>
+      )}
+      {movers.map((m, i) => (
+        <div
+          key={i}
+          style={{ display: "flex", justifyContent: "space-between", gap: 12, padding: "4px 0", fontSize: 13 }}
+        >
+          <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+            {label(m.row)}
+          </span>
+          <span style={{ display: "flex", gap: 8, flexShrink: 0 }}>
+            <span style={{ color: "var(--text-muted)" }}>{fmtPct(m.rate)}</span>
+            <TrendDelta value={m.delta} unit="pp" />
+          </span>
+        </div>
+      ))}
+    </div>
+  );
 }
 
 export function CaptureDetail() {
@@ -106,30 +248,50 @@ export function CaptureDetail() {
 
   const topPracticeMoves = useMemo(() => {
     const rows = utilTrendByPractice.data ?? [];
-    const latestByPractice = new Map<string, CaptureUtilizationTrendPracticePoint>();
-    for (const r of rows) {
-      if (!r.practice) continue;
-      const existing = latestByPractice.get(r.practice);
-      if (!existing || r.period > existing.period) latestByPractice.set(r.practice, r);
-    }
-    const getDelta = (r: CaptureUtilizationTrendPracticePoint) =>
-      filters.captureEnabledOnly ? r.pct_change_enabled : r.pct_change_all;
-    const withDelta = Array.from(latestByPractice.values()).filter((r) => getDelta(r) !== null);
-    const sorted = [...withDelta].sort((a, b) => (getDelta(b) ?? 0) - (getDelta(a) ?? 0));
-    return { improving: sorted.slice(0, 5), declining: sorted.slice(-5).reverse() };
+    return pickMovers(rows.filter((r) => !!r.practice), {
+      minVolume: PRACTICE_MIN_CAPTURABLE,
+      delta: (r) => (filters.captureEnabledOnly ? r.pp_change_enabled : r.pp_change_all),
+      rate: (r) => (filters.captureEnabledOnly ? r.pct_captured_enabled : r.pct_captured_all),
+      volume: (r) => (filters.captureEnabledOnly ? r.capturable_exams_enabled : r.capturable_exams_all),
+      prevVolume: (r) =>
+        filters.captureEnabledOnly ? r.prev_capturable_exams_enabled : r.prev_capturable_exams_all,
+    });
   }, [utilTrendByPractice.data, filters.captureEnabledOnly]);
 
   const topRadiologistMoves = useMemo(() => {
     const rows = utilTrendByRadiologist.data ?? [];
-    const latestByNpi = new Map<number, CaptureUtilizationTrendRadiologistPoint>();
-    for (const r of rows) {
-      const existing = latestByNpi.get(r.npi);
-      if (!existing || r.period > existing.period) latestByNpi.set(r.npi, r);
-    }
-    const withDelta = Array.from(latestByNpi.values()).filter((r) => r.pct_change !== null);
-    const sorted = [...withDelta].sort((a, b) => (b.pct_change ?? 0) - (a.pct_change ?? 0));
-    return { improving: sorted.slice(0, 5), declining: sorted.slice(-5).reverse() };
+    return pickMovers(rows, {
+      minVolume: RAD_MIN_CAPTURABLE,
+      delta: (r) => r.pp_change,
+      rate: (r) => r.pct_captured,
+      volume: (r) => r.capturable_exams,
+      prevVolume: (r) => r.prev_capturable_exams,
+    });
   }, [utilTrendByRadiologist.data]);
+
+  // The card's own footnote. Everything it states is a rule the ranking actually applied, so a
+  // reader can tell at a glance why their practice is absent - partial period, volume floor, or
+  // no prior bucket at all - instead of assuming the number is simply wrong.
+  const moverCaption = useMemo(() => {
+    const unit = granularity === "week" ? "week" : "month";
+    const period = topPracticeMoves.period ?? topRadiologistMoves.period;
+    if (!period) {
+      return `No complete ${unit} available to compare yet.`;
+    }
+    const parts = [
+      `Change in capture rate, in percentage points, for the ${unit} of ${fmtDate(period)} against the ${unit} before it.`,
+    ];
+    const partial = topPracticeMoves.excludedPartialPeriod ?? topRadiologistMoves.excludedPartialPeriod;
+    if (partial && partial > period) {
+      parts.push(`The ${unit} of ${fmtDate(partial)} is still in progress and is excluded.`);
+    }
+    parts.push(
+      `Requires at least ${PRACTICE_MIN_CAPTURABLE} capturable exams in both ${unit}s for a practice ` +
+        `(${topPracticeMoves.qualified} of ${topPracticeMoves.considered} qualify) and ${RAD_MIN_CAPTURABLE} for a radiologist ` +
+        `(${topRadiologistMoves.qualified} of ${topRadiologistMoves.considered}).`
+    );
+    return parts.join(" ");
+  }, [granularity, topPracticeMoves, topRadiologistMoves]);
 
   const PRACTICE_COLUMNS: DataTableColumn<CapturePracticeRollup>[] = [
     {
@@ -289,46 +451,33 @@ export function CaptureDetail() {
       </div>
 
       <div style={CARD_STYLE}>
-        <div style={{ color: "var(--text-muted)", fontSize: 13, marginBottom: 12, textTransform: "uppercase", letterSpacing: 0.5 }}>
+        <div style={{ color: "var(--text-muted)", fontSize: 13, marginBottom: 4, textTransform: "uppercase", letterSpacing: 0.5 }}>
           Improvement / Decline Highlights ({granularity === "week" ? "Week over Week" : "Month over Month"})
         </div>
+        <div style={{ fontSize: 12, color: "var(--text-muted)", marginBottom: 12, lineHeight: 1.5 }}>
+          {moverCaption}
+        </div>
         <div style={{ display: "flex", gap: 20, flexWrap: "wrap" }}>
-          <div style={{ flex: "1 1 300px" }}>
-            <div style={{ fontSize: 12, color: "var(--text-muted)", marginBottom: 8 }}>Top Improving Practices</div>
-            {topPracticeMoves.improving.map((r) => (
-              <div key={r.practice} style={{ display: "flex", justifyContent: "space-between", padding: "4px 0", fontSize: 13 }}>
-                <span>{r.practice}</span>
-                <TrendDelta value={filters.captureEnabledOnly ? r.pct_change_enabled : r.pct_change_all} />
-              </div>
-            ))}
-          </div>
-          <div style={{ flex: "1 1 300px" }}>
-            <div style={{ fontSize: 12, color: "var(--text-muted)", marginBottom: 8 }}>Top Declining Practices</div>
-            {topPracticeMoves.declining.map((r) => (
-              <div key={r.practice} style={{ display: "flex", justifyContent: "space-between", padding: "4px 0", fontSize: 13 }}>
-                <span>{r.practice}</span>
-                <TrendDelta value={filters.captureEnabledOnly ? r.pct_change_enabled : r.pct_change_all} />
-              </div>
-            ))}
-          </div>
-          <div style={{ flex: "1 1 300px" }}>
-            <div style={{ fontSize: 12, color: "var(--text-muted)", marginBottom: 8 }}>Top Improving Radiologists</div>
-            {topRadiologistMoves.improving.map((r) => (
-              <div key={r.npi} style={{ display: "flex", justifyContent: "space-between", padding: "4px 0", fontSize: 13 }}>
-                <span>{r.radiologist_name ?? r.npi}</span>
-                <TrendDelta value={r.pct_change} />
-              </div>
-            ))}
-          </div>
-          <div style={{ flex: "1 1 300px" }}>
-            <div style={{ fontSize: 12, color: "var(--text-muted)", marginBottom: 8 }}>Top Declining Radiologists</div>
-            {topRadiologistMoves.declining.map((r) => (
-              <div key={r.npi} style={{ display: "flex", justifyContent: "space-between", padding: "4px 0", fontSize: 13 }}>
-                <span>{r.radiologist_name ?? r.npi}</span>
-                <TrendDelta value={r.pct_change} />
-              </div>
-            ))}
-          </div>
+          <MoverList
+            title="Top Improving Practices"
+            movers={topPracticeMoves.improving}
+            label={(r) => r.practice ?? "Unknown"}
+          />
+          <MoverList
+            title="Top Declining Practices"
+            movers={topPracticeMoves.declining}
+            label={(r) => r.practice ?? "Unknown"}
+          />
+          <MoverList
+            title="Top Improving Radiologists"
+            movers={topRadiologistMoves.improving}
+            label={(r) => r.radiologist_name ?? String(r.npi)}
+          />
+          <MoverList
+            title="Top Declining Radiologists"
+            movers={topRadiologistMoves.declining}
+            label={(r) => r.radiologist_name ?? String(r.npi)}
+          />
         </div>
       </div>
 
